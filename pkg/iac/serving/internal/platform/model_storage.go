@@ -149,7 +149,7 @@ func CreateModelStorage(ctx *pulumi.Context, model appConfig.Model, llmdNamespac
 					// the PVC is provisioned in the correct zone. Zonal PDs are zone-locked:
 					// if the pull job runs in a different zone than the GPU node, the model
 					// service pod cannot be scheduled because it cannot access the PV.
-					NodeSelector: model.NodeSelectorStringMap(),
+					Affinity: model.NodeAffinityArgs(),
 					// The pull job must land on the same node as the model service pod so the
 					// hostpath PV is accessible. If the GPU node carries a taint, tolerate it.
 					Tolerations: buildTolerations(model),

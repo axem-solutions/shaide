@@ -44,11 +44,13 @@ config:
   # ==========================================================================
   app-shaide:shaideServiceAccountName: shaide-server
   # ==========================================================================
-  # Node selector (matches node pool label "nodegroup: <value>")
+  # Node affinity (soft preference — matches node label "axem.dev/workload-cpu: true")
   # infra/azure/03_cluster/deployments/Pulumi.kalmannemeth-westeurope.yaml defines a
-  # "shaide" node pool (cpu-standard, max 3) — matches it explicitly.
+  # "shaide" node pool (cpu-standard, max 3), labeled axem.dev/workload-cpu — preferred,
+  # but app_shaide can still schedule elsewhere if that pool is unavailable.
   # ==========================================================================
-  app-shaide:nodeSelector: cpu-standard
+  app-shaide:nodeSelectorKey: axem.dev/workload-cpu
+  app-shaide:nodeSelector: "true"
   # ==========================================================================
   # Storage — AKS uses Azure Disk CSI dynamic provisioning.
   # The default StorageClass (managed-csi) is used when storageClassName is omitted.

@@ -143,7 +143,10 @@ func Deploy(ctx *pulumi.Context, deps *runtime.DeploymentContext, cfg appconfig.
 					Labels: deps.MetaLabels(name, "object-storage"),
 				},
 				Spec: &corev1.PodSpecArgs{
-					NodeSelector: cfg.NodeSelectorFor(cfg.NodeSelectorRustfs),
+					Affinity: &corev1.AffinityArgs{
+						NodeAffinity:    cfg.NodeAffinityFor(cfg.NodeSelectorRustfs),
+						PodAntiAffinity: deps.PodAntiAffinityFor(name),
+					},
 					SecurityContext: &corev1.PodSecurityContextArgs{
 						RunAsUser:  pulumi.Int(rustfsUID),
 						RunAsGroup: pulumi.Int(rustfsUID),

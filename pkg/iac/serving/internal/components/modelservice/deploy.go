@@ -38,7 +38,7 @@ func Deploy(
 	}
 
 	podConfig := pulumi.Map{
-		"nodeSelector": model.NodeSelectorMap(),
+		"affinity": model.NodeAffinityMap(),
 	}
 
 	if t := model.GPUToleration; t != nil {
