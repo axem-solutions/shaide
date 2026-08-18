@@ -43,7 +43,6 @@ type S3Config struct {
 type Config struct {
 	Namespace     string
 	CloudProvider string
-	NodeSelector  string
 	Kubeconfig    string
 	Components    map[string]bool
 	S3            S3Config
@@ -88,7 +87,6 @@ func Load(ctx *pulumi.Context, projectDir string) Config {
 	return Config{
 		Namespace:     cfg.Require("namespace"),
 		CloudProvider: cfg.Require("cloudProvider"),
-		NodeSelector:  cfg.Get("nodeSelector"),
 		Kubeconfig:    cfg.Get("kubeconfig"),
 		Components:    loadComponents(cfg),
 		S3: S3Config{

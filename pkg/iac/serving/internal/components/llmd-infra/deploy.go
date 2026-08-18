@@ -119,8 +119,12 @@ func Deploy(ctx *pulumi.Context, model appConfig.Model, lldChartPath string, opt
 spec:
   template:
     spec:
-      nodeSelector:
-` + renderNodeSelectorYaml(model.NodeSelector)),
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+` + renderNodeAffinityYaml(model.NodeSelector)),
 		},
 	}, cmOpts...)
 	if err != nil {
@@ -130,7 +134,10 @@ spec:
 	return release, nil
 }
 
-func renderNodeSelectorYaml(selector map[string]string) string {
+// renderNodeAffinityYaml renders selector as a sorted list of matchExpressions lines, one
+// {key, In, [value]} entry per key, to be embedded under a requiredDuringSchedulingIgnoredDuringExecution
+// nodeSelectorTerms/matchExpressions block. Sorted for a stable, diff-friendly rendering.
+func renderNodeAffinityYaml(selector map[string]string) string {
 	keys := make([]string, 0, len(selector))
 	for k := range selector {
 		keys = append(keys, k)
@@ -139,7 +146,7 @@ func renderNodeSelectorYaml(selector map[string]string) string {
 
 	lines := make([]string, 0, len(keys))
 	for _, key := range keys {
-		lines = append(lines, "        "+key+": "+selector[key])
+		lines = append(lines, fmt.Sprintf(`              - {key: %s, operator: In, values: [%q]}`, key, selector[key]))
 	}
 	return strings.Join(lines, "\n")
 }

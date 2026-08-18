@@ -64,7 +64,10 @@ func Deploy(ctx *pulumi.Context, deps *runtime.DeploymentContext, cfg appconfig.
 				},
 				Spec: &corev1.PodSpecArgs{
 					ServiceAccountName: pulumi.String(cfg.ServiceAccountName),
-					NodeSelector:       cfg.NodeSelectorFor(cfg.NodeSelectorShaide),
+					Affinity: &corev1.AffinityArgs{
+						NodeAffinity:    cfg.NodeAffinityFor(cfg.NodeSelectorShaide),
+						PodAntiAffinity: deps.PodAntiAffinityFor("shaide-server"),
+					},
 					SecurityContext: &corev1.PodSecurityContextArgs{
 						FsGroup: pulumi.Int(1000),
 					},

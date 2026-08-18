@@ -39,7 +39,10 @@ func Deploy(ctx *pulumi.Context, deps *runtime.DeploymentContext, cfg appconfig.
 					Labels: deps.MetaLabels(name, "webapp"),
 				},
 				Spec: &corev1.PodSpecArgs{
-					NodeSelector: cfg.NodeSelectorFor(cfg.NodeSelectorWebApp),
+					Affinity: &corev1.AffinityArgs{
+						NodeAffinity:    cfg.NodeAffinityFor(cfg.NodeSelectorWebApp),
+						PodAntiAffinity: deps.PodAntiAffinityFor(name),
+					},
 					ImagePullSecrets: corev1.LocalObjectReferenceArray{
 						&corev1.LocalObjectReferenceArgs{
 							Name: pulumi.String(deps.RegistrySecretName),

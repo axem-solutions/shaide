@@ -41,7 +41,10 @@ func Deploy(ctx *pulumi.Context, deps *runtime.DeploymentContext, cfg appconfig.
 					Labels: deps.MetaLabels(name, "console"),
 				},
 				Spec: &corev1.PodSpecArgs{
-					NodeSelector: cfg.NodeSelectorFor(cfg.NodeSelectorControlPanel),
+					Affinity: &corev1.AffinityArgs{
+						NodeAffinity:    cfg.NodeAffinityFor(cfg.NodeSelectorControlPanel),
+						PodAntiAffinity: deps.PodAntiAffinityFor(name),
+					},
 					ImagePullSecrets: corev1.LocalObjectReferenceArray{
 						&corev1.LocalObjectReferenceArgs{
 							Name: pulumi.String(deps.RegistrySecretName),

@@ -118,7 +118,7 @@ func Deploy(ctx *pulumi.Context, ds appconfig.Datasource, cfg appconfig.Config, 
 
 	mainContainer := buildMainContainer(name, ds.Image, caTrustEnvVar, caConfigMapName, port, imagePullPolicy, healthPath, cpuRequest, memoryRequest, cpuLimit, memoryLimit, startupProbeFailureThreshold, ds.DisableProbes, ds.Args, ds.Env, ds.SecretEnv, cfg)
 	volumes := buildVolumes(caConfigMapName)
-	nodeSelector := buildNodeSelector(cfg.NodeSelectorKey, resolveStr(ds.NodeSelector, cfg.NodeSelector))
+	nodeAffinity := buildNodeAffinity(cfg.NodeSelectorKey, resolveStr(ds.NodeSelector, cfg.NodeSelector))
 	imagePullSecrets := buildImagePullSecrets(cfg.ImagePullSecrets)
 
 	deployment, err := appsv1.NewDeployment(ctx, name, &appsv1.DeploymentArgs{
@@ -148,7 +148,7 @@ func Deploy(ctx *pulumi.Context, ds appconfig.Datasource, cfg appconfig.Config, 
 					},
 				},
 				Spec: &corev1.PodSpecArgs{
-					NodeSelector:     nodeSelector,
+					Affinity:         nodeAffinity,
 					ImagePullSecrets: imagePullSecrets,
 					Containers:       corev1.ContainerArray{mainContainer},
 					Volumes:          volumes,
@@ -183,11 +183,27 @@ func Deploy(ctx *pulumi.Context, ds appconfig.Datasource, cfg appconfig.Config, 
 	return err
 }
 
-func buildNodeSelector(key, value string) pulumi.StringMap {
+func buildNodeAffinity(key, value string) *corev1.AffinityArgs {
 	if key == "" || value == "" {
 		return nil
 	}
-	return pulumi.StringMap{key: pulumi.String(value)}
+	return &corev1.AffinityArgs{
+		NodeAffinity: &corev1.NodeAffinityArgs{
+			RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelectorArgs{
+				NodeSelectorTerms: corev1.NodeSelectorTermArray{
+					&corev1.NodeSelectorTermArgs{
+						MatchExpressions: corev1.NodeSelectorRequirementArray{
+							&corev1.NodeSelectorRequirementArgs{
+								Key:      pulumi.String(key),
+								Operator: pulumi.String("In"),
+								Values:   pulumi.StringArray{pulumi.String(value)},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
 }
 
 func buildImagePullSecrets(names []string) corev1.LocalObjectReferenceArray {

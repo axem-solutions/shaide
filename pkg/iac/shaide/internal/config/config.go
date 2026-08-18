@@ -1,14 +1,19 @@
 package appconfig
 
 import (
+	corev1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/core/v1"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	pulumiconfig "github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
 )
 
-// NodeSelectorFor builds a nodeSelector map for a component.
+// NodeAffinityFor builds a soft (preferred) nodeAffinity for a component.
 // override takes precedence over the global NodeSelector.
-// Returns nil when both are empty (no scheduling constraint).
-func (c Config) NodeSelectorFor(override string) pulumi.StringMap {
+// Returns nil when both are empty (no scheduling preference) — same short-circuit as the
+// nodeSelector this replaces. Soft, not hard: the component should prefer a node carrying
+// NodeSelectorKey=val, but must still be able to run elsewhere if none is available.
+// Returns just the NodeAffinity sub-block (not the full AffinityArgs wrapper) so callers can
+// compose it alongside PodAntiAffinityFor in a single Affinity value.
+func (c Config) NodeAffinityFor(override string) *corev1.NodeAffinityArgs {
 	val := override
 	if val == "" {
 		val = c.NodeSelector
@@ -16,7 +21,22 @@ func (c Config) NodeSelectorFor(override string) pulumi.StringMap {
 	if val == "" {
 		return nil
 	}
-	return pulumi.StringMap{c.NodeSelectorKey: pulumi.String(val)}
+	return &corev1.NodeAffinityArgs{
+		PreferredDuringSchedulingIgnoredDuringExecution: corev1.PreferredSchedulingTermArray{
+			&corev1.PreferredSchedulingTermArgs{
+				Weight: pulumi.Int(100),
+				Preference: &corev1.NodeSelectorTermArgs{
+					MatchExpressions: corev1.NodeSelectorRequirementArray{
+						&corev1.NodeSelectorRequirementArgs{
+							Key:      pulumi.String(c.NodeSelectorKey),
+							Operator: pulumi.String("In"),
+							Values:   pulumi.StringArray{pulumi.String(val)},
+						},
+					},
+				},
+			},
+		},
+	}
 }
 
 type ServiceNames struct {

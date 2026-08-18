@@ -48,7 +48,10 @@ func Deploy(ctx *pulumi.Context, deps *runtime.DeploymentContext, cfg appconfig.
 					Labels: deps.MetaLabels(name, "vector-database"),
 				},
 				Spec: &corev1.PodSpecArgs{
-					NodeSelector: cfg.NodeSelectorFor(cfg.NodeSelectorQdrant),
+					Affinity: &corev1.AffinityArgs{
+						NodeAffinity:    cfg.NodeAffinityFor(cfg.NodeSelectorQdrant),
+						PodAntiAffinity: deps.PodAntiAffinityFor(name),
+					},
 					Containers: corev1.ContainerArray{
 						&corev1.ContainerArgs{
 							Name:            pulumi.String(name),
