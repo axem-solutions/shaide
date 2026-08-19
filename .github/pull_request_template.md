@@ -40,6 +40,7 @@ Additional validation details:
 - [ ] I added or updated tests for changed behavior, or explained why tests are not needed.
 - [ ] I updated documentation for deployment, configuration, topology, or operational changes.
 - [ ] My commits follow the Conventional Commits specification.
+- [ ] Every commit includes a `Signed-off-by` trailer (`git commit -s`).
 - [ ] I did not commit Pulumi state, kubeconfigs, chart archives, model artifacts, credentials, tokens, or plaintext secrets.
 
 ## Screenshots
