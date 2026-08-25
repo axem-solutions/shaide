@@ -13,6 +13,9 @@ const (
 	stackAppShaide       = "shaide"
 	stackCloudHarbor     = "harbor"
 	stackOnPremHarbor    = "OnPrem"
+	stackMonitoring      = "monitoring"
+
+	configNamespaceHarbor = "harbor"
 )
 
 func pulumiConfigKey(projectName, key string) string {
