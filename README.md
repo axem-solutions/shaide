@@ -1,109 +1,198 @@
-# axem's AI platform
+<div align="center">
 
-This project's goal is to provide a platform for running AI workloads on any Kubernetes
-cluster, using the [llm-d](https://github.com/llm-d/llm-d) framework. For inference, the
-vLLM engine is used. All infrastructure is written as Pulumi Go programs, deployable to
-GCP, AWS, Azure, or an on-prem/air-gapped RKE2 cluster.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/shaide_logo_white.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/assets/shaide_logo_black.svg">
+  <img alt="shaide" src="docs/assets/shaide_logo_black.svg" width="360">
+</picture>
 
-## Components
+# The sovereign AI platform for enterprise
 
-### Application layer
+Distributed, multi-model LLM inference on Kubernetes you own -
+installed by a single command, all the way down to air-gapped clusters.
 
-- **app_serving**: Per-model serving stack (llm-d-infra Gateway, GAIE, ModelService).
-  Convention-based model discovery — drop a `gaie-<slug>`/`ms-<slug>` folder pair under
-  `deployments/models/<category>/<model>/` and reference it in stack config. Supports
-  both generative and embedder models, with optional Harbor-backed model-weight
-  pre-loading via ORAS.
-- **app_shaide**: Centralized router and application layer — the Shaide server
-  (Rust/Axum, SQLite-backed), the control panel UI, an end-user webapp, RustFS
-  (S3-compatible object storage), and Qdrant (vector DB for RAG). Exposed via
-  LoadBalancer or, when a shared Gateway is available, ClusterIP + HTTPRoute.
-- **app_mcp**: Deploys MCP (Model Context Protocol) server datasources into a shared
-  gateway namespace, with per-datasource NetworkPolicies, optional internal-CA trust,
-  and the RBAC Shaide needs to watch MCP pod state.
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/axem-solutions/shaide)](https://github.com/axem-solutions/shaide/releases)
+[![Go](https://img.shields.io/badge/go-1.25%2B-00ADD8?logo=go&logoColor=white)](https://go.dev)
+[![Kubernetes](https://img.shields.io/badge/kubernetes-1.30%2B-326CE5?logo=kubernetes&logoColor=white)](https://kubernetes.io)
 
-### Infrastructure layer
+**[Quickstart](#quickstart)** · **[Architecture](#architecture)** · **[Documentation][docs]** · **[Contributing](CONTRIBUTING.md)**
 
-- **infra/aws**: EKS cluster with GPU node groups and the AWS Load Balancer Controller
-  for public access.
-- **infra/gcp**: GKE cluster with GPU node pools, Gateway API, and Certificate Manager
-  for public HTTPS access.
-- **infra/azure**: AKS cluster, built as sequential phases (bootstrap/team access,
-  shared services, cluster, RBAC, optional workload identity) with a node-pool catalog
-  driving new clusters without new code.
-- **infra/on-prem**: Ansible-provisioned, air-gapped RKE2 clusters, plus the Pulumi
-  stacks (hostPath StorageClass, Harbor, MetalLB, GPU Operator) that turn a bare RKE2
-  cluster into a platform-ready one.
-- **infra/gateway-provider**: Cluster-level Gateway API + GAIE CRDs, the Istio control
-  plane, and the shared Gateway resource — deployed before `app_serving` on every cloud
-  and on-prem.
-- **infra/cloud-harbor**: Internal OCI registry (Harbor) used as the model and image
-  registry across all deployment targets.
-- **infra/model-registry**: Downloads models from Hugging Face and pushes them to
-  Harbor as OCI artifacts.
-- **infra/local-k8s**: Local Kubernetes cluster for development and testing.
+</div>
 
-### Platform tooling
+> [!IMPORTANT]
+> **shaide is in early access.** The platform runs production workloads today, but this
+> repository is young: interfaces, stack configuration and module layout may still change
+> between releases. Pin a release rather than tracking `main`, and please open an issue if
+> something breaks.
 
-- **installer**: Containerized terminal UI that installs or updates the platform from
-  an offline bundle (images, manifests, Pulumi stack defaults) via the Pulumi Automation
-  API — supports both on-prem and cloud targets.
-- **monitoring**: Loki (log aggregation), Grafana (dashboards), and Alloy (log
-  collection) stack, backed by RustFS for long-term retention. Prometheus support is
-  planned but not yet implemented.
-- **pkg**: Shared Go module — houses the actual Pulumi deployment logic for
-  `app_serving`, `app_shaide`, `infra/cloud-harbor`, `infra/gateway-provider`, and the
-  on-prem services stack, plus small cross-cutting helpers.
-- **documentation**: mdBook technical reference — per-cloud architecture blueprints
-  (AWS/GCP/Azure/on-prem), operational guides, and architecture decision records.
+---
 
-### Upstream references
+## What is shaide?
 
-- **llm-d**: The core LLM deployment framework, vendored as git submodules under
-  `upstream/llm-d/`:
-  - `llm-d`: Core framework and reference implementations for LLM deployment and serving
-  - `llm-d-benchmark`: Tool for performance benchmarking
-  - `llm-d-inference-scheduler`: Scheduler for prefill/decode tasks
-  - `llm-d-inference-sim`: Simulation environment without actual model execution, for
-    testing and development
-  - `llm-d-infra`: Infrastructure components for llm-d
-  - `llm-d-kv-cache`: Key-value cache implementation used by the serving stack
-  - `llm-d-modelservice`: Helm chart reference and examples used by the serving stack
-  - `llm-d-routing-sidecar`: Sidecar for routing requests to the appropriate model service
-- **control_panel**: A React-based control panel for monitoring and managing the
-  platform, deployed by `app_shaide`.
-- **shaide_server**: The central router and API server, deployed by `app_shaide`.
+shaide is a self-hosted AI platform that serves AI models at scale on your
+own Kubernetes clusters. The goal is to run many models side by side, each with multiple
+replicas, and route traffic across them.
 
-## Supported models
+Standing up enterprise AI infrastructure today means assembling a long list of moving
+parts - an inference engine, a serving orchestrator, a gateway, a model registry,
+storage, observability, and that is only the beginning. Each one has to be chosen,
+configured and glued to the next, component by component, then again for every
+environment. shaide ships that whole stack as one installable platform.
 
-See [`app_serving/README.md`](app_serving/README.md#supported-models) for the current
-list of validated generative and embedder models.
+The entire platform is managed as **infrastructure as code**. Every layer - the internal
+registry, the gateway, model serving and the application layer - is defined as a Pulumi
+project in this repository, so your AI infrastructure is versioned and reproducible.
+
+And it stays inside your perimeter. shaide is built for organisations whose data cannot
+leave their infrastructure: regulated industries, defence, public sector, or anyone who
+simply will not send prompts to a third-party API. There is nothing phoning
+home and no dependency on a vendor's cloud - including fully **air-gapped**
+installations with no internet access at all.
+
+## Why shaide
+
+- **Sovereign by design.** Everything runs in your infrastructure. An internal OCI
+  registry mirrors every container image and model weight, so a cluster can operate with
+  no egress whatsoever.
+
+- **Installed by one command.** Point the interactive terminal installer at a prepared
+  cluster and it installs the entire platform through guided prompts. No Helm chart
+  archaeology, no twelve READMEs to follow in order.
+
+- **Distributed multi-model serving.** [vLLM](https://vllm.ai/) as the inference engine,
+  [llm-d](https://llm-d.ai/) for multi-instance orchestration. Serve generative and embedding models
+  concurrently, each scaled independently across GPU nodes.
+
+- **Built for agent fleets.** Multi-model routing, KV-cache-aware scheduling and
+  inference-pool load balancing keep many concurrent agents served from one platform.
+
+- **Runs anywhere Kubernetes runs.** AWS EKS, GCP GKE, Azure AKS and on-prem RKE2 -
+  the same platform and the same installer across all of them.
+
+- **OpenAI-compatible API.** Point any OpenAI-compatible SDK, agent framework or tool at
+  your endpoint and change nothing but the base URL.
+
+- **Infrastructure as Code.** Every layer is a [Pulumi](https://www.pulumi.com/) Go program, so
+  deployments are reviewable, diffable and reproducible.
+
+## Quickstart
+
+### 1. Prepare a cluster
+
+shaide installs onto an **existing** Kubernetes cluster. Check it against the prerequisites:
+
+> **[→ Prerequisites](installer/docs/customer/prerequisites.md)**
+
+### 2. Run the installer
+
+Point the installer at your prepared cluster and it takes over from there:
+
+```bash
+docker run --rm -it \
+  --network host \
+  -e PULUMI_CONFIG_PASSPHRASE \
+  -v "$HOME/.kube/config:/.kube/config:ro" \
+  -v "$PWD/bundle.tar.gz:/.bundle/bundle.tar.gz:ro" \
+  --mount "type=bind,src=$PWD/shaide-installer-data,dst=/var/shaide-installer" \
+  ghcr.io/axem-solutions/shaide/installer:latest
+```
+
+The installer needs an interactive terminal (`-it`) and an **installer bundle** -
+a self-contained archive holding the images, manifests and deployment definitions it
+installs from. Preparing that bundle, along with the full guided walkthrough, is covered
+in the installer guide:
+
+> **[→ Installer guide](installer/README.md)**
+
+### 3. Verify
+
+Once the installer completes, check that the platform is serving:
+
+```bash
+curl https://<your-shaide-endpoint>/v1/models
+```
+
+### Using the API
+
+shaide exposes an OpenAI-compatible API, so existing clients work unchanged:
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="https://<your-shaide-endpoint>/v1",
+    api_key="<your-api-key>",
+)
+
+response = client.chat.completions.create(
+    model="<model-name>",
+    messages=[{"role": "user", "content": "Hello!"}],
+)
+print(response.choices[0].message.content)
+```
 
 ## Architecture
 
-### Deployment order (per cluster)
+<div align="center">
+  <img alt="shaide architecture" src="docs/assets/architecture.png" width="800">
+</div>
+
+shaide is built in layers, each deployed as an independent Pulumi program:
+
+| Layer | What it does |
+| --- | --- |
+| **Platform services** | The internal OCI registry that holds every image and model weight, plus the shared Istio Gateway and Gateway API layer. |
+| **Serving** | Per-model inference stacks: vLLM engine pods orchestrated by llm-d, fronted by an inference gateway that routes and load-balances across replicas. |
+| **Application** | The shaide server - the universal API surface, authentication and user management - together with the control panel UI. |
+| **Packages** | The interactive installer, the observability stack, and shared libraries used across every layer. |
+
+Deployment proceeds in a fixed order:
 
 ```
-1. infra/gcp | infra/aws | infra/azure | infra/on-prem   — cluster provisioning
-2. infra/cloud-harbor (or the on-prem services stack)    — internal OCI registry
-3. infra/gateway-provider                                — Istio + Gateway API
-4. app_serving                                           — per-model LLM serving
-5. app_shaide                                            — application layer
-6. app_mcp, monitoring                                   — optional
+1. Internal OCI registry       infra/cloud-harbor
+2. Gateway + Istio             infra/gateway-provider
+3. Model serving               app_serving
+4. Application layer           app_shaide
+5. Optional add-ons            app_mcp, monitoring
 ```
 
-### Traffic flow
+## The shaide components
 
-**Generative models:**
+shaide is developed across three open-source repositories:
+
+| Repository | Role |
+| --- | --- |
+| **[shaide](https://github.com/axem-solutions/shaide)** | This repository - the core: infrastructure, model serving and the installer. |
+| **[shaide_server](https://github.com/axem-solutions/shaide_server)** | The universal interface to every service the platform provides, plus authentication and user management. |
+| **[shaide_control_panel](https://github.com/axem-solutions/shaide_control_panel)** | The web UI for operating the platform. |
+
+## Repository layout
+
 ```
-Public ingress (cloud LB / Gateway, or on-prem MetalLB)
-  → app_shaide (shaide-server)
-  → per-model Istio Gateway → GAIE EPP (InferencePool)
-  → ModelService decode pod
+├── app_serving/      Per-model LLM serving stacks (vLLM + llm-d)
+├── app_shaide/       Application layer: shaide server and control panel
+├── app_mcp/          MCP server datasources deployed into the shared gateway
+├── infra/            In-cluster platform services: OCI registry and gateway
+├── installer/        Containerized interactive installer
+├── monitoring/       Observability stack
+├── pkg/              Shared Go module with the Pulumi deployment logic
+└── benchmarking/     Performance benchmarking tooling
 ```
 
-**Embedding models** bypass the Gateway/GAIE path entirely — the inference gateway only
-understands chat-completion requests:
-```
-app_shaide → ms-<slug>-embeddings ClusterIP Service → ModelService decode pod
-```
+Full technical documentation lives at **[docs](docs)**.
+
+## Contributing
+
+Contributions are welcome. See **[CONTRIBUTING.md](CONTRIBUTING.md)** for development
+setup, coding standards and the review process.
+
+## Security
+
+Please do not report security vulnerabilities through public issues. See our
+**[security policy](https://github.com/axem-solutions/shaide?tab=security-ov-file)** for
+how to disclose them responsibly.
+
+## License
+
+Licensed under the Apache License 2.0. See **[LICENSE](LICENSE)** for details.
