@@ -33,7 +33,6 @@ inventory-dev/
 *.zip
 artifacts/
 downloads/
-bundle/
 
 # Harbor / model registry
 k8s-harbor-sa-secret
