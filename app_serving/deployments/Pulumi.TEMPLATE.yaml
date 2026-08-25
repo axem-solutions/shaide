@@ -1,0 +1,121 @@
+# Stack: <stack-name> -- <short description>
+# Model paths auto-resolve from deployments/models/<category>/<modelName>/
+#
+# Required config:
+#   cloudProvider — target platform: "cloud" (GCP/AWS/Azure) or "on-prem"
+#                   Determines which credentials are required.
+#
+#   models        — lists of models to deploy, split by category (generative, embedder).
+#                   Each entry must have:
+#                     name         — folder name under deployments/models/<category>/
+#                     enabled      — boolean (true/false). MUST be a boolean, not a string.
+#                     nodeSelector — per-model node targeting map
+#                   Optional per-entry overrides:
+#                     nameSpace    — override auto-derived namespace (default: llm-d-<slug>)
+#                     releaseName  — override auto-derived release name (default: infra-<slug>)
+#                     modelSource  — pre-loaded model weights; Pulumi creates a PVC and a
+#                                    one-time ORAS pull Job that populates it from Harbor, then
+#                                    overrides modelArtifacts.uri with pvc+hf://<slug>-model/<modelUri>.
+#                                      harborRef    — full OCI ref pushed by model-upload.sh,
+#                                                     e.g. harbor.harbor.svc.cluster.local/ai-models/nomic:1.5.0
+#                                      modelUri     — HF cache path inside the PVC,
+#                                                     e.g. hub/nomic-ai/nomic-embed-text-v1.5
+#                                      storageSize  — PVC size, e.g. 5Gi
+#                                      storageClass — optional, cloud only: overrides the cluster
+#                                                     default StorageClass. Needed when the target
+#                                                     GPU node type requires a specific class
+#                                                     (e.g. "hyperdisk-balanced" for some GKE
+#                                                     machine types). Ignored on-prem, which always
+#                                                     uses the "hostpath" StorageClass.
+#                                      hostpathNode — on-prem only: node hostname to pin the PV to
+#                                                     via nodeAffinity (kubernetes.io/hostname).
+#                                                     Pulumi creates the PV; the backing directory
+#                                                     must already exist on that node (Ansible
+#                                                     hostpath_dirs role).
+#                                      hostpathDir  — on-prem only, optional: absolute path on the
+#                                                     node; default: /var/lib/hostpath/models/<slug>
+#
+# On-prem / air-gap config (omit for cloud stacks):
+#   kubeconfig    — path to RKE2 kubeconfig on provisioner laptop
+#   gpuToleration — {key, operator, value, effect}; one toleration applied stack-wide to every
+#                   model's pods (decode, prefill) and to the ORAS pull Job, so they can schedule
+#                   onto tainted GPU nodes. Must match the taint applied to the GPU node (Ansible
+#                   node_taints). Omit if GPU nodes carry no taint.
+#
+# Harbor config (required on-prem; required on cloud only when any model uses modelSource):
+#   harborHostname — internal Harbor hostname — on-prem, e.g. harbor.internal.lan (must match the
+#                    containerd /etc/hosts entry); cloud, always harbor.harbor.svc.cluster.local
+#   harborUser     — Harbor robot account name (e.g. robot$k8s-puller)
+#   harborToken    — Harbor robot secret (set with: pulumi config set --secret harborToken <secret>)
+#
+# Optional, cluster-wide overrides:
+#   llmdChart         — override path to the llm-d-infra Helm chart, relative to the stack's
+#                        working directory; default: ../upstream/llm-d/llm-d-infra/charts/llm-d-infra
+#   modelStorageClass — stack-wide default StorageClass applied to a model's PVC when that
+#                        model's own modelSource.storageClass is empty; ignored on-prem.
+#
+# The slug is extracted from the gaie-<slug>/ and ms-<slug>/ subdirectories
+# inside deployments/models/<category>/<modelName>/. Both must use the same slug.
+# Each model on the same cluster must have a unique slug to avoid resource name collisions.
+# Slug rules: lowercase alphanumeric + hyphens, start/end with alphanumeric, max 47 characters.
+#
+# Example folder structure:
+#   deployments/models/generative/MyModel/
+#     gaie-mymodel/values.yaml
+#     ms-mymodel/values.yaml
+#
+# To create a new on-prem stack:
+#   pulumi stack init <stack-name>
+#   pulumi config set cloudProvider on-prem
+#   pulumi config set kubeconfig ~/.kube/rke2-cluster.yaml
+#   pulumi config set harborHostname harbor.internal.lan
+#   pulumi config set harborUser 'robot$k8s-puller'
+#   pulumi config set --secret harborToken <robot-secret>
+#
+# To create a new cloud stack (with Harbor model registry):
+#   pulumi stack init <stack-name>
+#   pulumi config set cloudProvider cloud
+#   pulumi config set harborHostname harbor.harbor.svc.cluster.local
+#   pulumi config set harborUser 'robot$k8s-puller'
+#   pulumi config set --secret harborToken <robot-secret>
+config:
+  app-serving:cloudProvider: cloud  # or: on-prem
+  app-serving:models:
+    generative:
+      - name: <modelName>
+        enabled: true               # boolean true/false — not a string
+        nodeSelector:
+          <key>: <value>            # e.g. nodegroup: g2-standard-48-l4 (cloud) or workload: gpu (on-prem)
+        # nameSpace: llm-d-<slug>   # optional: override auto-derived namespace
+        # releaseName: infra-<slug> # optional: override auto-derived release name
+        # modelSource:
+        #   harborRef: harbor.harbor.svc.cluster.local/ai-models/<model>:<tag>
+        #   modelUri: hub/<org>/<model-name>
+        #   storageSize: 5Gi
+        #   storageClass: <storage-class>                # cloud only, optional
+        #   hostpathNode: <node-hostname>                 # on-prem only
+        #   hostpathDir: /var/lib/hostpath/models/<slug>  # on-prem only, optional
+    # embedder:
+    #   - name: <modelName>
+    #     enabled: true
+    #     nodeSelector:
+    #       <key>: <value>
+  # --- On-prem only — remove these lines for cloud stacks ---
+  # app-serving:kubeconfig: ~/.kube/rke2-cluster.yaml
+  # app-serving:gpuToleration:
+  #   key: <taint-key>
+  #   operator: Equal
+  #   value: <taint-value>
+  #   effect: NoSchedule
+  # --- Harbor — required on-prem; required on cloud only if modelSource is used above ---
+  # app-serving:harborHostname: harbor.internal.lan
+  # app-serving:harborUser: robot$k8s-puller
+  # app-serving:harborToken:
+  #   secure: <run `pulumi config set --secret harborToken <robot-secret>`>
+  # --- Optional, cluster-wide overrides ---
+  # app-serving:llmdChart: ../upstream/llm-d/llm-d-infra/charts/llm-d-infra
+  # app-serving:modelStorageClass: <storage-class>
+#
+# Managed by Pulumi.
+# Do not edit or remove the following line — required to decrypt secret config values.
+encryptionsalt: null

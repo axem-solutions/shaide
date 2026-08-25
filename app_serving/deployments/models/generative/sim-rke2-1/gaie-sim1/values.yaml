@@ -1,0 +1,25 @@
+inferenceExtension:
+  replicas: 1
+  flags:
+    v: 1
+  image:
+    # EPP image served from internal Harbor registry.
+    # Harbor project: shaide  source: registry.k8s.io/gateway-api-inference-extension/epp:v1.2.0
+    # Upload: skopeo copy docker://registry.k8s.io/gateway-api-inference-extension/epp:v1.2.0 \
+    #           oci-archive:ansible/artifacts/images/epp-v1.2.0.tar
+    name: epp
+    hub: harbor.harbor.svc.cluster.local/shaide
+    tag: v1.2.0
+    pullPolicy: IfNotPresent
+  extProcPort: 9002
+  pluginsConfigFile: "default-plugins.yaml"
+# Pull secret created by the app-serving Pulumi stack (harbor-creds).
+imagePullSecrets:
+  - name: harbor-creds
+inferencePool:
+  targetPortNumber: 8000
+  modelServerType: vllm
+  modelServers:
+    matchLabels:
+      llm-d.ai/inferenceServing: "true"
+      llm-d.ai/model: ms-sim1-llm-d-modelservice

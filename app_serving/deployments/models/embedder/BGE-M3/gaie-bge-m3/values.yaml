@@ -1,0 +1,17 @@
+inferenceExtension:
+  replicas: 1
+  image:
+    name: epp
+    hub: registry.k8s.io/gateway-api-inference-extension
+    tag: v1.2.0
+    pullPolicy: Always
+  extProcPort: 9002
+  pluginsConfigFile: "default-plugins.yaml"
+
+inferencePool:
+  targetPortNumber: 8000
+  modelServerType: vllm
+  modelServers:
+    matchLabels:
+      llm-d.ai/inferenceServing: "true"
+      llm-d.ai/model: ms-bge-m3-llm-d-modelservice

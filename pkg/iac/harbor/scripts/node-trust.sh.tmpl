@@ -1,0 +1,10 @@
+while true; do
+  mkdir -p %[1]s
+  cat > %[1]s/hosts.toml <<TOML
+server = "http://%[2]s"
+
+[host."http://%[2]s"]
+  capabilities = ["pull", "resolve"]
+TOML
+  sleep 300
+done

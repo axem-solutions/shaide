@@ -1,0 +1,21 @@
+inferenceExtension:
+  replicas: 1
+  image:
+    name: epp
+    # source: registry.k8s.io/gateway-api-inference-extension/epp:v1.2.0
+    hub: harbor.harbor.svc.cluster.local/images-shaide/gateway-api-inference-extension
+    tag: v1.2.0
+    pullPolicy: IfNotPresent
+  # Pull secret created by the app-serving Pulumi stack (harbor-creds).
+  imagePullSecrets:
+    - name: harbor-creds
+  extProcPort: 9002
+  pluginsConfigFile: "default-plugins.yaml"
+
+inferencePool:
+  targetPortNumber: 8000
+  modelServerType: vllm
+  modelServers:
+    matchLabels:
+      llm-d.ai/inferenceServing: "true"
+      llm-d.ai/model: ms-nomic-embed-text-v1-5-rke2-llm-d-modelservice

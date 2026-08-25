@@ -1,0 +1,116 @@
+# Devstral Small 2 24B Instruct 2512 ModelService Configuration
+# Creates the resources for mistralai/Devstral-Small-2-24B-Instruct-2512
+# The model ships in FP8 and the upstream vLLM example uses TP=2 for the full
+# 256K context window. We start with a conservative single-GPU profile so the
+# model stays practical on 1x 48 GB cards.
+multinode: false
+
+modelArtifacts:
+  name: "mistralai/Devstral-Small-2-24B-Instruct-2512"
+  uri: "hf://mistralai/Devstral-Small-2-24B-Instruct-2512"
+  size: 60Gi
+  authSecretName: "llm-d-hf-token"
+  labels:
+    llm-d.ai/inferenceServing: "true"
+    llm-d.ai/model: "ms-devstral-small-2-24b-2512-llm-d-modelservice"
+
+routing:
+  servicePort: 8000
+
+  proxy:
+    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.4.0-rc.1
+    connector: nixlv2
+    secure: false
+
+decode:
+  create: true
+  replicas: 1
+  monitoring:
+    podmonitor:
+      enabled: false
+      portName: "metrics"
+      path: "/metrics"
+      interval: "30s"
+  containers:
+  - name: "vllm"
+    # Mistral recommends the latest vLLM build and the `mistral` tool parser.
+    image: "ghcr.io/llm-d/llm-d-cuda:latest"
+    modelCommand: vllmServe
+    args:
+      - "--tensor-parallel-size"
+      - "1"
+      - "--gpu-memory-utilization"
+      - "0.4"
+      - "--max-model-len"
+      - "32768"
+      - "--max-num-seqs"
+      - "2"
+      - "--block-size"
+      - "16"
+      - "--kv-cache-dtype"
+      - "fp8"
+      - "--trust-remote-code"
+      - "--enable-auto-tool-choice"
+      - "--tool-call-parser"
+      - "mistral"
+    env:
+      - name: HF_HUB_OFFLINE
+        value: "1"
+      - name: UCX_TLS
+        value: "cuda_ipc,cuda_copy,tcp"
+      - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+        valueFrom:
+          fieldRef:
+            fieldPath: status.podIP
+      - name: VLLM_NIXL_SIDE_CHANNEL_PORT
+        value: "5557"
+      - name: VLLM_LOGGING_LEVEL
+        value: INFO
+      - name: NCCL_P2P_DISABLE
+        value: "1"
+      - name: NCCL_IGNORE_DISABLED_P2P
+        value: "1"
+      - name: NCCL_DEBUG
+        value: "INFO"
+      - name: VLLM_SKIP_P2P_CHECK
+        value: "1"
+      - name: GLOO_SOCKET_IFNAME
+        value: "eth0"
+      - name: NCCL_SOCKET_IFNAME
+        value: "eth0"
+    ports:
+      - containerPort: 5557
+        protocol: TCP
+      - containerPort: 8200
+        name: metrics
+        protocol: TCP
+    resources:
+      limits:
+        nvidia.com/gpu: "1"
+        memory: "48Gi"
+        cpu: "16"
+      requests:
+        nvidia.com/gpu: "1"
+        memory: "48Gi"
+        cpu: "16"
+    mountModelVolume: true
+    volumeMounts:
+    - name: metrics-volume
+      mountPath: /.config
+    - name: torch-compile-cache
+      mountPath: /.cache
+    - name: shm
+      mountPath: /dev/shm
+  volumes:
+  - name: metrics-volume
+    emptyDir: {}
+  - name: torch-compile-cache
+    emptyDir: {}
+  - name: shm
+    emptyDir:
+      medium: Memory
+      sizeLimit: 8Gi
+
+prefill:
+  create: false
+  replicas: 0

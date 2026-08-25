@@ -1,0 +1,21 @@
+# Copy this file to .env (or .env.<environment>) and fill in your values
+# cp .env.example .env
+# cp .env.example .env.prod
+
+# HuggingFace token — get yours at https://huggingface.co/settings/tokens
+HF_TOKEN=hf_your_token_here
+
+# Harbor robot account credentials — set after running harbor-setup.sh
+HARBOR_USER='robot$k8s-harbor-sa'
+HARBOR_PASSWORD=your_robot_secret_here
+
+# Harbor connection — defaults work with kubectl port-forward on localhost:5000
+HARBOR_HOST=localhost
+HARBOR_LOCAL_PORT=5000
+
+# ORAS container image
+ORAS_IMAGE=ghcr.io/oras-project/oras:v1.3.1
+YQ_IMAGE=linuxserver/yq:3.4.3
+
+# Local folder used as a staging area between downloader and ORAS containers
+MODEL_CACHE_DIR=./model-cache

@@ -1,0 +1,220 @@
+# Gemma 4 31B IT ModelService Configuration — on-prem / air-gapped / GPU
+# Serves google/gemma-4-31B-it through the OpenAI-compatible API.
+# Tuned for 1x 96 GB GPU node.
+# Target profile:
+#   - 64K context length
+#   - 5 concurrent sequences
+#   - image-only multimodal input
+#   - audio disabled
+#   - FP8 KV cache
+#   - air-gapped / offline cluster nodes
+#
+# Images and model artifact served from internal Harbor; no internet access required on cluster nodes.
+#
+# Image upload, run on provisioner laptop before pulumi up:
+#   skopeo copy docker://ghcr.io/llm-d/llm-d-routing-sidecar:v0.8.0 \
+#     oci-archive:infra/on-prem/ansible/artifacts/images/llm-d-routing-sidecar-v0.8.0.tar
+#   skopeo copy docker://ghcr.io/llm-d/llm-d-cuda:v0.7.0 \
+#     oci-archive:infra/on-prem/ansible/artifacts/images/llm-d-cuda-v0.7.0.tar
+#   ansible-playbook -i inventory-dev harbor_upload.yml
+#
+# Model artifact upload:
+#   Ensure your model registry manifest contains:
+#     id: google/gemma-4-31B-it
+#     harbor_project: ai-models
+#     harbor_name: gemma-4-31b-it
+#     harbor_tag: "1.0.0"
+#     revision: "<pinned HF commit SHA>"
+#
+#   Then run:
+#     bash model-sync.sh
+#
+# Expected Harbor model artifact:
+#   harbor.harbor.svc.cluster.local/ai-models/gemma-4-31b-it:1.0.0
+
+multinode: false
+
+modelArtifacts:
+  name: "google/gemma-4-31B-it"
+  uri: "oci://harbor.harbor.svc.cluster.local/ai-models/gemma-4-31b-it:1.0.0"
+  size: 90Gi
+  labels:
+    llm-d.ai/inferenceServing: "true"
+    llm-d.ai/model: "ms-gemma-4-31b-it-rke2-llm-d-modelservice"
+
+routing:
+  servicePort: 8000
+
+  proxy:
+    # Air-gapped on-prem: served from internal Harbor (mirror before pulumi up).
+    image: "harbor.harbor.svc.cluster.local/images-shaide/llm-d/llm-d-routing-sidecar:v0.8.0"
+    connector: nixlv2
+    secure: false
+
+decode:
+  create: true
+  replicas: 1
+
+  # Pull secret created by the app-serving Pulumi stack.
+  imagePullSecrets:
+    - name: harbor-creds
+
+  # server4 carries taint dedicated=gpu-pro:NoSchedule.
+  tolerations:
+    - key: "dedicated"
+      operator: "Exists"
+      effect: "NoSchedule"
+
+  monitoring:
+    podmonitor:
+      enabled: false
+      portName: "metrics"
+      path: "/metrics"
+      interval: "30s"
+
+  containers:
+    - name: "vllm"
+      # Air-gapped on-prem: served from internal Harbor (mirror before pulumi up).
+      image: "harbor.harbor.svc.cluster.local/images-shaide/llm-d/llm-d-cuda:v0.7.0"
+      modelCommand: vllmServe
+
+      args:
+        # Single 96 GB GPU.
+        - "--tensor-parallel-size"
+        - "1"
+
+        # 96 GB GPU target.
+        # 0.94 gives additional KV/cache room for 64K context.
+        # If startup OOMs or runtime fragmentation occurs, reduce to 0.92.
+        - "--gpu-memory-utilization"
+        - "0.94"
+
+        # 64K context length.
+        # This is the total budget for text tokens + image tokens + generated tokens.
+        - "--max-model-len"
+        - "65536"
+
+        # 5 concurrent active sequences.
+        # This is suitable for 64K context on 1x96 GB with FP8 KV.
+        - "--max-num-seqs"
+        - "5"
+
+        # Long-prefill profile.
+        # 32768 improves prefill throughput versus 16384.
+        # Lower to 16384 if TTFT or startup profiling becomes unstable.
+        - "--max-num-batched-tokens"
+        - "32768"
+
+        # Standard CUDA block size.
+        - "--block-size"
+        - "16"
+
+        # Required/pragmatic for newer Gemma architecture support in pinned images.
+        - "--trust-remote-code"
+
+        # Gemma 4 reasoning and tool-calling support.
+        - "--reasoning-parser"
+        - "gemma4"
+        - "--tool-call-parser"
+        - "gemma4"
+        - "--enable-auto-tool-choice"
+
+        # Throughput and latency improvement for vLLM scheduling.
+        - "--async-scheduling"
+
+        # Image-only multimodal usage.
+        # image:2 allows up to 2 images per request.
+        # audio:0 prevents audio-path allocation/profiling.
+        #
+        # For maximum stability, change image:2 to image:1.
+        # For heavier multi-image workloads, image:4 is possible but should reduce
+        # --max-num-seqs to 3 or 4.
+        - "--limit-mm-per-prompt"
+        - '{"image":2,"audio":0}'
+
+        # KV memory reduction.
+        # Critical for 64K context and 5 concurrent sequences on 1x96 GB.
+        - "--kv-cache-dtype"
+        - "fp8"
+
+        # Useful for repeated system prompts, RAG templates, tool schemas, and chat prefixes.
+        - "--enable-prefix-caching"
+
+      env:
+        # Keep this: even with OCI model artifact, cluster nodes should not call HF.
+        - name: HF_HUB_OFFLINE
+          value: "1"
+        - name: TRANSFORMERS_OFFLINE
+          value: "1"
+
+        # NIXL / llm-d routing side-channel settings.
+        - name: UCX_TLS
+          value: "cuda_ipc,cuda_copy,tcp"
+        - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: VLLM_NIXL_SIDE_CHANNEL_PORT
+          value: "5557"
+
+        # vLLM logging.
+        - name: VLLM_LOGGING_LEVEL
+          value: "INFO"
+
+        # Keep from current working on-prem GPU profile.
+        - name: NCCL_P2P_DISABLE
+          value: "1"
+        - name: NCCL_IGNORE_DISABLED_P2P
+          value: "1"
+        - name: NCCL_DEBUG
+          value: "INFO"
+        - name: VLLM_SKIP_P2P_CHECK
+          value: "1"
+        - name: GLOO_SOCKET_IFNAME
+          value: "eth0"
+        - name: NCCL_SOCKET_IFNAME
+          value: "eth0"
+
+      ports:
+        - containerPort: 5557
+          protocol: TCP
+        - containerPort: 8200
+          name: metrics
+          protocol: TCP
+
+      resources:
+        limits:
+          nvidia.com/gpu: "1"
+          memory: "128Gi"
+          cpu: "16"
+        requests:
+          nvidia.com/gpu: "1"
+          memory: "96Gi"
+          cpu: "16"
+
+      mountModelVolume: true
+
+      volumeMounts:
+        - name: metrics-volume
+          mountPath: /.config
+        - name: torch-compile-cache
+          mountPath: /.cache
+        - name: shm
+          mountPath: /dev/shm
+
+  volumes:
+    - name: metrics-volume
+      emptyDir: {}
+
+    - name: torch-compile-cache
+      emptyDir: {}
+
+    - name: shm
+      emptyDir:
+        medium: Memory
+        sizeLimit: 32Gi
+
+prefill:
+  create: false
+  replicas: 0
+

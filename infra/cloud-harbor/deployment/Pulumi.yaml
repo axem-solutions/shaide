@@ -1,0 +1,4 @@
+name: cloud-harbor
+description: Harbor OCI model registry — provider-agnostic cloud deployment (GCP, AWS, Azure)
+runtime: go
+main: ..

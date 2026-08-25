@@ -1,0 +1,118 @@
+# Qwen3.5-27B-FP8 ModelService Configuration
+# Creates the resources for Qwen/Qwen3.5-27B-FP8
+# The upstream vLLM recipe targets TP=8 and the full 262K context window. We
+# use a conservative single-GPU text-only profile so the model remains practical
+# on 1x 48 GB cards while still supporting reasoning and tool calls.
+multinode: false
+
+modelArtifacts:
+  name: "Qwen/Qwen3.5-27B-FP8"
+  uri: "hf://Qwen/Qwen3.5-27B-FP8"
+  size: 50Gi
+  authSecretName: "llm-d-hf-token"
+  labels:
+    llm-d.ai/inferenceServing: "true"
+    llm-d.ai/model: "ms-qwen3-5-27b-fp8-llm-d-modelservice"
+
+routing:
+  servicePort: 8000
+
+  proxy:
+    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.4.0-rc.1
+    connector: nixlv2
+    secure: false
+
+decode:
+  create: true
+  replicas: 1
+  monitoring:
+    podmonitor:
+      enabled: false
+      portName: "metrics"
+      path: "/metrics"
+      interval: "30s"
+  containers:
+  - name: "vllm"
+    # Qwen3.5 needs newer vLLM support plus the qwen3 reasoning/tool parsers.
+    image: "ghcr.io/llm-d/llm-d-cuda:latest"
+    modelCommand: vllmServe
+    args:
+      - "--tensor-parallel-size"
+      - "1"
+      - "--gpu-memory-utilization"
+      - "0.45"
+      - "--max-model-len"
+      - "32768"
+      - "--max-num-seqs"
+      - "2"
+      - "--block-size"
+      - "16"
+      - "--kv-cache-dtype"
+      - "fp8"
+      - "--reasoning-parser"
+      - "qwen3"
+      - "--enable-auto-tool-choice"
+      - "--tool-call-parser"
+      - "qwen3_coder"
+      - "--trust-remote-code"
+    env:
+      - name: HF_HUB_OFFLINE
+        value: "1"
+      - name: UCX_TLS
+        value: "cuda_ipc,cuda_copy,tcp"
+      - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+        valueFrom:
+          fieldRef:
+            fieldPath: status.podIP
+      - name: VLLM_NIXL_SIDE_CHANNEL_PORT
+        value: "5557"
+      - name: VLLM_LOGGING_LEVEL
+        value: INFO
+      - name: NCCL_P2P_DISABLE
+        value: "1"
+      - name: NCCL_IGNORE_DISABLED_P2P
+        value: "1"
+      - name: NCCL_DEBUG
+        value: "INFO"
+      - name: VLLM_SKIP_P2P_CHECK
+        value: "1"
+      - name: GLOO_SOCKET_IFNAME
+        value: "eth0"
+      - name: NCCL_SOCKET_IFNAME
+        value: "eth0"
+    ports:
+      - containerPort: 5557
+        protocol: TCP
+      - containerPort: 8200
+        name: metrics
+        protocol: TCP
+    resources:
+      limits:
+        nvidia.com/gpu: "1"
+        memory: "48Gi"
+        cpu: "16"
+      requests:
+        nvidia.com/gpu: "1"
+        memory: "48Gi"
+        cpu: "16"
+    mountModelVolume: true
+    volumeMounts:
+    - name: metrics-volume
+      mountPath: /.config
+    - name: torch-compile-cache
+      mountPath: /.cache
+    - name: shm
+      mountPath: /dev/shm
+  volumes:
+  - name: metrics-volume
+    emptyDir: {}
+  - name: torch-compile-cache
+    emptyDir: {}
+  - name: shm
+    emptyDir:
+      medium: Memory
+      sizeLimit: 8Gi
+
+prefill:
+  create: false
+  replicas: 0

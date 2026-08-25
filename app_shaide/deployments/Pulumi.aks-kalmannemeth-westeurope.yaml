@@ -1,0 +1,152 @@
+# Added by Pulumi.
+# Do not edit or remove — required to decrypt secret config values.
+encryptionsalt: v1:Kf0ho2g7HuM=:v1:Wswa+lLQZaAql+qK:LZ5LMM8dLCewhvIsGvhQUke/oFq7Uw==
+#
+# Stack Configuration
+config:
+  # ==========================================================================
+  # Cloud provider (informational — identifies the target platform)
+  # ==========================================================================
+  app-shaide:cloudProvider: azure
+  # ==========================================================================
+  # ServiceAccount annotations (optional — for provider-specific pod identity bindings)
+  # AKS Workload Identity: set the client ID of the managed identity federated to
+  # this Kubernetes service account.
+  # Locate the client ID:
+  #   az identity show --name id-aks-kalmannemeth-westeurope \
+  #     --resource-group rg-ai-platform-kalmannemeth-westeurope --query clientId -o tsv
+  # ==========================================================================
+  app-shaide:serviceAccountAnnotations:
+    azure.workload.identity/client-id: 2e46cb60-48c1-4eff-848d-6d7eb2d1ed23
+  # ==========================================================================
+  # Load balancer annotations — ignored when infraStackRef is set (Service
+  # becomes ClusterIP). Kept for reference if switching to standalone LB.
+  # ==========================================================================
+  app-shaide:lbAnnotations:
+    service.beta.kubernetes.io/azure-load-balancer-resource-group: rg-ai-platform-kalmannemeth-westeurope
+  # ==========================================================================
+  # Infra stack reference (for gateway config via StackReference)
+  # Reads gatewayHostname from the 03_cluster stack; switches shaide-server
+  # to ClusterIP + HTTPRoute through the shared AGC Gateway.
+  # Matches infra/gateway-provider/deployments/Pulumi.aks-kalmannemeth-westeurope.yaml's
+  # own infraStackRef, and infra/azure/03_cluster/deployments/Pulumi.kalmannemeth-westeurope.yaml.
+  # ==========================================================================
+  app-shaide:infraStackRef: organization/azure-cluster/kalmannemeth-westeurope
+  # ==========================================================================
+  # Namespace
+  # ==========================================================================
+  app-shaide:namespace: app-shaide
+  # Namespace for the MCP gateway components.
+  app-shaide:mcpNamespace: mcp-gateway
+  # ==========================================================================
+  # Workload identity / service account
+  # serviceAccountName is used by the shaide-server pod.
+  # ==========================================================================
+  app-shaide:shaideServiceAccountName: shaide-server
+  # ==========================================================================
+  # Node selector (matches node pool label "nodegroup: <value>")
+  # infra/azure/03_cluster/deployments/Pulumi.kalmannemeth-westeurope.yaml defines a
+  # "shaide" node pool (cpu-standard, max 3) — matches it explicitly.
+  # ==========================================================================
+  app-shaide:nodeSelector: cpu-standard
+  # ==========================================================================
+  # Storage — AKS uses Azure Disk CSI dynamic provisioning.
+  # The default StorageClass (managed-csi) is used when storageClassName is omitted.
+  # To use Azure Files or a custom StorageClass, set storageClassName explicitly.
+  # ==========================================================================
+  # app-shaide:storageClassName: managed-csi
+  # PV/PVC sizes — uncomment to override the defaults (5Gi each).
+  # app-shaide:shaidePVSize: 5Gi
+  # app-shaide:rustfsPVSize: 5Gi
+  # app-shaide:qdrantPVSize: 5Gi
+  # ==========================================================================
+  # Registry pull credentials for the "ghcr-creds" secret every Deployment
+  # below references (shaide/deploy.go, controlpanel/deploy.go, webapp/deploy.go).
+  # harborHostname set below routes pkg/iac/shaide/internal/platform/secret.go's
+  # CreateGHCRSecret at Harbor instead of ghcr.io — per its own doc comment, in
+  # that mode ghcrUser/ghcrToken must hold the *Harbor robot account's*
+  # credentials, not a real GitHub PAT: username is Harbor's fixed robot
+  # account name (`robot$k8s-harbor-sa`, same as infra/cloud-harbor/pkg/iac/harbor/harbor.go's
+  # robotUser const); token is that account's password
+  # (matches `harbor:robotPassword` in infra/cloud-harbor's own stack config —
+  # same value, set again here since Pulumi stacks don't share config).
+  #
+  # Trade-off worth knowing: infra/cloud-harbor/JOB.md's mirror CronJob also
+  # reads app-shaide:ghcrUser/ghcrToken from this stack, but to authenticate
+  # against the *real* ghcr.io (package discovery + mirroring axem-solutions'
+  # private images into Harbor in the first place). With this stack's ghcrUser
+  # repurposed for Harbor, that CronJob needs a real GitHub PAT from somewhere
+  # else if it's used against this cluster — e.g. set GHCR_USER/GHCR_TOKEN
+  # directly via kubectl instead of sourcing them from this stack (see JOB.md).
+  #
+  #   cd app_shaide/deployments
+  #   pulumi stack select aks-kalmannemeth-westeurope
+  #   pulumi config set --secret ghcrToken <harbor robot account password>
+  # ==========================================================================
+  app-shaide:harborHostname: harbor.harbor.svc.cluster.local
+  app-shaide:ghcrUser: 'robot$k8s-harbor-sa'
+  app-shaide:ghcrToken:
+    secure: v1:nh21KUlKSxm7pMXy:pLMzGlrlDEswzHBdxx4I/qPUPWuJLAiX+8fY
+  # app-shaide:ghcrToken: set via `pulumi config set --secret` above — do not
+  # hand-write a `secure:` block, its ciphertext is tied to this stack's own
+  # encryptionsalt and won't decrypt if copied from another stack's file.
+  # ==========================================================================
+  # Container images — all pulled from the internal Harbor registry, not
+  # ghcr.io/docker.io/dockerhub directly. Requires:
+  #   - infra/cloud-harbor deployed for this stack (Harbor running, robot
+  #     account created) — see infra/cloud-harbor/TASK_2.md.
+  #   - The harbor-registry-config DaemonSet (TASK_2.md step 5) applied on this
+  #     cluster, so node-level (kubelet) pulls of harbor.harbor.svc.cluster.local
+  #     bypass DNS and trust it as plain HTTP — without it these pulls fail the
+  #     same way documented in infra/cloud-harbor/TASK.md.
+  #   - Every tag referenced below actually mirrored into Harbor — the
+  #     harbor-image-mirror CronJob (infra/cloud-harbor/JOB.md) discovers and
+  #     mirrors all current ghcr.io/axem-solutions/* tags automatically, so
+  #     shaide_server/control_panel/shaide-webapp below need no manual mirroring
+  #     step as long as that CronJob is running; rustfs/qdrant/busybox are in
+  #     its static public-images.txt list.
+  # ==========================================================================
+  app-shaide:shaideServerImage: "harbor.harbor.svc.cluster.local/images-shaide/shaide_server:v0.7.0"
+  app-shaide:controlPanelImage: "harbor.harbor.svc.cluster.local/images-shaide/control_panel:v0.3.0"
+  app-shaide:webappImage: "harbor.harbor.svc.cluster.local/images-shaide/shaide-webapp:v0.1.1"
+  app-shaide:rustfsImage: "harbor.harbor.svc.cluster.local/images-shaide/rustfs/rustfs:1.0.0-alpha.92"
+  app-shaide:qdrantImage: "harbor.harbor.svc.cluster.local/images-shaide/qdrant/qdrant:v1.17"
+  app-shaide:busyboxImage: "harbor.harbor.svc.cluster.local/images-infra/busybox:1.37"
+  # ==========================================================================
+  # Application settings (injected as ConfigMap env vars into shaide-server)
+  # ==========================================================================
+  app-shaide:shaideServerUiFqdn: "control-panel"
+  app-shaide:shaideServerUiPort: "3000"
+  app-shaide:controlPanelBasePath: "/ui"
+  app-shaide:shaideServerS3Fqdn: "rustfs"
+  app-shaide:shaideServerS3Port: "9000"
+  app-shaide:rustfsWebhookArn: "arn:rustfs:sqs:eu-central-1:shaide:webhook"
+  app-shaide:databaseUrl: "sqlite:///root/.config/axem/shaide/db/kalmannemeth-db.sqlite"
+  app-shaide:s3User: rustfsuser
+  app-shaide:s3UploadProxyRoutePrefix: "/s3"
+  app-shaide:vectorDBUrl: "http://qdrant:6334"
+  app-shaide:rustLibBacktrace: "1"
+  app-shaide:rustSpantrace: "0"
+  app-shaide:rustfsConsoleEnabled: "true"
+  app-shaide:rustfsNotifyWebhookEnableShaide: "on"
+  app-shaide:rustfsNotifyWebhookEndpointShaide: "http://shaide-server/v1/object-storage/event"
+  app-shaide:rustfsNotifyWebhookQueueDirShaide: "/data/deploy/logs/notify"
+  # ==========================================================================
+  # In-cluster service discovery (ConfigMap)
+  # Kubernetes DNS names used by shaide-server to reach internal services.
+  # ==========================================================================
+  app-shaide:controlPanelService: control-panel
+  app-shaide:webappService: webapp
+  app-shaide:rustfsService: rustfs
+  app-shaide:qdrantService: qdrant
+  # ==========================================================================
+  # Secrets (encrypted, set per stack via CLI)
+  #   cd app_shaide/deployments
+  #   pulumi stack select aks-axem-trial-westeurope
+  #   pulumi config set --secret adminAuthKey <value>
+  #   pulumi config set --secret s3Password <value>
+  # ==========================================================================
+  app-shaide:adminAuthKey:
+    secure: v1:ml0cTXNfKRO5Y0G6:+oOUq0qVZWl7/ClSpizb3Hf5TjfG
+  app-shaide:s3Password:
+    secure: v1:vp5TvrYh7mvgZLwv:fKZFcIpvNUv0B/JZAVKe6PY8IN6lcNb0dXCKnQEt

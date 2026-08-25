@@ -1,0 +1,4 @@
+name: app_mcp
+runtime: go
+main: ..
+description: MCP Server namespace and infrastructure for Shaide platform

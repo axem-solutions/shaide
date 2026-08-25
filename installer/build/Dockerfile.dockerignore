@@ -1,0 +1,9 @@
+**
+!installer/
+!installer/**
+!pkg/
+!pkg/**
+installer/installer-bundle/
+installer/.bundle/
+installer/*.tar*
+installer/**/*.tar*
