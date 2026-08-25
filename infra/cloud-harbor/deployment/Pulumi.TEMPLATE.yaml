@@ -1,0 +1,55 @@
+# Stack: <stack-name> -- <short description>
+#
+# Works on any cloud provider (GCP, AWS, Azure) or any cluster reachable via kubeconfig.
+# On-prem Harbor (hostPath PVs, pre-loaded images) is a separate stack — see
+# infra/on-prem/pulumi/services/.
+#
+# Required config:
+#   harbor:adminPassword — Harbor admin password (set via
+#                          `pulumi config set --secret harbor:adminPassword <password> --stack <stack-name>`).
+#                          Set once on first deploy; do not change after — Harbor does not
+#                          pick up changes to this value on redeploy.
+#
+# Optional config:
+#   kubeconfig — bare (project-level) key, NOT under the harbor: prefix — path to kubeconfig;
+#                omit to use KUBECONFIG env / ~/.kube/config
+#   context    — bare (project-level) key — kubeconfig context name to use, when the
+#                kubeconfig has multiple contexts and the current one isn't the target cluster
+#
+#   harbor:robotPassword — robot account (`k8s-harbor-sa`) password. Leave unset on the first
+#                          `pulumi up` (no robot account exists yet) — set it after running
+#                          scripts/harbor-setup.sh, then re-run `pulumi up` to create the
+#                          `k8s-harbor-sa-secret` pull secret. Must contain at least one
+#                          uppercase, one lowercase, one number, and one special character
+#                          (Harbor registry token service requirement).
+#   harbor:chartPath      — path to the Harbor Helm chart tarball; default:
+#                          ./charts/harbor-1.18.2.tgz. The chart is NOT committed to the
+#                          repo — download it first, see README.md Step 0.
+#   harbor:nodeHostname   — pins all Harbor pods to a specific node
+#                          (kubernetes.io/hostname); omit to let Kubernetes schedule freely
+#                          (the default on cloud, which uses dynamic PVCs from the cluster's
+#                          default StorageClass, e.g. pd-ssd on GKE)
+#   harbor:namespace      — Kubernetes namespace for Harbor; default: harbor
+#
+# To create a new stack:
+#   cd infra/cloud-harbor/deployment
+#   pulumi stack init <stack-name>
+#   pulumi config set --secret harbor:adminPassword <password>
+#   pulumi up
+#   # then, after scripts/harbor-setup.sh creates the robot account:
+#   pulumi config set --secret harbor:robotPassword <robot-password>
+#   pulumi up
+config:
+  harbor:adminPassword:
+    secure: <run `pulumi config set --secret harbor:adminPassword <password>`>
+  # harbor:robotPassword:
+  #   secure: <run `pulumi config set --secret harbor:robotPassword <robot-password>` after harbor-setup.sh>
+  # harbor:chartPath: ./charts/harbor-1.18.2.tgz
+  # harbor:nodeHostname: <node-hostname>
+  # harbor:namespace: harbor
+  # cloud-harbor:kubeconfig: ~/.kube/<cluster-name>.yaml
+  # cloud-harbor:context: <kubeconfig-context-name>
+#
+# Managed by Pulumi.
+# Do not edit or remove the following line — required to decrypt secret config values.
+encryptionsalt: null

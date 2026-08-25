@@ -1,0 +1,4 @@
+name: app-shaide
+runtime: go
+main: ..
+description: Centralized Shaide routing instance for multi-nodegroup AI platform

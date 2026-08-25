@@ -1,0 +1,46 @@
+---
+# ==============================================================
+# Model Registry Manifest
+# Declarative list of models to download from HuggingFace and
+# push to Harbor as OCI artifacts via ORAS.
+#
+# Fields:
+#   id:             HuggingFace model ID (org/model-name)
+#   harbor_project: Harbor project to push into (must exist)
+#   harbor_name:    Image name inside the project
+#   harbor_tag:     OCI tag (use semantic version or date)
+#   revision:       HF commit hash — pins the exact snapshot.
+#                   HF can update a model's default revision, so
+#                   always pin to a known-good commit.
+#   dependencies:   (optional) extra HF repos downloaded together
+#                   and packed into the same OCI artifact.
+#                   Each entry has:
+#                     id:       HuggingFace model ID
+#                     revision: HF commit hash (optional, omit to use latest)
+#
+# Usage:
+#   cp models/TEMPLATE.yml models/<stack-name>.yml
+#   ENV_FILE=<stack-name> MODELS_YML=<stack-name>.yml bash model-sync.sh   # download + upload
+#   ENV_FILE=<stack-name> MODELS_YML=<stack-name>.yml bash model-download.sh  # download only
+#   ENV_FILE=<stack-name> MODELS_YML=<stack-name>.yml bash model-upload.sh    # upload only
+#
+# On-prem — pass a custom kubeconfig for clusters not in the default context:
+#   KUBECONFIG=~/.kube/<stack-name>.yaml \
+#   ENV_FILE=<stack-name> MODELS_YML=<stack-name>.yml bash model-sync.sh
+# ==============================================================
+
+models:
+  - id: "nomic-ai/nomic-embed-text-v1.5"
+    harbor_project: ai-models
+    harbor_name: nomic-embed-text-v1.5
+    harbor_tag: "1.5.0"
+    revision: "e5cf08aadaa33385f5990def41f7a23405aec398"        # fill in HF commit hash before first use
+    dependencies:
+      - id: "nomic-ai/nomic-bert-2048"
+        revision: "7710840340a098cfb869c4f65e87cf2b1b70caca"    # fill in HF commit hash to pin
+
+#  - id: "<org>/<model-name>"
+#    harbor_project: ai-models
+#    harbor_name: <model-name>
+#    harbor_tag: "1.0.0"
+#    revision: ""        # fill in HF commit hash before first use

@@ -1,0 +1,126 @@
+# Added by Pulumi.
+# Do not edit or remove — required to decrypt secret config values.
+encryptionsalt: v1:d+Qx4h1NMfc=:v1:NyTQgdUO55Z1fcuG:Fy8s5al0vlJQsvcBoJ/Ly5fuFuvvxQ==
+#
+# ─── Stack Configuration ───────────────────────────────────────────────────
+# 
+config:
+  # Harbor admin password — set once, never change after first deploy.
+  #   cd infra/cloud-harbor
+  #   pulumi stack select aks-axem-trial-westeurope
+  #   pulumi config set --secret harbor:adminPassword <password>
+  harbor:adminPassword:
+    secure: v1:rY1t2Jrwy0iI8DXM:2ugt1Ttxc2QdHSauk1TWetDXHmRTECoiR082EA==
+  # Harbor chart tarball — download from https://github.com/goharbor/harbor-helm
+  # and place at ./charts/harbor-1.18.2.tgz before running pulumi up.
+  harbor:chartPath: ./charts/harbor-1.18.2.tgz
+  # Harbor robot account password — pick any value and set it, no need to run
+  # anything first. `pulumi up` creates (or updates) the k8s-harbor-sa robot
+  # account itself, using this exact password (pkg/iac/harbor/setup.go) — it's
+  # desired state, not a value to capture from elsewhere.
+  #   pulumi config set --secret harbor:robotPassword <password>
+  harbor:robotPassword:
+    secure: v1:Hb5f13uRuYyT2Wzk:u6j5qRsnUS7FZKghzx+qjT17gRfDL0OH9mQB
+  # Harbor projects to create (and keep public) — one name per line, no
+  # default baked into the code. Also the destination namespace prefix used
+  # by harbor:publicImages/harbor:ghcrPinnedImages below and by the private
+  # GHCR mirror's discovered destinations (always "images-shaide/...").
+  # ai-models is used directly by app_serving's modelSource ORAS pulls, not
+  # by anything in this stack.
+  harbor:projects: |
+    ai-models
+    images-infra
+    images-shaide
+  # Pins Harbor's Service to a fixed ClusterIP instead of a Kubernetes-assigned
+  # one, so the node-trust DaemonSet (pkg/iac/harbor/node_trust.go) has a
+  # stable address to bake into every node's hosts.toml. Must be a free IP
+  # inside this cluster's Service CIDR (az aks show --query
+  # networkProfile.serviceCidr) — Kubernetes rejects the value at apply time
+  # if it's out of range or already taken by another Service.
+  # Chosen here to match what Harbor's Service already had assigned, so
+  # pinning it doesn't attempt to change an existing (immutable) ClusterIP:
+  #   kubectl -n harbor get svc harbor -o jsonpath='{.spec.clusterIP}'
+  harbor:staticClusterIP: 10.96.126.34
+  #
+  # ─── Harbor Mirroring ───────────────────────────────────────────────────
+  #
+  # Opt-in — mirroring only deploys when this is true, even though
+  # harbor:robotPassword is also required (push auth) regardless of this
+  # flag. A cluster can pull from Harbor without this platform also being
+  # responsible for keeping Harbor populated; set this only where that's
+  # actually wanted.
+  harbor:mirrorEnabled: true
+  #
+  # Config below covers two independent things mirrored into Harbor:
+  #   - static public images   → harbor:publicImages
+  #   - private GHCR images    → harbor:ghcrOrg + harbor:ghcrSyncMode
+  #                               (+ harbor:ghcrUser / harbor:ghcrToken to
+  #                               actually authenticate against GHCR — unset
+  #                               skips private-image mirroring entirely)
+  # None of these keys have a default baked into the code; a stack that
+  # leaves one unset simply mirrors nothing for that part, rather than
+  # falling back to some other cluster's list.
+  #
+  # GitHub org the harbor-image-mirror CronJob discovers/mirrors private
+  # GHCR packages from (pkg/iac/harbor/mirror.go). No default baked into the
+  # code — private-image discovery is skipped entirely if this is unset.
+  harbor:ghcrOrg: axem-solutions
+  # Both required for private-image mirroring to run at all, in every sync
+  # mode — not just because the images themselves are private:
+  #   - GitHub's Packages API (used by "all"/"min-version" discovery) requires
+  #     an authenticated token to list org packages/tags, regardless of
+  #     whether the underlying container image is public or private.
+  #   - mirrorScript's own gate (pkg/iac/harbor/mirror.go) only attempts
+  #     private-image mirroring — including "pinned" mode, which never calls
+  #     the GitHub API — when both are present; unset means skipped outright,
+  #     even for a fully public GHCR package.
+  harbor:ghcrUser: axem-bot
+  harbor:ghcrToken:
+    secure: v1:spclLMLOWYzGAcMj:ut1kFLyTlPnJun1dqzFL1Uk76bXjpypZ/1MJ9rdEyHjIickNpn7noCad9XXHYWKsnfAaDKwLFjg=
+  # How private GHCR images are chosen (pkg/iac/harbor/mirror.go). Packages
+  # not covered by the active mode's list are skipped entirely — no partial
+  # fallback to "all" for whatever's missing.
+  #
+  #   all (default if unset) — every published tag for every org package,
+  #   discovered dynamically via the GitHub Packages API each run:
+  #     harbor:ghcrSyncMode: all
+  #
+  #   pinned — only the exact package:tag pairs listed in
+  #   harbor:ghcrPinnedImages, no discovery call at all:
+  #     harbor:ghcrSyncMode: pinned
+  #     harbor:ghcrPinnedImages: |
+  #       shaide_server:v0.11.0|images-shaide/shaide_server:v0.11.0
+  #       control_panel:v0.4.0|images-shaide/control_panel:v0.4.0
+  #
+  #   min-version — every tag >= a per-package floor from
+  #   harbor:ghcrMinVersions (this stack's setup, see below):
+  #     harbor:ghcrSyncMode: min-version
+  harbor:ghcrSyncMode: min-version
+  # "package|min_version" per line — only tags >= min_version are mirrored for
+  # that package; packages not listed here are skipped entirely in
+  # min-version mode (no fallback to "all" for the rest).
+  harbor:ghcrMinVersions: |
+    shaide_server|v0.7.0
+    control_panel|v0.3.0
+    shaide-webapp|v0.1.1
+  # Static public images mirrored into Harbor by the harbor-image-mirror
+  # CronJob (pkg/iac/harbor/mirror.go) — "src|dest" per line, no default
+  # baked into the code. Adjust freely; this cluster's own list, not a
+  # platform-wide one.
+  #   pulumi config set harbor:publicImages "$(cat <<'EOF'
+  #   ...
+  #   EOF
+  #   )"
+  harbor:publicImages: |
+    nginx:alpine|images-infra/nginx:alpine
+    alpine:3.20|images-infra/alpine:3.20
+    python:3.12-slim|images-infra/python:3.12-slim
+    busybox:1.37|images-infra/busybox:1.37
+    rustfs/rustfs:1.0.0-alpha.92|images-shaide/rustfs/rustfs:1.0.0-alpha.92
+    qdrant/qdrant:v1.17|images-shaide/qdrant/qdrant:v1.17
+    docker.io/istio/pilot:1.28.1|images-shaide/pilot:1.28.1
+    docker.io/istio/proxyv2:1.28.1|images-shaide/proxyv2:1.28.1
+    ghcr.io/llm-d/llm-d-routing-sidecar:v0.4.0-rc.1|images-shaide/llm-d/llm-d-routing-sidecar:v0.4.0-rc.1
+    ghcr.io/llm-d/llm-d-cuda:v0.4.0|images-shaide/llm-d/llm-d-cuda:v0.4.0
+    registry.k8s.io/gateway-api-inference-extension/epp:v1.2.0|images-shaide/gateway-api-inference-extension/epp:v1.2.0
+    ghcr.io/oras-project/oras:v1.3.1|images-infra/oras-project/oras:v1.3.1

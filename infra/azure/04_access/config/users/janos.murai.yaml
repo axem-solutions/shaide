@@ -1,0 +1,13 @@
+# Per-user extras beyond the developer group baseline.
+# Only needed when a user requires access the group does not cover.
+# Group baseline is defined in config/groups.yaml.
+email: janos.murai@axem.dev
+# az ad user list --filter "startswith(displayName,'Janos')" --query "[0].id" -o tsv
+objectId: "acfd9eb2-7d30-49ce-ae0d-d3dd83cde1df"
+# No "name" (stack) field here, unlike clusters: above — permissions are always
+# materialized by the single dedicated axem-azure stack, never per-cluster.
+# Azure role assignments aren't region-scoped — the deploying stack's own region and
+# the target resource's region are unrelated, so this works regardless of either.
+permissions:
+  - role: Cognitive Services User
+    resource: foundry-ai

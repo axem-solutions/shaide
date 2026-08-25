@@ -1,0 +1,104 @@
+# Stack: <stack-name> -- <short description>
+#
+# Required config:
+#   namespace     — Kubernetes namespace for all monitoring resources (e.g. monitoring)
+#   cloudProvider — informational only; loaded but not currently read by any component
+#                   (no storage/node-selector behavior is actually gated on it today,
+#                   despite the name). Set it anyway — it's a required key. Valid
+#                   values used elsewhere in this repo: gcp | aws | azure | on-prem
+#   components    — list of components to deploy; only listed components are created,
+#                   omitting one skips it without removing existing resources:
+#                     loki        — log aggregation (StatefulSet, monolithic mode)
+#                     grafana     — dashboards + log/metric visualization
+#                     alloy       — Kubernetes pod log collection (DaemonSet)
+#                     dashboards  — the 4 built-in Grafana dashboards, as ConfigMaps.
+#                                   This is independent of "grafana" — listing "grafana"
+#                                   alone does NOT deploy dashboards; both must be listed.
+#                     prometheus  — NOT YET IMPLEMENTED (deploy.go is a no-op stub)
+#
+#   S3 / RustFS backend (required whenever "loki" is enabled — Loki has no other backend):
+#     s3Endpoint   — RustFS S3-compatible endpoint, e.g.
+#                    http://rustfs.app-shaide.svc.cluster.local:9000
+#                    (RustFS is deployed by app_shaide, not owned by this stack)
+#     s3User       — RustFS access key (same value as app_shaide's s3User)
+#     s3Password   — RustFS secret key (set via `pulumi config set --secret s3Password <value>`;
+#                    same value as app_shaide's s3Password)
+#     s3BucketLoki — bucket name for Loki chunks/ruler data; auto-created on `pulumi up`
+#                    by a one-time Job (mc mb --ignore-existing) — no manual setup needed
+#
+#   Helm chart versions (required per enabled component — no default; also drive the
+#   default chart path, see chartPath overrides below):
+#     lokiVersion, grafanaVersion, alloyVersion
+#     Charts must be downloaded locally first (they are read from disk, not fetched from
+#     a Helm repo at deploy time — required for air-gapped/on-prem):
+#       helm repo add grafana-community https://grafana-community.github.io/helm-charts
+#       helm repo add grafana https://grafana.github.io/helm-charts
+#       helm repo update
+#       cd monitoring/charts/
+#       helm pull grafana-community/loki    --version <lokiVersion>
+#       helm pull grafana-community/grafana --version <grafanaVersion>
+#       helm pull grafana/alloy             --version <alloyVersion>
+#     The .tgz files are git-ignored — download them fresh on every machine that runs
+#     `pulumi up`, never commit them.
+#
+#   grafanaAdminPassword — Grafana admin login (set via
+#                          `pulumi config set --secret grafanaAdminPassword <value>`)
+#
+# Optional config:
+#   kubeconfig       — path to kubeconfig file; omit to use KUBECONFIG env / ~/.kube/config
+#   nodeSelector     — loaded but not currently applied to any resource by any component;
+#                       setting it has no effect today
+#   lokiStorageClass — StorageClass for Loki's 10Gi PVC (WAL + compactor working dir).
+#                       on-prem: hostpath | GCP: standard or premium-rwo. Omit to use the
+#                       cluster's default StorageClass.
+#   lokiChartPath, grafanaChartPath, alloyChartPath
+#                    — override the local chart tarball path; default:
+#                      charts/<component>-<version>.tgz (e.g. charts/loki-14.1.0.tgz)
+#   mcImage          — image for the bucket-creation Job; default: minio/mc:latest
+#                       (mirror into Harbor and override for on-prem air-gap, e.g.
+#                       harbor.<host>/images-infra/minio/mc:latest)
+#   prometheusVersion — chart version for the prometheus component; unused until
+#                       prometheus/deploy.go is implemented
+#
+# To create a new stack:
+#   cd monitoring/deployments
+#   pulumi stack init <stack-name>
+#   pulumi config set --secret s3Password <value>            # same as app_shaide's s3Password
+#   pulumi config set --secret grafanaAdminPassword <value>
+config:
+  monitoring:namespace: monitoring
+  monitoring:cloudProvider: cloud   # or: on-prem
+  monitoring:components:
+    - loki
+    - grafana
+    - alloy
+    - dashboards
+    # - prometheus   # not yet implemented — deploy.go is a no-op stub
+
+  # --- S3 / RustFS backend (required when "loki" is enabled) ---
+  monitoring:s3Endpoint: http://rustfs.app-shaide.svc.cluster.local:9000
+  monitoring:s3User: rustfsuser
+  monitoring:s3Password:
+    secure: <run `pulumi config set --secret s3Password <value>`>
+  monitoring:s3BucketLoki: loki-chunks
+
+  # --- Helm chart versions (required per enabled component) ---
+  monitoring:lokiVersion: "<loki-chart-version>"
+  monitoring:grafanaVersion: "<grafana-chart-version>"
+  monitoring:alloyVersion: "<alloy-chart-version>"
+  # monitoring:lokiChartPath: charts/loki-<version>.tgz
+  # monitoring:grafanaChartPath: charts/grafana-<version>.tgz
+  # monitoring:alloyChartPath: charts/alloy-<version>.tgz
+  # monitoring:mcImage: minio/mc:latest
+
+  monitoring:grafanaAdminPassword:
+    secure: <run `pulumi config set --secret grafanaAdminPassword <value>`>
+
+  # --- Optional ---
+  # monitoring:kubeconfig: ~/.kube/rke2-cluster.yaml
+  # monitoring:nodeSelector: <node-pool-name>   # currently unused by any component
+  # monitoring:lokiStorageClass: <storage-class>   # e.g. hostpath (on-prem), standard (GCP)
+#
+# Managed by Pulumi.
+# Do not edit or remove the following line — required to decrypt secret config values.
+encryptionsalt: null

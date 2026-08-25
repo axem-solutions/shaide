@@ -1,0 +1,130 @@
+# Nomic Embed Text v1.5 ModelService Configuration — on-prem / air-gapped / GPU
+# Serves nomic-ai/nomic-embed-text-v1.5 through the OpenAI-compatible /v1/embeddings API
+# Tuned for a single-GPU embedder deployment using vLLM pooling runner.
+# Images served from internal Harbor; no internet access required on cluster nodes.
+#
+# Image upload (run on provisioner laptop before pulumi up):
+#   skopeo copy docker://ghcr.io/llm-d/llm-d-routing-sidecar:v0.8.0 \
+#     oci-archive:infra/on-prem/ansible/artifacts/images/llm-d-routing-sidecar-v0.8.0.tar
+#   skopeo copy docker://ghcr.io/llm-d/llm-d-cuda:v0.7.0 \
+#     oci-archive:infra/on-prem/ansible/artifacts/images/llm-d-cuda-v0.7.0.tar
+#   ansible-playbook -i inventory-dev harbor_upload.yml
+multinode: false
+
+modelArtifacts:
+  name: "nomic-ai/nomic-embed-text-v1.5"
+  uri: "hf://nomic-ai/nomic-embed-text-v1.5"
+  size: 10Gi
+  labels:
+    llm-d.ai/inferenceServing: "true"
+    llm-d.ai/model: "ms-nomic-embed-text-v1-5-rke2-llm-d-modelservice"
+
+routing:
+  servicePort: 8000
+
+  proxy:
+    # source: ghcr.io/llm-d/llm-d-routing-sidecar:v0.8.0
+    image: harbor.harbor.svc.cluster.local/images-shaide/llm-d/llm-d-routing-sidecar:v0.8.0
+    connector: nixlv2
+    secure: false
+
+decode:
+  create: true
+  replicas: 1
+  # Pull secret created by the app-serving Pulumi stack (harbor-creds).
+  imagePullSecrets:
+    - name: harbor-creds
+  # GPU node srv3rke2w2 carries taint dedicated=gpu:NoSchedule.
+  tolerations:
+    - key: "dedicated"
+      operator: "Equal"
+      value: "gpu"
+      effect: "NoSchedule"
+  monitoring:
+    podmonitor:
+      enabled: false
+      portName: "metrics"
+      path: "/metrics"
+      interval: "30s"
+  containers:
+  - name: "vllm"
+    # source: ghcr.io/llm-d/llm-d-cuda:v0.7.0
+    image: "harbor.harbor.svc.cluster.local/images-shaide/llm-d/llm-d-cuda:v0.7.0"
+    modelCommand: vllmServe
+    args:
+      - "--runner"
+      - "pooling"
+      - "--tensor-parallel-size"
+      - "1"
+      - "--gpu-memory-utilization"
+      - "0.7"
+      - "--max-model-len"
+      - "2048"
+      - "--dtype"
+      - "bfloat16"
+      - "--max-num-seqs"
+      - "8"
+      - "--max-num-batched-tokens"
+      - "8192"
+      - "--trust-remote-code"
+    env:
+      - name: HF_HUB_OFFLINE
+        value: "1"
+      - name: UCX_TLS
+        value: "cuda_ipc,cuda_copy,tcp"
+      - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+        valueFrom:
+          fieldRef:
+            fieldPath: status.podIP
+      - name: VLLM_NIXL_SIDE_CHANNEL_PORT
+        value: "5557"
+      - name: VLLM_LOGGING_LEVEL
+        value: INFO
+      - name: NCCL_P2P_DISABLE
+        value: "1"
+      - name: NCCL_IGNORE_DISABLED_P2P
+        value: "1"
+      - name: NCCL_DEBUG
+        value: "INFO"
+      - name: VLLM_SKIP_P2P_CHECK
+        value: "1"
+      - name: GLOO_SOCKET_IFNAME
+        value: "eth0"
+      - name: NCCL_SOCKET_IFNAME
+        value: "eth0"
+    ports:
+      - containerPort: 5557
+        protocol: TCP
+      - containerPort: 8200
+        name: metrics
+        protocol: TCP
+    resources:
+      limits:
+        nvidia.com/gpu: "1"
+        memory: "8Gi"
+        cpu: "4"
+      requests:
+        nvidia.com/gpu: "1"
+        memory: "8Gi"
+        cpu: "4"
+    mountModelVolume: true
+    volumeMounts:
+    - name: metrics-volume
+      mountPath: /.config
+    - name: torch-compile-cache
+      mountPath: /.cache
+    - name: shm
+      mountPath: /dev/shm
+  volumes:
+  - name: metrics-volume
+    emptyDir: {}
+  - name: torch-compile-cache
+    emptyDir: {}
+  - name: shm
+    emptyDir:
+      medium: Memory
+      sizeLimit: 8Gi
+
+prefill:
+  create: false
+  replicas: 0

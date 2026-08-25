@@ -1,0 +1,167 @@
+# Stack: <stack-name> -- <short description>
+#
+# Required config:
+#   namespace                — Kubernetes namespace for MCP resources; this stack creates it (always: mcp-gateway)
+#   shaideNamespace          — Shaide Server namespace; must already exist, owned by app_shaide (always: app-shaide)
+#   shaideServiceAccountName — ServiceAccount name of the Shaide Server pod in shaideNamespace
+#                              must match the value in the corresponding app_shaide stack config —
+#                              the mcp-pod-reader Role is bound to this SA; a mismatch causes 403 Forbidden
+#                              on the Kubernetes API Watch
+#   datasources              — list of MCP data source deployments (see Datasource fields below)
+#
+# Optional config:
+#   kubeconfig               — path to kubeconfig file; omit to use KUBECONFIG env / ~/.kube/config
+#   nodeSelectorKey          — Kubernetes node label key used by nodeSelector; default: nodegroup
+#   nodeSelector             — node label value applied to all MCP pods unless datasource overrides it
+#   imagePullSecrets         — list of existing pull secret names in the MCP namespace
+#   companyCACert            — PEM-encoded company internal root CA cert, applied to all datasources
+#                              that do not define their own caCert
+#                              creates ConfigMap company-internal-ca in the mcp namespace
+#                              omit when datasources use publicly trusted certificates
+#                              set via: pulumi config set companyCACert "$(cat company-ca.crt)"
+#   companyCATrustEnvVar     — runtime env var used to trust the company CA cert
+#                              NODE_EXTRA_CA_CERTS (Node.js) | REQUESTS_CA_BUNDLE (Python) | SSL_CERT_FILE (Go)
+#                              required when companyCACert is set
+#
+# Deployment defaults (apply to all datasources; each can be overridden per datasource):
+#   imagePullPolicy — Always | IfNotPresent | Never; default: Always
+#                     use IfNotPresent for air-gapped clusters
+#   healthPath      — HTTP path for startup, readiness, and liveness probes; default: /health
+#   cpuRequest      — default: 100m
+#   memoryRequest   — default: 128Mi
+#   cpuLimit        — default: 500m
+#   memoryLimit     — default: 512Mi; raise for datasources with large response payloads
+#
+# Probe timing (global; applies to all datasources):
+#   startupProbePeriod             — seconds between startup probe checks; default: 5
+#   startupProbeTimeout            — startup probe timeout in seconds; default: 3
+#   startupProbeFailureThreshold   — max failures before pod is killed; default: 30 (= 150s window)
+#                                    can also be overridden per datasource — see Datasource fields below
+#   readinessProbeInitialDelay     — seconds before first readiness check; default: 5
+#   readinessProbePeriod           — seconds between readiness checks; default: 10
+#   readinessProbeTimeout          — readiness probe timeout; default: 3
+#   readinessProbeFailureThreshold — consecutive failures before pod is marked unready; default: 3
+#   livenessProbeInitialDelay      — seconds before first liveness check; default: 15
+#   livenessProbePeriod            — seconds between liveness checks; default: 30
+#   livenessProbeTimeout           — liveness probe timeout; default: 5
+#   livenessProbeFailureThreshold  — consecutive failures before container restart; default: 3
+#
+# Datasource fields:
+#   name          — identifier used in resource names: mcp-<name>  (required)
+#   image         — fully qualified container image                 (required)
+#   port          — MCP server listen port; default: 8080
+#   args          — command-line args passed to the MCP container
+#   egressHost    — datasource hostname (e.g. datasource.internal.example.com)
+#                   stored as annotation mcp.shaide/datasource-host on the NetworkPolicy for operator reference;
+#                   Kubernetes NetworkPolicy only accepts IP/CIDR, not hostnames — informational only
+#   egressCIDR    — datasource IP in CIDR notation (e.g. 10.20.5.10/32)
+#                   required for egress NetworkPolicy; omit to skip the policy entirely
+#   egressPort    — TCP port to the datasource; default: 443
+#   caCert        — PEM-encoded CA cert for this datasource's TLS; takes precedence over companyCACert
+#                   set via: pulumi config set --path 'datasources[0].caCert' "$(cat ds-ca.crt)"
+#   caTrustEnvVar — runtime env var to trust the mounted cert
+#                   NODE_EXTRA_CA_CERTS (Node.js) | REQUESTS_CA_BUNDLE (Python) | SSL_CERT_FILE (Go)
+#                   required when caCert is set
+#
+#   env           — arbitrary environment variables injected into the MCP container
+#                   use to pass the datasource URL or any image-specific config:
+#                     env:
+#                       EXAMPLE_API_URL: https://api.example.com
+#   secretEnv     — environment variables sourced from Kubernetes Secrets in the MCP namespace:
+#                     secretEnv:
+#                       - name: EXAMPLE_API_TOKEN
+#                         secretName: mcp-secrets
+#                         secretKey: EXAMPLE_API_TOKEN
+#
+#   Per-datasource overrides (each falls back to the global default when omitted):
+#   replicas                     — pod replica count; default: 1
+#   imagePullPolicy              — Always | IfNotPresent | Never
+#   healthPath                   — HTTP probe path (e.g. /healthz)
+#   disableProbes                — true for images without startup/readiness/liveness endpoints
+#   cpuRequest                   — e.g. 200m
+#   memoryRequest                — e.g. 256Mi
+#   cpuLimit                     — e.g. 1000m
+#   memoryLimit                  — e.g. 1Gi
+#   startupProbeFailureThreshold — override the global startupProbeFailureThreshold for this datasource
+#                                  raise when the datasource is slow to become reachable at startup
+#   nodeSelector                 — override global nodeSelector for this datasource
+#
+# To create a new stack:
+#   cd app_mcp/deployments
+#   pulumi stack init <stack-name>
+config:
+  app_mcp:namespace: mcp-gateway
+  app_mcp:shaideNamespace: app-shaide
+  app_mcp:shaideServiceAccountName: shaide-server  # must match shaideServiceAccountName in the app_shaide stack
+  # app_mcp:nodeSelectorKey: nodegroup
+  # app_mcp:nodeSelector: general
+  # app_mcp:imagePullSecrets:
+  #   - ghcr-creds
+  # Optional managed Secret created in the MCP namespace as mcp-secrets.
+  # Only takes effect if a datasource below is named exactly "atlassian" —
+  # the value is auto-attached to that datasource as the
+  # ATLASSIAN_OAUTH_CLIENT_SECRET env var (see internal/config/config.go).
+  # app_mcp:mcpAtlassianOAuthClientSecret:
+  #   secure: <encrypted-secret>
+  # company-wide CA cert — set when datasources use a certificate signed by an internal CA:
+  # app_mcp:companyCACert: |
+  #   -----BEGIN CERTIFICATE-----
+  #   <base64-encoded-CA-cert>
+  #   -----END CERTIFICATE-----
+  # app_mcp:companyCATrustEnvVar: NODE_EXTRA_CA_CERTS
+  app_mcp:datasources:
+    # Simple example — a public MCP server image, no egress policy needed
+    # (the datasource is reached over the public internet, not a private network).
+    - name: example-public
+      image: <registry>/mcp-example-public:<tag>
+      port: 8080
+      args:
+        - --transport
+        - streamable-http
+        - --port
+        - "8080"
+      healthPath: /health
+      env:
+        EXAMPLE_API_URL: https://api.example.com
+      # secretEnv:
+      #   - name: EXAMPLE_API_TOKEN
+      #     secretName: mcp-secrets
+      #     secretKey: EXAMPLE_API_TOKEN
+    # Full example — a private/internal datasource, showing egress policy,
+    # per-datasource TLS trust, and resource/probe overrides.
+    - name: example-internal
+      image: <registry>/mcp-example-internal:<tag>
+      port: 8080
+      egressHost: datasource.internal.example.com
+      egressCIDR: 10.20.5.10/32
+      egressPort: 443
+      env:
+        DATASOURCE_URL: https://datasource.internal.example.com
+      # per-datasource CA cert — overrides companyCACert for this datasource:
+      # caCert: |
+      #   -----BEGIN CERTIFICATE-----
+      #   <base64-encoded-CA-cert>
+      #   -----END CERTIFICATE-----
+      # caTrustEnvVar: NODE_EXTRA_CA_CERTS
+      # per-datasource overrides:
+      # replicas: 1
+      # imagePullPolicy: Always
+      # healthPath: /health
+      # cpuRequest: 100m
+      # memoryRequest: 128Mi
+      # cpuLimit: 500m
+      # memoryLimit: 512Mi
+      # startupProbeFailureThreshold: 30
+  # app_mcp:kubeconfig: ~/.kube/rke2-cluster.yaml
+  # app_mcp:imagePullPolicy: IfNotPresent
+  # Probe timing (tune when datasources are slow to start):
+  # app_mcp:startupProbePeriod: 5
+  # app_mcp:startupProbeFailureThreshold: 30
+  # app_mcp:readinessProbeInitialDelay: 5
+  # app_mcp:readinessProbePeriod: 10
+  # app_mcp:livenessProbeInitialDelay: 15
+  # app_mcp:livenessProbePeriod: 30
+#
+# Managed by Pulumi.
+# Do not edit or remove the following line — required to decrypt secret config values.
+encryptionsalt: null

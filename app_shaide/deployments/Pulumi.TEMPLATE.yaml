@@ -1,0 +1,190 @@
+# Stack: <stack-name> -- <short description>
+#
+# Required config:
+#   namespace                — Kubernetes namespace for all app-shaide resources (e.g. app-shaide)
+#   shaideServiceAccountName — ServiceAccount name for the shaide-server pod (e.g. shaide-server)
+#                              app_mcp binds its watch Role to this SA — must match if app_mcp is deployed
+#   cloudProvider            — informational only; selects the cloud-specific resource
+#                              implementation: "gcp" | "aws" | "azure" | "on-prem" | anything else
+#                              (falls back to a no-op generic provider)
+#                                gcp:      dynamic PV provisioning; GKE HealthCheckPolicy on the
+#                                          shaide-server Service
+#                                aws:      dynamic PV provisioning; no post-deploy resource
+#                                azure:    dynamic PV provisioning; adds the
+#                                          azure.workload.identity/use pod label
+#                                on-prem:  requires pvNodeHostname when storageClassName is
+#                                          "hostpath" — creates static, pre-bound PersistentVolumes
+#                                other:    no-op (e.g. local/dev clusters with a default StorageClass)
+#
+#   controlPanelService, webappService, rustfsService, qdrantService
+#                            — Kubernetes Service names for each component (e.g. control-panel,
+#                              webapp, rustfs, qdrant); also injected into shaide-config for
+#                              in-cluster service discovery
+#   shaideServerImage, controlPanelImage, webappImage, rustfsImage, qdrantImage
+#                            — fully qualified container images for each component
+#
+#   Application settings (injected as ConfigMap env vars into shaide-server):
+#     shaideServerUiFqdn, shaideServerUiPort   — control-panel Service name/port
+#     databaseUrl                              — sqlite:///root/.config/axem/shaide/db/<name>.sqlite
+#     s3User, shaideServerS3Fqdn, shaideServerS3Port, s3UploadProxyRoutePrefix
+#     rustfsWebhookArn                         — arbitrary ARN-shaped string; RustFS requires the
+#                                                field but does not validate it against real AWS
+#     vectorDBUrl                              — e.g. http://qdrant:6334
+#     rustfsNotifyWebhookEnableShaide, rustfsNotifyWebhookEndpointShaide,
+#     rustfsNotifyWebhookQueueDirShaide        — RustFS → shaide-server event webhook
+#
+#   Secrets (set via `pulumi config set --secret <key> <value>`):
+#     ghcrToken     — GHCR PAT (read:packages) or Harbor robot secret (see harborHostname below)
+#     adminAuthKey  — shaide-server admin auth key
+#     s3Password    — RustFS S3 credential (paired with s3User above)
+#
+# Optional config:
+#   kubeconfig        — path to kubeconfig file; omit to use KUBECONFIG env / ~/.kube/config
+#   nodeSelectorKey   — Kubernetes node label key used by all nodeSelector values; default: nodegroup
+#   nodeSelector      — global fallback node label value applied to any component without its
+#                       own override
+#   nodeSelectorShaide, nodeSelectorControlPanel, nodeSelectorWebapp, nodeSelectorRustfs,
+#   nodeSelectorQdrant
+#                     — per-component override; falls back to nodeSelector when unset
+#                       (note the config key is "nodeSelectorWebapp", lowercase "app")
+#
+#   storageClassName  — StorageClass for all PVCs; omit to use the cluster default.
+#                       Set to "hostpath" on on-prem clusters using the no-provisioner
+#                       StorageClass — this also activates static PV creation below.
+#   pvNodeHostname    — required when storageClassName is "hostpath": the Kubernetes node
+#                       (kubernetes.io/hostname label) backing the static hostPath PVs for
+#                       shaide-server, rustfs, and qdrant (one PV each, pre-bound via claimRef).
+#                       Host directories are NOT created automatically — provision them first
+#                       (e.g. via the on-prem Ansible hostpath_dirs role).
+#   shaidePVSize, rustfsPVSize, qdrantPVSize
+#                     — PV/PVC size per component; default: 5Gi each
+#
+#   lbAnnotations              — map of annotations applied to the shaide-server Service when
+#                                 it is type LoadBalancer (i.e. neither infraStackRef nor
+#                                 gatewayHostname is set). Cloud-specific, e.g.:
+#                                   GCP:      cloud.google.com/load-balancer-type: External
+#                                   AWS:      service.beta.kubernetes.io/aws-load-balancer-type: external
+#                                   MetalLB:  metallb.universe.tf/address-pool: <pool-name>
+#   serviceAccountAnnotations  — map of annotations on the shaide-server ServiceAccount, for
+#                                 workload-identity bindings. Cloud-specific, e.g.:
+#                                   GCP:   iam.gke.io/gcp-service-account: <gsa-email>
+#                                   Azure: azure.workload.identity/client-id: <managed-identity-client-id>
+#                                   AWS:   eks.amazonaws.com/role-arn: <role-arn>
+#                                 Omit entirely for on-prem/generic clusters.
+#
+#   infraStackRef      — Pulumi StackReference (<org>/<project>/<stack>) to an infra stack that
+#                        exports "gatewayHostname". When set (or when gatewayHostname is set
+#                        directly below), the shaide-server Service becomes ClusterIP and an
+#                        HTTPRoute is created to the shared Gateway instead of a LoadBalancer.
+#   gatewayHostname    — direct hostname for the shared Gateway; alternative to infraStackRef
+#                        for on-prem stacks that have no infra StackReference to read from.
+#                        infraStackRef and gatewayHostname are mutually exclusive in practice —
+#                        setting either one switches routing to Gateway/HTTPRoute mode.
+#   gatewayName        — name of the shared Gateway the HTTPRoute binds to; default: shared-gateway
+#   gatewayNamespace   — namespace of the shared Gateway; default: gateway-system
+#
+#   harborHostname     — internal Harbor registry hostname (on-prem air-gap only). When set,
+#                        the ghcr-creds pull secret authenticates against Harbor
+#                        (http://<harborHostname>) using ghcrUser/ghcrToken instead of ghcr.io.
+#   ghcrUser           — registry username; default: axem-solutions (only meaningful for the
+#                        ghcr.io default — override to the Harbor robot account name on-prem,
+#                        e.g. robot$k8s-puller)
+#   busyboxImage       — init-container image used by rustfs for permission fixup; default: busybox:1.37
+#
+#   mcpNamespace       — namespace where the app_mcp stack is deployed (e.g. mcp-gateway).
+#                        Optional: when set, MCP_NAMESPACE is injected into shaide-config and
+#                        shaide-server can discover/watch MCP pods there. When unset,
+#                        MCP_NAMESPACE is omitted entirely and no app_mcp deployment is required.
+#   rustLibBacktrace, rustSpantrace
+#                     — RUST_LIB_BACKTRACE / RUST_SPANTRACE env vars for shaide-server
+#   trial              — "TRUE"/"FALSE"; injected as the TRIAL env var; default: FALSE
+#   rustfsConsoleEnabled
+#                     — boolean; exposes the RustFS console on port 9001 in addition to the
+#                        S3 API on port 9000; default: false
+#
+# To create a new stack:
+#   cd app_shaide/deployments
+#   pulumi stack init <stack-name>
+#   pulumi config set --secret ghcrToken <token-or-harbor-robot-secret>
+#   pulumi config set --secret adminAuthKey <value>
+#   pulumi config set --secret s3Password <value>
+config:
+  app-shaide:namespace: app-shaide
+  app-shaide:shaideServiceAccountName: shaide-server
+  app-shaide:cloudProvider: cloud   # or: on-prem
+  # app-shaide:kubeconfig: ~/.kube/rke2-cluster.yaml
+  # app-shaide:nodeSelectorKey: nodegroup
+  # app-shaide:nodeSelector: <node-pool-name>
+  # app-shaide:nodeSelectorShaide: <node-pool-name>
+  # app-shaide:nodeSelectorControlPanel: <node-pool-name>
+  # app-shaide:nodeSelectorWebapp: <node-pool-name>
+  # app-shaide:nodeSelectorRustfs: <node-pool-name>
+  # app-shaide:nodeSelectorQdrant: <node-pool-name>
+
+  # --- Storage ---
+  # app-shaide:storageClassName: <storage-class>   # e.g. "hostpath" on-prem
+  # app-shaide:pvNodeHostname: <node-hostname>      # required when storageClassName: hostpath
+  # app-shaide:shaidePVSize: 5Gi
+  # app-shaide:rustfsPVSize: 5Gi
+  # app-shaide:qdrantPVSize: 5Gi
+
+  # --- Networking / exposure ---
+  # app-shaide:lbAnnotations:
+  #   cloud.google.com/load-balancer-type: External
+  # app-shaide:serviceAccountAnnotations:
+  #   iam.gke.io/gcp-service-account: <gsa-email>
+  # app-shaide:infraStackRef: <org>/<infra-project>/<stack>
+  # app-shaide:gatewayHostname: shaide.example.com
+  # app-shaide:gatewayName: shared-gateway
+  # app-shaide:gatewayNamespace: gateway-system
+
+  # --- Registry / images ---
+  # app-shaide:harborHostname: harbor.harbor.svc.cluster.local
+  app-shaide:ghcrUser: axem-solutions
+  app-shaide:ghcrToken:
+    secure: <run `pulumi config set --secret ghcrToken <token>`>
+  app-shaide:shaideServerImage: "ghcr.io/axem-solutions/shaide_server:<tag>"
+  app-shaide:controlPanelImage: "ghcr.io/axem-solutions/control_panel:<tag>"
+  app-shaide:webappImage: "ghcr.io/axem-solutions/shaide-web:<tag>"
+  app-shaide:rustfsImage: "rustfs/rustfs:<tag>"
+  app-shaide:qdrantImage: "qdrant/qdrant:<tag>"
+  # app-shaide:busyboxImage: busybox:1.37
+
+  # --- Application settings ---
+  app-shaide:shaideServerUiFqdn: control-panel
+  app-shaide:shaideServerUiPort: "3000"
+  app-shaide:shaideServerS3Fqdn: rustfs
+  app-shaide:shaideServerS3Port: "9000"
+  app-shaide:rustfsWebhookArn: "arn:rustfs:sqs:eu-central-1:shaide:webhook"
+  app-shaide:databaseUrl: "sqlite:///root/.config/axem/shaide/db/<stack-name>-db.sqlite"
+  app-shaide:s3User: rustfsuser
+  app-shaide:s3UploadProxyRoutePrefix: "/s3"
+  app-shaide:vectorDBUrl: "http://qdrant:6334"
+  # app-shaide:rustLibBacktrace: "1"
+  # app-shaide:rustSpantrace: "0"
+  # app-shaide:trial: "FALSE"
+  # app-shaide:rustfsConsoleEnabled: false
+  app-shaide:rustfsNotifyWebhookEnableShaide: "on"
+  app-shaide:rustfsNotifyWebhookEndpointShaide: "http://shaide-server/v1/object-storage/event"
+  app-shaide:rustfsNotifyWebhookQueueDirShaide: "/data/deploy/logs/notify"
+
+  # --- In-cluster service discovery ---
+  app-shaide:controlPanelService: control-panel
+  app-shaide:webappService: webapp
+  app-shaide:rustfsService: rustfs
+  app-shaide:qdrantService: qdrant
+
+  # --- Optional MCP integration (see app_mcp) ---
+  # app-shaide:mcpNamespace: mcp-gateway
+
+  # --- Secrets (encrypted, set per stack via CLI) ---
+  #   pulumi config set --secret adminAuthKey <value>
+  #   pulumi config set --secret s3Password <value>
+  app-shaide:adminAuthKey:
+    secure: <run `pulumi config set --secret adminAuthKey <value>`>
+  app-shaide:s3Password:
+    secure: <run `pulumi config set --secret s3Password <value>`>
+#
+# Managed by Pulumi.
+# Do not edit or remove the following line — required to decrypt secret config values.
+encryptionsalt: null

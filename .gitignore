@@ -1,0 +1,56 @@
+infra/model-registry/env-vars/*
+!infra/model-registry/env-vars/example
+.vscode
+.claude/*
+!.claude/commands/
+.codex
+venv
+benchmarking/runs/
+benchmarking/eks-benchmark-results/
+CLAUDE.md
+GEMINI.md
+AGENTS.md
+PLAN.md
+app_shaide/app_shaide
+app_serving/app_serving
+infra/aws/aws-ai-infra
+infra/gcp/gcp-ai-infra
+infra/gateway-provider/gateway-provider
+# Pulumi - stack-specific configs and state
+**/aws-ai-infra
+
+# Ansible
+*.retry
+.ansible/
+ansible.log
+ansible/tmp
+inventory-dev/
+
+# Kubernetes artifacts / local outputs
+*.tgz
+*.tar
+*.tar.gz
+*.zip
+artifacts/
+downloads/
+bundle/
+
+# Harbor / model registry
+k8s-harbor-sa-secret
+model-cache/
+infra/model-registry/logs/
+installer-bundle/
+installer/installer-bundle/
+
+# Installer
+installer/installer-bundle
+shaide-installer-data
+installer/deployment
+
+# Log
+*.log
+
+# Secrets
+*.pem
+*.crt
+*.key

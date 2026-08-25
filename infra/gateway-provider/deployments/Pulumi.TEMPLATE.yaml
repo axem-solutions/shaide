@@ -1,0 +1,116 @@
+# Stack: <stack-name> -- <short description>
+#
+# Required config:
+#   cloudProvider    — drives behavior within this stack only (other Pulumi projects, e.g.
+#                      app_shaide, read their own separate cloudProvider config value —
+#                      setting it here has no effect on them):
+#                        "azure" → installGatewayApiCrds defaults to false (AKS's managed
+#                          Gateway API owns the CRDs and its admission webhook rejects
+#                          external changes to them); also switches the shared Gateway's
+#                          static-IP binding to a literal IPAddress (vs GCP's NamedAddress)
+#                          and, when albName is unset (Azure+Istio, not AGC), adds the
+#                          Azure LB health-probe annotation workaround for Istio's status port
+#                        anything else → installGatewayApiCrds defaults to true
+#                      Common values: gcp | aws | azure | on-prem
+#   gatewayClassName — GatewayClass used by the shared Gateway resource:
+#                        GCP:     gke-l7-regional-external-managed
+#                        Azure:   azure-alb-external (Application Gateway for Containers)
+#                        On-prem: istio (MetalLB provides the LoadBalancer IP)
+#
+# Optional config:
+#   provider   — Gateway implementation to install; default: istio. Set to anything else
+#                to skip installing Istio entirely (e.g. when the cloud's managed Gateway
+#                implementation, like Azure ALB, provides its own control plane).
+#   namespace  — namespace for the Istio control plane; default: istio-system
+#   kubeconfig — path to kubeconfig file; omit to use KUBECONFIG env / ~/.kube/config
+#
+#   istioHub   — image registry prefix for Istio component images (pilot, proxyv2);
+#                default: docker.io/istio. On-prem air-gapped clusters must point this at
+#                an internal Harbor project, e.g. harbor.harbor.svc.cluster.local/images-shaide
+#   istioTag   — Istio version; default: 1.28.1
+#
+#   installGatewayApiCrds — boolean; whether this stack installs the Gateway API CRDs.
+#                            See the cloudProvider note above for the default.
+#   gatewayApiCrdsPath     — local kustomize path (or remote URL) for Gateway API CRDs;
+#                            default: the experimental-channel v1.5.1 CRDs from
+#                            github.com/kubernetes-sigs/gateway-api. Populate the local
+#                            path first — see crds/README.md.
+#   gieCrdsPath            — local kustomize path (or remote URL) for the Gateway API
+#                            Inference Extension CRDs; default: v1.4.0 from
+#                            github.com/kubernetes-sigs/gateway-api-inference-extension
+#
+#   tlsCertAnnotation — annotation key used to bind a cloud-managed certificate to the
+#                       Gateway listener/metadata. GCP: networking.gke.io/cert-manager-certs.
+#                       Leave unset on-prem and anywhere else without a cloud cert manager.
+#   certManagerIssuer — cert-manager ClusterIssuer name. When set, creates an HTTPS listener
+#                       (TLS via certificateRefs) plus an HTTP listener for the ACME HTTP-01
+#                       challenge, and annotates the Gateway with cert-manager.io/cluster-issuer.
+#                       cert-manager's gateway-shim then creates the Certificate resource
+#                       automatically — no separate Certificate resource is declared here.
+#                       IMPORTANT: enable only after the Gateway is reachable over plain HTTP
+#                       and DNS already points at its IP — the ALB/LB controller can block
+#                       provisioning if the TLS Secret doesn't exist yet.
+#   tlsSecretName     — Secret name cert-manager writes the certificate into; default:
+#                       gateway-tls when certManagerIssuer is set.
+#   bootstrapTlsSecret — boolean; on Azure AGC stacks using certManagerIssuer, seeds
+#                        tlsSecretName with a throwaway self-signed cert so AGC's
+#                        ResolvedRefs check will program the HTTP listener the ACME
+#                        challenge needs (otherwise a brand-new stack deadlocks: no
+#                        Secret -> no listeners programmed -> port 80 unreachable ->
+#                        challenge can never complete -> Secret never created). Only
+#                        needed for first bootstrap; safe to leave on afterwards.
+#   albName            — Azure Application Gateway for Containers (ALB) resource name.
+#                        Azure-only; leave unset on GCP/on-prem.
+#
+#   Shared-Gateway hostname/cert/IP — provide EITHER infraStackRef OR gatewayHostname
+#   directly, never both. Leaving both unset skips shared-Gateway creation entirely.
+#     infraStackRef      — Pulumi StackReference (<org>/<project>/<stack>) to an infra stack
+#                          that exports gatewayHostname (and, on cloud, gatewayCertName /
+#                          gatewayStaticIPName / gatewayStaticIP / albSubnetId). Typical for
+#                          cloud stacks where cluster provisioning is a separate Pulumi stack.
+#     gatewayHostname    — direct hostname value, when there's no infra stack to reference
+#                          (on-prem, or a bundle install without a separate infra stack).
+#     gatewayCertName    — direct value alternative to the StackReference export (GCP
+#                          Certificate Manager certificate resource name).
+#     gatewayStaticIPName — direct value alternative (GCP compute.Address resource name).
+#     gatewayStaticIP     — direct value alternative (Azure: literal pre-allocated IP; used
+#                          only when albName is unset, i.e. Azure+Istio, not Azure+AGC).
+#     albSubnetId         — direct value alternative (Azure ALB subnet ID; AGC only).
+#
+# To create a new stack:
+#   cd infra/gateway-provider/deployments
+#   pulumi stack init <stack-name>
+config:
+  gateway-provider:cloudProvider: cloud   # or: on-prem
+  gateway-provider:gatewayClassName: <gateway-class-name>   # e.g. gke-l7-regional-external-managed
+  # gateway-provider:provider: istio
+  # gateway-provider:namespace: istio-system
+  # gateway-provider:kubeconfig: ~/.kube/rke2-cluster.yaml
+
+  # --- Istio images (override for on-prem air-gap) ---
+  # gateway-provider:istioHub: docker.io/istio
+  # gateway-provider:istioTag: "1.28.1"
+
+  # --- CRDs (populate local paths first — see crds/README.md) ---
+  # gateway-provider:installGatewayApiCrds: true
+  # gateway-provider:gatewayApiCrdsPath: ./crds/gateway-api/standard
+  # gateway-provider:gieCrdsPath: ./crds/gie
+
+  # --- TLS ---
+  # gateway-provider:tlsCertAnnotation: networking.gke.io/cert-manager-certs   # GCP
+  # gateway-provider:certManagerIssuer: <cluster-issuer-name>                 # cert-manager (Azure)
+  # gateway-provider:tlsSecretName: gateway-tls
+  # gateway-provider:bootstrapTlsSecret: false
+
+  # --- Azure Application Gateway for Containers only ---
+  # gateway-provider:albName: shared-alb
+
+  # --- Shared Gateway hostname — pick ONE of the two blocks below ---
+  # Option A: reference a separate infra stack that exports gatewayHostname (+ cloud extras)
+  # gateway-provider:infraStackRef: <org>/<infra-project>/<stack>
+  # Option B: on-prem, or a cloud bundle install with no infra stack to reference
+  # gateway-provider:gatewayHostname: shaide.example.com
+#
+# Managed by Pulumi.
+# Do not edit or remove the following line — required to decrypt secret config values.
+encryptionsalt: null
