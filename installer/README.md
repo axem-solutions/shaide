@@ -40,8 +40,8 @@ Expected archive shape:
 |   |-- shaide_server-0.5.0.tar
 |   |-- ...
 |-- manifests/
-|   |-- images.yml
-|   |-- models.yml
+|   |-- images.yaml
+|   |-- models.yaml
 `-- deployments/
     |-- app-shaide/
     |   |-- Pulumi.yaml
@@ -71,12 +71,12 @@ The installer validates these paths directly:
 | ----------------------- | ------------------------------------------- |
 | `images/`               | Image and Harbor bootstrap image manifests. |
 | `deployments/`          | Pulumi workdir root.                        |
-| `manifests/images.yml`  | Image upload manifest.                      |
-| `manifests/models.yml`  | Model download/upload manifest.             |      
+| `manifests/images.yaml`  | Image upload manifest.                      |
+| `manifests/models.yaml`  | Model download/upload manifest.             |      
 
 
 ### Images
-`images/` contains the image archive files referenced by `manifests/images.yml`.
+`images/` contains the image archive files referenced by `manifests/images.yaml`.
 Every active `file` value in either `harbor_upload_images` or `goharbor_images`
 must have a matching file under `images/`.
 ### Image Manifest
@@ -131,7 +131,7 @@ to this Harbor repository reference:
 
 ### Model Manifest
 
-`manifests/models.yml` is the model artifact inventory. It must contain a non-empty top-level `models` list.
+`manifests/models.yaml` is the model artifact inventory. It must contain a non-empty top-level `models` list.
 
 ```yaml
 models:
@@ -191,6 +191,11 @@ Expected workdirs:
 | `deployments/app-serving`      | `app-serving`      | `serving`  | Deploys model-serving infrastructure,  services, and inference values |
 | `deployments/gateway-provider` | `gateway-provider` | `provider` | Deploys Gateway API and inference extension CRDs/resources.           |
 | `deployments/app-shaide`       | `app-shaide`       | `shaide`   | Deploys the Shaide application stack.                                 |
+| `deployments/monitoring`       | `monitoring`       | `monitoring` | Deploys the monitoring charts and dashboards.                        |
+
+Each workdir contains only its canonical `Pulumi.yaml`. The installer reads
+template defaults where present, injects runtime values, and creates the
+stack-specific `Pulumi.<stack>.yaml` in its working copy; generated stack files and secrets are never part of the bundle.
 
 
 Important deployment asset paths:
@@ -349,7 +354,7 @@ minimal and include only the images required by that path.
 Destination:
 
 ```text
-installer/installer-bundle/bundle/manifests/images.yml
+installer/installer-bundle/bundle/manifests/images.yaml
 ```
 
 | Scenario           | Image source                                                                                              |
@@ -403,7 +408,7 @@ skopeo copy docker://<source-registry>/<source-repository>:<source-tag> \
   oci-archive:installer/installer-bundle/bundle/images/<archive-file>.tar:<source-registry>/<source-repository>:<source-tag>
 ```
 
-The `<archive-file>.tar` value must match the corresponding `file` value in `manifests/images.yml` exactly.
+The `<archive-file>.tar` value must match the corresponding `file` value in `manifests/images.yaml` exactly.
 
 ### Step 4: Write The Model Manifest
 Create or update the staged model manifest.
@@ -411,7 +416,7 @@ Create or update the staged model manifest.
 Destination:
 
 ```text
-installer/installer-bundle/bundle/manifests/models.yml
+installer/installer-bundle/bundle/manifests/models.yaml
 ```
 
 Example content with two model artifacts:
@@ -434,40 +439,27 @@ models:
 ```
 
 ### Step 5: Stage Deployment Workdirs
-Each Pulumi stack must be present under `deployments/` with the expected project
-file and stack file.
+Each Pulumi project must be present under `deployments/` with its canonical
+`Pulumi.yaml`. The installer reads template defaults, injects runtime values,
+and creates the stack-specific `Pulumi.<stack>.yaml` in its working copy.
 
-#### Create the stack files
-Required workdirs and stack files:
+#### Stage the project files
+Required workdirs and project files:
 
-| Workdir                        | Required files                        |
-| -------------------------------| ------------------------------------- |
-| `deployments/cloud-harbor`     | `Pulumi.yaml`, `Pulumi.harbor.yaml`   |
-| `deployments/app-serving`      | `Pulumi.yaml`, `Pulumi.serving.yaml`  |
-| `deployments/gateway-provider` | `Pulumi.yaml`, `Pulumi.provider.yaml` |
-| `deployments/app-shaide`       | `Pulumi.yaml`, `Pulumi.shaide.yaml`   |
+| Workdir                        | Required files |
+| -------------------------------| -------------- |
+| `deployments/cloud-harbor`     | `Pulumi.yaml`  |
+| `deployments/app-serving`      | `Pulumi.yaml`  |
+| `deployments/gateway-provider` | `Pulumi.yaml`  |
+| `deployments/app-shaide`       | `Pulumi.yaml`  |
+| `deployments/monitoring`       | `Pulumi.yaml`  |
 
-Copy maintained stack files into the staged workdirs.
+Copy the maintained canonical project files into the staged workdirs. Do not
+copy generated stack files, encrypted values, or `encryptionsalt` values.
 
-Start from an existing, known-good stack file for each project, then change these values from the staged stack files if present before packaging:
-
-| Bundle stack file      | Delete value                                                                                                          |  
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------- | 
-| `Pulumi.serving.yaml`  | `app-serving:kubeconfig`, `app-serving:harborToken`, `encryptionsalt`, `app-serving:orasImage`                        | 
-| `Pulumi.shaide.yaml`   | `app-shaide:kubeconfig`, `app-shaide:ghcrToken`, `app-shaide:adminAuthKey`, `app-shaide:s3Password`, `encryptionsalt` | 
-| `Pulumi.provider.yaml` | `gateway-provider:kubeconfig`, `gateway-provider:istioHub` `encryptionsalt`                                           |
-| `Pulumi.harbor.yaml`   | `cloud-harbor:kubeconfig`, `cloud-harbor:context`, `harbor:adminPassword`, `harbor:robotPassword`, `encryptionsalt`   | 
-
-
-| Bundle stack file      | Change value                                                           |  
-| ---------------------- | -----------------------------------------------------------------------| 
-| `Pulumi.serving.yaml`  | `app-serving:llmdChart: deployments/llm-d-infra` , `nodeSelector`     | 
-| `Pulumi.shaide.yaml`   | `-`                                                                    | 
-| `Pulumi.provider.yaml` |  `gateway-provider:gatewayApiCrdsPath: ./crds/gateway-api/standard`    |
-| `Pulumi.harbor.yaml`   | ``-`                                                                   | 
-
-For example `nodeSelector: { nodegroup: nvidia-l4-nodepool }`. 
-These are cluster-specific and must match the target cluster node labels. 
+Cluster-specific values such as kubeconfig paths, credentials, node selectors,
+and gateway hostnames are supplied by the installer at runtime. Keep only
+non-secret defaults and local asset paths in the canonical `Pulumi.yaml` files.
 
 #### Download the external resources to its destinations
 
@@ -515,8 +507,8 @@ cp -a app_serving/deployments/models/embedder/nomic-embed-text-v1.5 \
   installer/installer-bundle/bundle/deployments/app-serving/deployments/models/embedder/
 ```
 
-Also make sure `Pulumi.serving.yaml` enables the same model names that were
-copied into the bundle:
+The installer must generate the app-serving model config from the selected
+bundle model(s), using the same folder names copied into the bundle:
 
 ```yaml
 config:
@@ -569,8 +561,23 @@ deployments/
 Run the Docker build from the repository root:
 
 ```bash
-docker build -f installer/build/Dockerfile -t onprem-installer:latest .
+docker build -f installer/build/Dockerfile -t installer:latest .
 ```
+
+The repository also provides `installer/installer-bundle/scripts/deployment.sh`, which performs
+the build and starts the interactive container with the required mounts:
+
+```bash
+./installer/installer-bundle/scripts/deployment.sh \
+  --bundle installer/installer-bundle/bundle.tar.gz \
+  --kubeconfig "$HOME/.kube/config" \
+  --storage "$PWD/shaide-installer-data"
+```
+
+Use `--no-build` for subsequent runs against an already-built image or
+`--build-only` to compile the image without starting the installer. Optional
+`--ssh-key` and `--gcloud-config` arguments mount credentials required by
+Harbor image preloading or GKE kubeconfig authentication.
 
 Use this when changing installer code. It does not refresh the offline bundle;
 changing images, manifests, Pulumi stack files, charts, CRDs, or deployment
@@ -636,7 +643,7 @@ docker run --rm -it \
   -v "${HOST_SSH_DIR}:/root/.ssh:ro" \
   -v "${BUNDLE_ARCHIVE}:/.bundle/bundle.tar.gz:ro" \
   --mount "type=bind,src=${STORAGE_PATH},dst=${DST_BOUND_MOUNT}" \
-  onprem-installer:latest
+  installer:latest
 ```
 
 The `-it` flags are required because the installer is a TUI. `--network host`
@@ -662,7 +669,7 @@ At runtime the installer:
 1. verifies it is running in an interactive terminal;
 2. verifies and prepares persistent installer storage;
 3. extracts the mounted bundle into `/var/shaide-installer/bundle`;
-4. reads `manifests/images.yml` and `manifests/models.yml`;
+4. reads `manifests/images.yaml` and `manifests/models.yaml`;
 5. reads the mounted kubeconfig and lets the user select a context;
 6. discovers whether Harbor already exists in the selected cluster;
 7. deploys or configures Harbor when needed;
@@ -708,7 +715,7 @@ resource name, continue an update flow, or abort.
 
 | Path | Purpose |
 | --- | --- |
-| `installer/cmd/onprem-installer` | Installer entrypoint. |
+| `installer/cmd/installer` | Installer entrypoint. |
 | `installer/internal/config` | Runtime defaults, bundle extraction, manifest parsing, and storage paths. |
 | `installer/internal/workflow` | Stage runner, recovery behavior, and workflow state. |
 | `installer/internal/workflow/stages` | Bootstrap, Kubernetes, discovery, artifact, and Pulumi stages. |
@@ -761,7 +768,7 @@ Press `ctrl+y` in the TUI to save visible installer logs to
 ### Add A Service Image
 
 1. Copy the image into `installer/installer-bundle/fresh/images/`.
-2. Add a matching entry under `harbor_upload_images` in `manifests/images.yml`.
+2. Add a matching entry under `harbor_upload_images` in `manifests/images.yaml`.
 3. Ensure `file` exactly matches the archive filename.
 4. Rebuild `installer/installer-bundle/bundle.tar.gz`.
 5. Verify with `tar -tzf installer/installer-bundle/bundle.tar.gz`.
@@ -780,7 +787,7 @@ runtime config.
 
 ### Add A Model Artifact
 
-1. Add the model to `manifests/models.yml`.
+1. Add the model to `manifests/models.yaml`.
 2. Set `id`, `harbor_project`, `harbor_name`, `harbor_tag`, and a pinned
    `revision`.
 3. Add `dependencies` when the model requires additional Hugging Face repos.
@@ -813,7 +820,7 @@ runtime config.
 | `/.bundle/bundle.tar.gz does not exist` | The bundle archive was not mounted, or `BUNDLE_ARCHIVE_PATH` points to the wrong path. |
 | `/var/shaide-installer is not a mount point` | The host storage bind mount is missing. The TUI may let you continue, but cache/state/logs will not persist. |
 | `Hugging Face token was not set` | `HF_TOKEN` is required during bootstrap. |
-| `image <file> listed in manifest but not found` | `manifests/images.yml` references an archive missing from `images/`. |
+| `image <file> listed in manifest but not found` | `manifests/images.yaml` references an archive missing from `images/`. |
 | `models must be non-empty` | `app-serving:models` has no enabled generative or embedder entries. |
 | `no gaie-* subdirectory found` or `no ms-* subdirectory found` | The app-serving model folder does not satisfy the values directory contract. |
 | `slug mismatch` | The `gaie-*` and `ms-*` directory suffixes do not match. |

@@ -42,13 +42,13 @@ The installation has two parts:
 Load the installer Docker image from the provided image archive.
 
 ```bash
-docker load < onprem-installer.tar.gz
+docker load < installer.tar.gz
 ```
 
 Verify that the image is available locally:
 
 ```bash
-docker images onprem-installer:latest
+docker images installer:latest
 ```
 
 ### 2. Prepare Installer Storage
@@ -122,7 +122,7 @@ docker run --rm -it \
   -v "${HOST_KUBECONFIG}:/.kube/config:ro" \
   -v "${BUNDLE_ARCHIVE}:/.bundle/bundle.tar.gz:ro" \
   --mount "type=bind,src=${STORAGE_PATH},dst=/var/shaide-installer" \
-  onprem-installer:latest
+  installer:latest
 ```
 
 The installer requires an interactive terminal, so `-it` is required.

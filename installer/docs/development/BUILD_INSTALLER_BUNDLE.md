@@ -3,7 +3,7 @@
 The installer bundle is a gzip-compressed tar archive containing all deployment
 assets needed by the installer. Stage its contents under
 `installer/installer-bundle/bundle/`, then build it with
-`installer/scripts/build-bundle.sh`.
+`installer/installer-bundle/scripts/build-bundle.sh`.
 
 ## Bundle contents
 
@@ -15,8 +15,8 @@ bundle/
 |-- deployments/
 |-- images/
 `-- manifests/
-    |-- images.yml
-    `-- models.yml
+    |-- images.yaml
+    `-- models.yaml
 ```
 
 The runtime directory is named `manifests/` (plural), not `manifest/`.
@@ -24,9 +24,9 @@ The runtime directory is named `manifests/` (plural), not `manifest/`.
 | Path | What to put there |
 | --- | --- |
 | `deployments/` | Pulumi projects and stack files, plus all local Helm charts, CRDs, model values, and other files referenced by those projects. Stack files must contain non-secret defaults only. See [stack file configuration](./STACK_FILES_CONFIG.md). |
-| `images/` | OCI image archives for entries in `manifests/images.yml` whose `source` is `archive`. Remote image entries do not need a local archive. |
-| `manifests/images.yml` | The `harbor_upload_images` and `goharbor_images` inventories. Each entry needs `source`, `project`, `name`, and `tag`. |
-| `manifests/models.yml` | The model inventory. The build script stages the default storage-check inventory from `installer/manifests/models-storage-check.yml`. Each entry needs `id`, `revision`, `harbor_project`, `harbor_name`, and `harbor_tag`; `dependencies` is optional. |
+| `images/` | OCI image archives for entries in `manifests/images.yaml` whose `source` is `archive`. Remote image entries do not need a local archive. |
+| `manifests/images.yaml` | The `harbor_upload_images` and `goharbor_images` inventories. Each entry needs `source`, `project`, `name`, and `tag`. |
+| `manifests/models.yaml` | The model inventory supplied by the bundle author. Each entry needs `id`, `revision`, `harbor_project`, `harbor_name`, and `harbor_tag`; `dependencies` is optional. |
 | `checksum.json` | A generated fingerprint of the other bundle files. Do not maintain it manually. The build script rewrites it and places it first in the archive, as required by the bootstrap refactor. |
 
 For an archived image, the expected filename is derived from its manifest entry:
@@ -54,7 +54,7 @@ under `images/`.
 From the repository root, run:
 
 ```bash
-installer/scripts/build-bundle.sh
+installer/installer-bundle/scripts/build-bundle.sh
 ```
 
 The defaults are:
@@ -67,35 +67,23 @@ output archive:    installer/installer-bundle/bundle.tar.gz
 Both paths can be overridden:
 
 ```bash
-installer/scripts/build-bundle.sh <staging-directory> <output-archive>
+installer/installer-bundle/scripts/build-bundle.sh <staging-directory> <output-archive>
 ```
 
-By default, the script replaces the staged `manifests/models.yml` with
-`installer/manifests/models-storage-check.yml`. This inventory spans Nomic Embed,
-TinyLlama 1.1B, Mistral 7B, GPT-OSS 20B, and Gemma 4 31B so model selection can
-exercise the storage estimator across substantially different repository sizes.
-All revisions are pinned.
-
-Use a different model inventory by setting `MODELS_MANIFEST`:
-
-```bash
-MODELS_MANIFEST=/path/to/models.yml installer/scripts/build-bundle.sh
-```
-
-Gemma is gated on Hugging Face. The installer token must have accepted Google's
-Gemma license before its metadata or files can be accessed.
+The script never creates or replaces `manifests/models.yaml`. Write the desired
+model inventory into the selected staging directory before running the build;
+the file is validated and included exactly as supplied. Model files themselves
+are downloaded from Hugging Face during installation.
 
 The script:
 
-1. stages the selected models manifest;
-2. checks the required directories and manifest files;
-3. rejects symlinks and other archive entry types unsupported by the installer;
-4. hashes the sorted payload file list and writes `checksum.json`;
-5. creates the archive with `checksum.json` as its first entry;
-6. verifies the checksum entry before replacing the output archive.
+1. checks the required directories and manifest files;
+2. rejects symlinks and other archive entry types unsupported by the installer;
+3. hashes the sorted payload file list and writes `checksum.json`;
+4. creates the archive with `checksum.json` as its first entry;
+5. verifies the checksum entry before replacing the output archive.
 
-It requires Bash, GNU `tar`, `find`, `sort`, `sha256sum`, `awk`, `cmp`, `cp`,
-and `mktemp`.
+It requires Bash, GNU `tar`, `find`, `sort`, `sha256sum`, `awk`, and `mktemp`.
 
 ## Verify
 

@@ -150,7 +150,7 @@ The required installation files must be present on the provisioner machine befor
 
 | File                      | Purpose                                               |
 |---------------------------|-------------------------------------------------------|
-| `onprem-installer.tar.gz` | Installer Docker image.                               |
+| `installer.tar.gz` | Installer Docker image.                               |
 | `bundle.tar.gz`           | Installation payload used by the installer.           |
 
 
