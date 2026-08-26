@@ -18,8 +18,8 @@ const (
 	defaultDeploymentDir = "deployments"
 	defaultImageDir      = "images"
 	defaultManifestDir   = "manifests"
-	defaultImageFile     = "images.yml"
-	defaultModelFile     = "models.yml"
+	defaultImageFile     = "images.yaml"
+	defaultModelFile     = "models.yaml"
 
 	bundleChecksumFile = "checksum.json"
 )
