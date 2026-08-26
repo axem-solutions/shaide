@@ -1,0 +1,8 @@
+name: app-serving
+description: Per-nodegroup GAIE/Gateway stack for distributed model serving
+runtime: go
+main: ..
+config:
+  pulumi:tags:
+    value:
+      pulumi:template: kubernetes-go
