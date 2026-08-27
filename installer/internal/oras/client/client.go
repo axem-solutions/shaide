@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/axem-solutions/ai_platform/installer/internal/config/bundle"
+	"github.com/axem-solutions/ai_platform/installer/internal/config/catalog"
 	"github.com/axem-solutions/ai_platform/installer/internal/oras/repository"
 	"oras.land/oras-go/v2/registry/remote"
 	"oras.land/oras-go/v2/registry/remote/auth"
@@ -110,7 +110,7 @@ func (c *Client) NewTargetRepository(project string, repositoryName string, opts
 	return repository.New(repo, opts), nil
 }
 
-func (c *Client) NewSourceRepository(image bundle.Image) (*remote.Repository, error) {
+func (c *Client) NewSourceRepository(image catalog.Image) (*remote.Repository, error) {
 	registry, err := ParseRemote(image)
 	if err != nil {
 		return nil, err
@@ -156,17 +156,17 @@ func (c *Client) Ping(ctx context.Context, project, name, tag string) error {
 	return nil
 }
 
-func ParseRemote(image bundle.Image) (string, error) {
+func ParseRemote(image catalog.Image) (string, error) {
 	switch image.Source {
-	case bundle.ImageSourceDockerHub:
+	case catalog.ImageSourceDockerHub:
 		return fmt.Sprintf("%s/%s", DockerHubRegistry, dockerHubRepository(image.Name)), nil
-	case bundle.ImageSourceGitHub:
+	case catalog.ImageSourceGitHub:
 		return fmt.Sprintf("%s/%s", GHCRRegistry, image.Name), nil
-	case bundle.ImageSourceNVCR:
+	case catalog.ImageSourceNVCR:
 		return fmt.Sprintf("%s/%s", NVCRRegistry, image.Name), nil
-	case bundle.ImageSourceQuay:
+	case catalog.ImageSourceQuay:
 		return fmt.Sprintf("%s/%s", QuayRegistry, image.Name), nil
-	case bundle.ImageSourceRegistryK8s:
+	case catalog.ImageSourceRegistryK8s:
 		return fmt.Sprintf("%s/%s", RegistryK8sRegistry, image.Name), nil
 	default:
 		return "", fmt.Errorf("unsupported remote image source %q", image.Source)

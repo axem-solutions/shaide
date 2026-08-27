@@ -2,7 +2,7 @@ package core
 
 import (
 	"github.com/axem-solutions/ai_platform/installer/internal/config"
-	"github.com/axem-solutions/ai_platform/installer/internal/config/bundle"
+	"github.com/axem-solutions/ai_platform/installer/internal/config/catalog"
 	harborapi "github.com/axem-solutions/ai_platform/installer/internal/harbor/api"
 	"github.com/axem-solutions/ai_platform/installer/internal/harbor/auth"
 	"github.com/axem-solutions/ai_platform/pkg/kube"
@@ -37,17 +37,17 @@ type DiscoveryState struct {
 }
 
 type ArtifactState struct {
-	SelectedModels []bundle.Model
+	SelectedModels []catalog.Model
 	ModelOptions   []ModelOption
 }
 type ModelOption struct {
 	Label string
-	Model bundle.Model
+	Model catalog.Model
 }
 
 type BootstrapState struct {
-	Config config.Config
-	Bundle bundle.Prepared
+	Config  config.Config
+	Catalog catalog.Catalog
 	// GatewayHostname is populated by the gateway-provider stage (from env
 	// or TUI) and reused downstream by stages that need to point HTTPRoutes
 	// at the shared gateway (app-shaide).

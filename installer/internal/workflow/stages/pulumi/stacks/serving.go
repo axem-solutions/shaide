@@ -27,8 +27,8 @@ const (
 )
 
 func DeployAppServing(rt *core.Runtime) error {
-	workdir := rt.Bootstrap.Bundle.PulumiWorkDir
-	appServingDir := filepath.Join(workdir, projectAppServing)
+	workDir := filepath.Join(rt.Bootstrap.Config.Paths.ProjectsDir, projectAppServing)
+	stateDir := rt.Bootstrap.Config.Paths.PulumiState
 
 	deployConfig := auto.ConfigMap{
 		pulumiConfigKey(projectAppServing, "kubeconfig"): {
@@ -83,8 +83,8 @@ func DeployAppServing(rt *core.Runtime) error {
 	deployer, err := iac.NewDeployer(iac.DeployerOptions{
 		ProjectName: projectAppServing,
 		StackName:   stackAppServing,
-		WorkDir:     filepath.Join(workdir, projectAppServing),
-		StateDir:    rt.Bootstrap.Config.Paths.PulumiState,
+		WorkDir:     workDir,
+		StateDir:    stateDir,
 		Logger:      rt.Logger.Writer(),
 		Config:      deployConfig,
 		Destroy:     destroy,
@@ -95,7 +95,7 @@ func DeployAppServing(rt *core.Runtime) error {
 	}
 
 	_, err = deployer.Deploy(context.Background(), func(ctx *pulumi.Context) error {
-		return serving.DeployAppServing(ctx, appServingDir, rt.Detailf)
+		return serving.DeployAppServing(ctx, workDir, rt.Detailf)
 	})
 	if err != nil {
 		return err

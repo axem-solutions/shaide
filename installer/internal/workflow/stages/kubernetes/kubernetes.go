@@ -6,7 +6,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/axem-solutions/ai_platform/installer/internal/config/bundle"
+	"github.com/axem-solutions/ai_platform/installer/internal/config/catalog"
 	"github.com/axem-solutions/ai_platform/installer/internal/config/driver"
 	"github.com/axem-solutions/ai_platform/installer/internal/kube"
 	"github.com/axem-solutions/ai_platform/installer/internal/oras/inspect"
@@ -64,7 +64,7 @@ func detectClusterPlatform(rt *core.Runtime) error {
 }
 
 func checkDriverCompatibility(rt *core.Runtime) error {
-	cudaImage, err := findImageByName(rt.Bootstrap.Bundle.ServiceImages, cudaImageName)
+	cudaImage, err := findImageByName(rt.Bootstrap.Catalog.ServiceImages, cudaImageName)
 	if err != nil {
 		return fmt.Errorf("find CUDA image: %w", err)
 	}
@@ -119,8 +119,8 @@ func loadK8sConfig(rt *core.Runtime) error {
 	return nil
 }
 
-func findImageByName(images []bundle.Image, name string) (bundle.Image, error) {
-	var matched bundle.Image
+func findImageByName(images []catalog.Image, name string) (catalog.Image, error) {
+	var matched catalog.Image
 	found := false
 
 	for _, image := range images {
@@ -128,14 +128,14 @@ func findImageByName(images []bundle.Image, name string) (bundle.Image, error) {
 			continue
 		}
 		if found {
-			return bundle.Image{}, fmt.Errorf("image manifest contains multiple entries for image %q", name)
+			return catalog.Image{}, fmt.Errorf("image manifest contains multiple entries for image %q", name)
 		}
 		matched = image
 		found = true
 	}
 
 	if !found {
-		return bundle.Image{}, fmt.Errorf("image manifest does not contain image %q", name)
+		return catalog.Image{}, fmt.Errorf("image manifest does not contain image %q", name)
 	}
 
 	return matched, nil

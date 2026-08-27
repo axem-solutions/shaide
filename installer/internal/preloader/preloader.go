@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/axem-solutions/ai_platform/installer/internal/config/bundle"
+	"github.com/axem-solutions/ai_platform/installer/internal/config/catalog"
 	"github.com/axem-solutions/ai_platform/installer/internal/preloader/remote"
 	"github.com/axem-solutions/ai_platform/installer/internal/progress"
 )
@@ -48,7 +48,7 @@ func (p *Preloader) Close() error {
 	return p.remote.Close()
 }
 
-func (p *Preloader) Preload(ctx context.Context, images []bundle.Image) error {
+func (p *Preloader) Preload(ctx context.Context, images []catalog.Image) error {
 	harborImages, _, err := p.build(ctx, images)
 	if err != nil {
 		return err
@@ -57,7 +57,7 @@ func (p *Preloader) Preload(ctx context.Context, images []bundle.Image) error {
 	return p.uploadImages(ctx, harborImages)
 }
 
-func (p *Preloader) build(ctx context.Context, images []bundle.Image) ([]bundle.Image, int64, error) {
+func (p *Preloader) build(ctx context.Context, images []catalog.Image) ([]catalog.Image, int64, error) {
 	var totalBytes int64
 	for _, image := range images {
 		totalBytes += image.Size
@@ -76,7 +76,7 @@ func (p *Preloader) build(ctx context.Context, images []bundle.Image) ([]bundle.
 		return nil, -1, err
 	}
 
-	missingImages := make([]bundle.Image, 0, len(images))
+	missingImages := make([]catalog.Image, 0, len(images))
 
 	for _, harborImage := range images {
 		if _, ok := nodeImages[harborImage.Ref()]; !ok {
@@ -88,7 +88,7 @@ func (p *Preloader) build(ctx context.Context, images []bundle.Image) ([]bundle.
 	return missingImages, totalBytes, nil
 }
 
-func (p *Preloader) uploadImages(ctx context.Context, images []bundle.Image) error {
+func (p *Preloader) uploadImages(ctx context.Context, images []catalog.Image) error {
 	if len(images) == 0 {
 		return nil
 	}
@@ -152,7 +152,7 @@ func (p *Preloader) cleanStageDir(ctx context.Context, stageDir string) error {
 	return nil
 }
 
-func (p *Preloader) uploadAndImport(ctx context.Context, images []bundle.Image) error {
+func (p *Preloader) uploadAndImport(ctx context.Context, images []catalog.Image) error {
 	for _, image := range images {
 		remotePath, err := p.toNode(ctx, image)
 		if err != nil {
@@ -167,8 +167,8 @@ func (p *Preloader) uploadAndImport(ctx context.Context, images []bundle.Image) 
 	return nil
 }
 
-func (p *Preloader) toNode(ctx context.Context, image bundle.Image) (string, error) {
-	if image.Source != bundle.ImageSourceArchive {
+func (p *Preloader) toNode(ctx context.Context, image catalog.Image) (string, error) {
+	if image.Source != catalog.ImageSourceArchive {
 		return "", fmt.Errorf("unsupported Harbor image source %q", image.Source)
 	}
 
@@ -194,7 +194,7 @@ func (p *Preloader) toNode(ctx context.Context, image bundle.Image) (string, err
 
 }
 
-func (p *Preloader) toContainerd(ctx context.Context, image bundle.Image, remotePath string) error {
+func (p *Preloader) toContainerd(ctx context.Context, image catalog.Image, remotePath string) error {
 	p.opts.Logf("importing Harbor image archive %s into containerd", remotePath)
 	tracker := p.startProgress(image.Ref(), progress.PhaseImporting, 0, 1)
 

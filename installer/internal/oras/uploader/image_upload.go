@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/axem-solutions/ai_platform/installer/internal/config/bundle"
+	"github.com/axem-solutions/ai_platform/installer/internal/config/catalog"
 	"github.com/axem-solutions/ai_platform/installer/internal/oras/errdef"
 	"github.com/axem-solutions/ai_platform/installer/internal/progress"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"oras.land/oras-go/v2/content/oci"
 )
 
-func (u *Uploader) UploadImages(ctx context.Context, imageDir string, images []bundle.Image) error {
+func (u *Uploader) UploadImages(ctx context.Context, imageDir string, images []catalog.Image) error {
 	for _, image := range images {
 		u.logf("uploading image %s", image.Name)
 
@@ -29,23 +29,23 @@ func (u *Uploader) UploadImages(ctx context.Context, imageDir string, images []b
 	return nil
 }
 
-func (u *Uploader) prepareImageArtifact(ctx context.Context, imageDir string, image bundle.Image) (Artifact, error) {
+func (u *Uploader) prepareImageArtifact(ctx context.Context, imageDir string, image catalog.Image) (Artifact, error) {
 	// Example:
 	//
 	//   source: archive://api-server.tar
 	//   source: dockerhub://library/nginx:1.25
 	//   source: ghcr://my-org/api-server:v1.2.3
 	switch image.Source {
-	case bundle.ImageSourceArchive:
+	case catalog.ImageSourceArchive:
 		return u.archiveArtifact(ctx, imageDir, image)
-	case bundle.ImageSourceDockerHub, bundle.ImageSourceGitHub, bundle.ImageSourceNVCR, bundle.ImageSourceQuay, bundle.ImageSourceRegistryK8s:
+	case catalog.ImageSourceDockerHub, catalog.ImageSourceGitHub, catalog.ImageSourceNVCR, catalog.ImageSourceQuay, catalog.ImageSourceRegistryK8s:
 		return u.remoteArtifact(ctx, image)
 	}
 
 	return Artifact{}, fmt.Errorf("unsupported image source %q", image.Source)
 }
 
-func (u *Uploader) archiveArtifact(ctx context.Context, imageDir string, image bundle.Image) (Artifact, error) {
+func (u *Uploader) archiveArtifact(ctx context.Context, imageDir string, image catalog.Image) (Artifact, error) {
 	archiveFile := image.FileName()
 	path := filepath.Join(imageDir, archiveFile)
 
@@ -81,7 +81,7 @@ func (u *Uploader) archiveArtifact(ctx context.Context, imageDir string, image b
 	}, nil
 }
 
-func (u *Uploader) remoteArtifact(ctx context.Context, image bundle.Image) (Artifact, error) {
+func (u *Uploader) remoteArtifact(ctx context.Context, image catalog.Image) (Artifact, error) {
 	source, err := u.client.NewSourceRepository(image)
 	if err != nil {
 		return Artifact{}, fmt.Errorf("create remote source repository %q: %w", image.Source, err)
@@ -115,7 +115,7 @@ func (u *Uploader) remoteArtifact(ctx context.Context, image bundle.Image) (Arti
 
 // resolveImage resolves the OCI descriptor for image inside an archive
 // produced by `docker save -o <file> <project>/<name>:<tag>`
-func resolveImage(ctx context.Context, source *oci.ReadOnlyStore, image bundle.Image) (string, ocispec.Descriptor, error) {
+func resolveImage(ctx context.Context, source *oci.ReadOnlyStore, image catalog.Image) (string, ocispec.Descriptor, error) {
 	ref := targetRef(image.Project, image.Name, image.Tag)
 
 	manifest, err := source.Resolve(ctx, ref)

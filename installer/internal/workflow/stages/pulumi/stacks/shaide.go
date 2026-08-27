@@ -14,7 +14,8 @@ import (
 )
 
 func DeployAppShaide(rt *core.Runtime) error {
-	workdir := rt.Bootstrap.Bundle.PulumiWorkDir
+	workDir := filepath.Join(rt.Bootstrap.Config.Paths.ProjectsDir, projectAppShaide)
+	stateDir := rt.Bootstrap.Config.Paths.PulumiState
 
 	deployConfig := auto.ConfigMap{
 		pulumiConfigKey(projectAppShaide, "kubeconfig"): {
@@ -63,7 +64,7 @@ func DeployAppShaide(rt *core.Runtime) error {
 		}
 	}
 
-	ghcrToken, err := shaidePullCredential(rt, filepath.Join(workdir, projectAppShaide))
+	ghcrToken, err := shaidePullCredential(rt, workDir)
 	if err != nil {
 		return err
 	}
@@ -76,8 +77,8 @@ func DeployAppShaide(rt *core.Runtime) error {
 	deployer, err := iac.NewDeployer(iac.DeployerOptions{
 		ProjectName: projectAppShaide,
 		StackName:   stackAppShaide,
-		WorkDir:     filepath.Join(workdir, projectAppShaide),
-		StateDir:    rt.Bootstrap.Config.Paths.PulumiState,
+		WorkDir:     workDir,
+		StateDir:    stateDir,
 		Logger:      rt.Logger.Writer(),
 		Config:      deployConfig,
 		Destroy:     false,

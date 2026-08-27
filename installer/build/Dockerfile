@@ -44,6 +44,46 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 
 # -----------------------------------------------------------------------------
+# Helm chart downloader stage
+#
+# Download the pinned third-party charts at build time. Keeping this work in a
+# separate stage avoids adding curl or its download cache to the runtime image.
+# -----------------------------------------------------------------------------
+FROM alpine:3.23 AS chart-downloader
+
+ARG HARBOR_CHART_VERSION=1.18.2
+ARG LOKI_CHART_VERSION=14.1.0
+ARG GRAFANA_CHART_VERSION=12.3.2
+ARG ALLOY_CHART_VERSION=1.8.1
+ARG PROMETHEUS_CHART_VERSION=29.21.0
+
+RUN apk add --no-cache ca-certificates curl \
+    && mkdir -p \
+        /opt/shaide-installer/projects/harbor/charts \
+        /opt/shaide-installer/projects/monitoring/charts
+
+RUN curl -fsSL --retry 3 \
+    -o "/opt/shaide-installer/projects/harbor/charts/harbor-${HARBOR_CHART_VERSION}.tgz" \
+    "https://helm.goharbor.io/harbor-${HARBOR_CHART_VERSION}.tgz"
+
+RUN curl -fsSL --retry 3 \
+    -o "/opt/shaide-installer/projects/monitoring/charts/loki-${LOKI_CHART_VERSION}.tgz" \
+    "https://github.com/grafana-community/helm-charts/releases/download/loki-${LOKI_CHART_VERSION}/loki-${LOKI_CHART_VERSION}.tgz"
+
+RUN curl -fsSL --retry 3 \
+    -o "/opt/shaide-installer/projects/monitoring/charts/grafana-${GRAFANA_CHART_VERSION}.tgz" \
+    "https://github.com/grafana-community/helm-charts/releases/download/grafana-${GRAFANA_CHART_VERSION}/grafana-${GRAFANA_CHART_VERSION}.tgz"
+
+RUN curl -fsSL --retry 3 \
+    -o "/opt/shaide-installer/projects/monitoring/charts/alloy-${ALLOY_CHART_VERSION}.tgz" \
+    "https://github.com/grafana/helm-charts/releases/download/alloy-${ALLOY_CHART_VERSION}/alloy-${ALLOY_CHART_VERSION}.tgz"
+
+RUN curl -fsSL --retry 3 \
+    -o "/opt/shaide-installer/projects/monitoring/charts/prometheus-${PROMETHEUS_CHART_VERSION}.tgz" \
+    "https://github.com/prometheus-community/helm-charts/releases/download/prometheus-${PROMETHEUS_CHART_VERSION}/prometheus-${PROMETHEUS_CHART_VERSION}.tgz"
+
+
+# -----------------------------------------------------------------------------
 # Runtime stage
 #
 # Use a smaller Debian image containing only the compiled installer and the
@@ -118,11 +158,14 @@ COPY app_serving/charts/ \
 COPY app_shaide/deployments/Pulumi.yaml \
     /opt/shaide-installer/projects/app-shaide/Pulumi.yaml
 
-# Cloud Harbor
-COPY infra/cloud-harbor/deployment/Pulumi.yaml \
-    /opt/shaide-installer/projects/cloud-harbor/Pulumi.yaml
-COPY infra/cloud-harbor/charts/ \
-    /opt/shaide-installer/projects/cloud-harbor/charts/
+
+# Harbor
+COPY harbor/deployment/Pulumi.yaml \
+    /opt/shaide-installer/projects/harbor/Pulumi.yaml
+COPY --from=chart-downloader \
+    /opt/shaide-installer/projects/harbor/charts/ \
+    /opt/shaide-installer/projects/harbor/charts/
+
 
 # Gateway Provider
 COPY infra/gateway-provider/deployments/Pulumi.yaml \
@@ -133,7 +176,8 @@ COPY infra/gateway-provider/crds/ \
 # Monitoring
 COPY monitoring/deployments/Pulumi.yaml \
     /opt/shaide-installer/projects/monitoring/Pulumi.yaml
-COPY monitoring/charts/ \
+COPY --from=chart-downloader \
+    /opt/shaide-installer/projects/monitoring/charts/ \
     /opt/shaide-installer/projects/monitoring/charts/
 
 # Manifests

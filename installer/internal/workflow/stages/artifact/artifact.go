@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/axem-solutions/ai_platform/installer/internal/config/bundle"
+	"github.com/axem-solutions/ai_platform/installer/internal/config/catalog"
 	"github.com/axem-solutions/ai_platform/installer/internal/config/storage"
 	harborapi "github.com/axem-solutions/ai_platform/installer/internal/harbor/api"
 	"github.com/axem-solutions/ai_platform/installer/internal/huggingface"
@@ -64,9 +64,17 @@ func Stage() core.Stage {
 func checkModelArtifacts(rt *core.Runtime) error {
 	rt.Artifact.ModelOptions = nil
 
-	client := orasapi.NewClient(artifactClientOptions(rt))
+	if err := discovery.RefreshPortForward(rt); err != nil {
+		return err
+	}
 
-	for _, model := range rt.Bootstrap.Bundle.Models {
+	clientOptions, err := artifactClientOptions(rt)
+	if err != nil {
+		return err
+	}
+	client := orasapi.NewClient(clientOptions)
+
+	for _, model := range rt.Bootstrap.Catalog.Models {
 		found, err := modelExistsInHarbor(context.Background(), client, model, rt.Bootstrap.Config.Paths.UploadState)
 		if err != nil {
 			return err
@@ -230,14 +238,19 @@ func uploadImages(rt *core.Runtime) error {
 
 	return uploader.UploadImages(
 		context.Background(),
-		rt.Bootstrap.Bundle.ImagesDir,
-		rt.Bootstrap.Bundle.ServiceImages,
+		rt.Bootstrap.Catalog.ImagesDir,
+		rt.Bootstrap.Catalog.ServiceImages,
 	)
 }
 
 func artifactUploader(rt *core.Runtime) (*oras.Uploader, error) {
+	clientOptions, err := artifactClientOptions(rt)
+	if err != nil {
+		return nil, err
+	}
+
 	return oras.NewUploader(oras.UploaderOptions{
-		Client:           artifactClientOptions(rt),
+		Client:           clientOptions,
 		ChunkSize:        128 << 20,
 		StateDir:         rt.Bootstrap.Config.Paths.UploadState,
 		ArtifactCacheDir: rt.Bootstrap.Config.Paths.ArtifactCache,
@@ -261,7 +274,12 @@ func artifactUploader(rt *core.Runtime) (*oras.Uploader, error) {
 		},
 	})
 }
-func artifactClientOptions(rt *core.Runtime) orasapi.ClientOptions {
+
+func artifactClientOptions(rt *core.Runtime) (orasapi.ClientOptions, error) {
+	if rt.Discovery.HarborForward == nil {
+		return orasapi.ClientOptions{}, fmt.Errorf("harbor port-forward is not initialized")
+	}
+
 	return orasapi.ClientOptions{
 		Registry: fmt.Sprintf(
 			"127.0.0.1:%d",
@@ -272,7 +290,7 @@ func artifactClientOptions(rt *core.Runtime) orasapi.ClientOptions {
 			Password: strings.TrimSpace(rt.Discovery.Auth.Password),
 		},
 		RemoteCredentials: remoteSourceCredentials(rt),
-	}
+	}, nil
 }
 
 func remoteSourceCredentials(rt *core.Runtime) map[string]orasapi.Credential {
@@ -376,7 +394,7 @@ func deleteModels(rt *core.Runtime) error {
 	return nil
 }
 
-func modelExistsInHarbor(ctx context.Context, client *orasapi.Client, model bundle.Model, uploadDir string) (bool, error) {
+func modelExistsInHarbor(ctx context.Context, client *orasapi.Client, model catalog.Model, uploadDir string) (bool, error) {
 	repository, err := client.NewTargetRepository(
 		model.HarborProject,
 		model.HarborName,
@@ -401,7 +419,7 @@ func modelExistsInHarbor(ctx context.Context, client *orasapi.Client, model bund
 	return exists, nil
 }
 
-func huggingFaceModel(model bundle.Model) huggingface.Model {
+func huggingFaceModel(model catalog.Model) huggingface.Model {
 	deps := make([]huggingface.Dependency, 0, len(model.Dependencies))
 	for _, dep := range model.Dependencies {
 		deps = append(deps, huggingface.Dependency{
@@ -417,7 +435,7 @@ func huggingFaceModel(model bundle.Model) huggingface.Model {
 	}
 }
 
-func modelOptionLabel(model bundle.Model) string {
+func modelOptionLabel(model catalog.Model) string {
 	return fmt.Sprintf("%s:%s",
 		model.HarborName,
 		model.HarborTag,

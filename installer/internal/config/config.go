@@ -9,10 +9,9 @@ import (
 )
 
 const (
-	BundleArchivePathEnv = "BUNDLE_ARCHIVE_PATH"
-	KubeconfigPathEnv    = "KUBECONFIG"
-	PrivateKeyPathEnv    = "PRIVATE_KEY_PATH"
-	HFTokenEnv           = "HF_TOKEN"
+	KubeconfigPathEnv = "KUBECONFIG"
+	PrivateKeyPathEnv = "PRIVATE_KEY_PATH"
+	HFTokenEnv        = "HF_TOKEN"
 
 	GHCRUserEnv  = "GHCR_USERNAME"
 	GHCRTokenEnv = "GHCR_TOKEN"
@@ -99,10 +98,6 @@ func Load() Config {
 
 	if value := env(KubeconfigPathEnv); value != "" {
 		paths.Kubeconfig = filepath.Clean(value)
-	}
-
-	if value := env(BundleArchivePathEnv); value != "" {
-		paths.BundleArchive = filepath.Clean(value)
 	}
 
 	hfToken := env(HFTokenEnv)

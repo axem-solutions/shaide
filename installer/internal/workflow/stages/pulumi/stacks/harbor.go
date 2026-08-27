@@ -12,8 +12,7 @@ import (
 )
 
 func DeployHarbor(rt *core.Runtime) error {
-	workdir := rt.Bootstrap.Bundle.PulumiWorkDir
-	harborDir := filepath.Join(workdir, projectCloudHarbor)
+	workDir := filepath.Join(rt.Bootstrap.Config.Paths.ProjectsDir, projectCloudHarbor)
 
 	deployConfig := auto.ConfigMap{
 		pulumiConfigKey(projectCloudHarbor, "kubeconfig"): {
@@ -62,7 +61,7 @@ func DeployHarbor(rt *core.Runtime) error {
 	deployer, err := iac.NewDeployer(iac.DeployerOptions{
 		ProjectName: projectCloudHarbor,
 		StackName:   stackCloudHarbor,
-		WorkDir:     harborDir,
+		WorkDir:     workDir,
 		StateDir:    rt.Bootstrap.Config.Paths.PulumiState,
 		Logger:      rt.Logger.Writer(),
 		Config:      deployConfig,
@@ -77,7 +76,7 @@ func DeployHarbor(rt *core.Runtime) error {
 	// it inherits the installer's working directory rather than WorkDir, and
 	// the relative chartPath from Pulumi.harbor.yaml has to be anchored here.
 	_, err = deployer.Deploy(context.Background(), func(ctx *pulumi.Context) error {
-		return harbor.DeployHarbor(ctx, harborDir)
+		return harbor.DeployHarbor(ctx, workDir)
 	})
 	if err != nil {
 		return err
