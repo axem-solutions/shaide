@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/axem-solutions/ai_platform/installer/internal/config/bundle"
+	"github.com/axem-solutions/ai_platform/installer/internal/config/catalog"
 	"github.com/axem-solutions/ai_platform/installer/internal/config/storage"
 	"github.com/axem-solutions/ai_platform/installer/internal/oras/errdef"
 	"github.com/axem-solutions/ai_platform/installer/internal/progress"
@@ -21,7 +21,7 @@ import (
 
 const modelArtifactType = "application/vnd.cnai.model"
 
-func (u *Uploader) UploadModels(ctx context.Context, hubdir string, models []bundle.Model) error {
+func (u *Uploader) UploadModels(ctx context.Context, hubdir string, models []catalog.Model) error {
 	for _, model := range models {
 		u.logf("uploading model %s", model.HarborName)
 
@@ -38,7 +38,7 @@ func (u *Uploader) UploadModels(ctx context.Context, hubdir string, models []bun
 	return nil
 }
 
-func (u *Uploader) prepareModelArtifact(ctx context.Context, hubdir string, model bundle.Model) (Artifact, error) {
+func (u *Uploader) prepareModelArtifact(ctx context.Context, hubdir string, model catalog.Model) (Artifact, error) {
 	ref := targetRef(model.HarborProject, model.HarborName, model.HarborTag)
 
 	cache, manifest, err := u.cacheArtifact(ctx, hubdir, model, ref)
@@ -66,7 +66,7 @@ func (u *Uploader) prepareModelArtifact(ctx context.Context, hubdir string, mode
 	}, nil
 }
 
-func (u *Uploader) cacheArtifact(ctx context.Context, hubDir string, model bundle.Model, ref string) (*oci.Store, ocispec.Descriptor, error) {
+func (u *Uploader) cacheArtifact(ctx context.Context, hubDir string, model catalog.Model, ref string) (*oci.Store, ocispec.Descriptor, error) {
 	cache, manifest, found, err := u.resolveCache(ctx, ref)
 	if err != nil {
 		return nil, ocispec.Descriptor{}, err
@@ -110,7 +110,7 @@ func (u *Uploader) resolveCache(ctx context.Context, ref string) (*oci.Store, oc
 
 }
 
-func (u *Uploader) buildCache(ctx context.Context, hubDir string, model bundle.Model, cache *oci.Store, ref string) (ocispec.Descriptor, error) {
+func (u *Uploader) buildCache(ctx context.Context, hubDir string, model catalog.Model, cache *oci.Store, ref string) (ocispec.Descriptor, error) {
 	if err := u.checkBuildStorage(hubDir, model, ref); err != nil {
 		return ocispec.Descriptor{}, err
 	}
@@ -138,7 +138,7 @@ func (u *Uploader) buildCache(ctx context.Context, hubDir string, model bundle.M
 	return cached, nil
 }
 
-func (u *Uploader) packStore(ctx context.Context, hubDir string, model bundle.Model, store *file.Store) (ocispec.Descriptor, error) {
+func (u *Uploader) packStore(ctx context.Context, hubDir string, model catalog.Model, store *file.Store) (ocispec.Descriptor, error) {
 	dirs := modelDirs(model)
 
 	tracker := progress.NewTracker(progress.PhaseBuilding, model.ID, int64(len(dirs)+1), 0, u.progressf)
@@ -208,7 +208,7 @@ func (u *Uploader) addLayer(ctx context.Context, store *file.Store, hubDir strin
 	return layer, nil
 }
 
-func modelDirs(model bundle.Model) []string {
+func modelDirs(model catalog.Model) []string {
 	dirs := []string{modelDir(model.ID)}
 
 	for _, dep := range model.Dependencies {
@@ -222,7 +222,7 @@ func modelDir(id string) string {
 	return "models--" + strings.ReplaceAll(id, "/", "--")
 }
 
-func (u *Uploader) checkBuildStorage(hubDir string, model bundle.Model, ref string) error {
+func (u *Uploader) checkBuildStorage(hubDir string, model catalog.Model, ref string) error {
 	required, err := estimateBuildWorkingSpace(hubDir, modelDirs(model))
 	if err != nil {
 		return fmt.Errorf("estimate OCI artifact storage for %s: %w", ref, err)

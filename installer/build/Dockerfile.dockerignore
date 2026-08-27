@@ -22,14 +22,13 @@
 !app_shaide/deployments/
 !app_shaide/deployments/Pulumi.yaml
 
+# Harbor project
+!harbor/
+!harbor/deployment/
+!harbor/deployment/Pulumi.yaml
+
 # Infrastructure projects
 !infra/
-
-!infra/cloud-harbor/
-!infra/cloud-harbor/deployment/
-!infra/cloud-harbor/deployment/Pulumi.yaml
-!infra/cloud-harbor/charts/
-!infra/cloud-harbor/charts/**
 
 !infra/gateway-provider/
 !infra/gateway-provider/deployments/
@@ -41,5 +40,3 @@
 !monitoring/
 !monitoring/deployments/
 !monitoring/deployments/Pulumi.yaml
-!monitoring/charts/
-!monitoring/charts/**

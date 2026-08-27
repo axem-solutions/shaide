@@ -5,9 +5,9 @@ import (
 	"os"
 
 	"github.com/axem-solutions/ai_platform/installer/internal/config"
-	"github.com/axem-solutions/ai_platform/installer/internal/config/bundle"
+	"github.com/axem-solutions/ai_platform/installer/internal/config/catalog"
+	"github.com/axem-solutions/ai_platform/installer/internal/config/projects"
 	"github.com/axem-solutions/ai_platform/installer/internal/config/storage"
-	"github.com/axem-solutions/ai_platform/installer/internal/progress"
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/core"
 	"golang.org/x/term"
 )
@@ -33,8 +33,8 @@ func Stage() core.Stage {
 				Run:  prepareStorage,
 			},
 			{
-				Name: "require valid bundle",
-				Run:  requireValidBundle,
+				Name: "prepare installer assets",
+				Run:  prepareAssets,
 			},
 		},
 	}
@@ -95,31 +95,26 @@ func prepareStorage(rt *core.Runtime) error {
 	return nil
 }
 
-func requireValidBundle(rt *core.Runtime) error {
-	archivePath := rt.Bootstrap.Config.Paths.BundleArchive
-	dstDir := rt.Bootstrap.Config.Paths.Bundle
+func prepareAssets(rt *core.Runtime) error {
+	paths := rt.Bootstrap.Config.Paths
 
-	preparedBundle, err := bundle.Prepare(bundle.PrepareOptions{
-		ArchivePath: archivePath,
-		Destination: dstDir,
-		Logf:        rt.Detailf,
-		Progressf: func(e progress.Event) {
-			rt.Reporter.ProgressModel(core.ModelProgress{
-				ID:         fmt.Sprintf("%s \n %s", e.Phase, e.Current),
-				Bytes:      e.Bytes,
-				TotalBytes: e.TotalBytes,
-				Files:      e.Files,
-				TotalFiles: e.TotalFiles,
-				Percent:    e.Percent,
-				Done:       e.Done,
-			})
-		},
-	})
-	if err != nil {
-		return fmt.Errorf("prepare bundle: %w", err)
+	if err := projects.Prepare(projects.PrepareOptions{
+		SourceDir:      paths.ProjectsSourceDir,
+		DestinationDir: paths.ProjectsDir,
+	}); err != nil {
+		return fmt.Errorf("prepare Pulumi projects: %w", err)
 	}
 
-	rt.Bootstrap.Bundle = preparedBundle
+	loadedCatalog, err := catalog.Load(
+		catalog.LoadOptions{
+			ManifestsDir: paths.ManifestsDir,
+			ImagesDir:    paths.ImagesDir,
+		})
+	if err != nil {
+		return fmt.Errorf("load catalog: %w", err)
+	}
+
+	rt.Bootstrap.Catalog = loadedCatalog
 
 	return nil
 }

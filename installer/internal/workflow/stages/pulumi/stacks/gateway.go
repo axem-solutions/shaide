@@ -73,8 +73,8 @@ func defaultsForPlatform(provider string) platformDefaults {
 }
 
 func DeployGatewayProvider(rt *core.Runtime) error {
-	workdir := rt.Bootstrap.Bundle.PulumiWorkDir
-	gatewayDir := filepath.Join(workdir, "gateway-provider")
+	workdir := filepath.Join(rt.Bootstrap.Config.Paths.ProjectsDir, projectGatewayProvider)
+	stateDir := rt.Bootstrap.Config.Paths.PulumiState
 
 	// Cloud platform selection drives the per-platform defaults below.
 	// Pre-filled with the platform detected from the cluster's node
@@ -161,10 +161,10 @@ func DeployGatewayProvider(rt *core.Runtime) error {
 			Value: rt.Cluster.ConfigPath,
 		},
 		"gateway-provider:gatewayApiCrdsPath": {
-			Value: filepath.Join(gatewayDir, "crds", "gateway-api", "standard"),
+			Value: filepath.Join(workdir, "crds", "gateway-api", "standard"),
 		},
 		"gateway-provider:gieCrdsPath": {
-			Value: filepath.Join(gatewayDir, "crds", "gie"),
+			Value: filepath.Join(workdir, "crds", "gie"),
 		},
 		pulumiConfigKey(projectGatewayProvider, "cloudProvider"): {
 			Value: platform,
@@ -188,7 +188,7 @@ func DeployGatewayProvider(rt *core.Runtime) error {
 	}
 
 	// Resource-ownership policy: take ownership of any existing istio-base /
-	// istiod resources so the bundled Helm charts can adopt them instead of
+	// istiod resources so the Catalogd Helm charts can adopt them instead of
 	// failing with "already exists". Idempotent; no-op on a fresh cluster.
 	const istioNamespace = "istio-system"
 	rt.Detailf("ensuring installer ownership of Istio chart resources in %s", istioNamespace)
@@ -202,8 +202,8 @@ func DeployGatewayProvider(rt *core.Runtime) error {
 	deployer, err := iac.NewDeployer(iac.DeployerOptions{
 		ProjectName: projectGatewayProvider,
 		StackName:   stackGatewayProvider,
-		WorkDir:     gatewayDir,
-		StateDir:    rt.Bootstrap.Config.Paths.PulumiState,
+		WorkDir:     workdir,
+		StateDir:    stateDir,
 		Logger:      rt.Logger.Writer(),
 		Config:      deployConfig,
 		Destroy:     false,

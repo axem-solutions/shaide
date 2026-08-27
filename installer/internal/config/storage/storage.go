@@ -26,10 +26,7 @@ type Requirement struct {
 
 type Checker func(Requirement) error
 
-func NewChecker(
-	path string,
-	logf func(string, ...any),
-) Checker {
+func NewChecker(path string, logf func(string, ...any)) Checker {
 	return func(requirement Requirement) error {
 		required := MissingBytes(
 			requirement.Expected,

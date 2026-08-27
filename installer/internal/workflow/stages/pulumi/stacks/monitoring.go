@@ -13,10 +13,9 @@ import (
 )
 
 func DeployMonitoring(rt *core.Runtime) error {
-	workdir := rt.Bootstrap.Bundle.PulumiWorkDir
-	monitorDir := filepath.Join(workdir, "monitoring")
-
-	stackFile := filepath.Join(monitorDir, "Pulumi.yaml")
+	workDir := filepath.Join(rt.Bootstrap.Config.Paths.ProjectsDir, projectMonitoring)
+	stateDir := rt.Bootstrap.Config.Paths.PulumiState
+	stackFile := filepath.Join(workDir, "Pulumi.yaml")
 
 	_, keys, err := decoder.LoadTemplateFile(stackFile)
 	if err != nil {
@@ -36,8 +35,8 @@ func DeployMonitoring(rt *core.Runtime) error {
 	deployer, err := iac.NewDeployer(iac.DeployerOptions{
 		ProjectName: projectMonitoring,
 		StackName:   stackMonitoring,
-		WorkDir:     monitorDir,
-		StateDir:    rt.Bootstrap.Config.Paths.PulumiState,
+		WorkDir:     workDir,
+		StateDir:    stateDir,
 		Logger:      rt.Logger.Writer(),
 		Config:      stackConfig,
 		Destroy:     true,
@@ -48,10 +47,10 @@ func DeployMonitoring(rt *core.Runtime) error {
 	}
 
 	// Inline Automation API programs retain the installer's process working
-	// directory. Pass the project directory explicitly so bundled chart paths
-	// are resolved relative to deployments/monitoring, not the launch directory.
+	// directory. Pass the project root explicitly so chart paths are resolved
+	// from the copied monitoring project, not the launch directory.
 	_, err = deployer.Deploy(context.Background(), func(ctx *pulumi.Context) error {
-		return monitoring.DeployMonitoring(ctx, monitorDir)
+		return monitoring.DeployMonitoring(ctx, projectDir)
 	})
 	if err != nil {
 		return err

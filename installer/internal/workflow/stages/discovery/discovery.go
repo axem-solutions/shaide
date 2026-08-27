@@ -175,12 +175,7 @@ func checkHarborPullSecret(rt *core.Runtime) error {
 	ns := rt.Bootstrap.Config.Harbor.Namespace
 	secretName := rt.Bootstrap.Config.Harbor.PullSecret
 
-	auth, err := getAuthTokenFromSecret(
-		reqCtx,
-		rt.Cluster.Client,
-		ns,
-		secretName,
-	)
+	auth, err := getAuthTokenFromSecret(reqCtx, rt.Cluster.Client, ns, secretName)
 	if err != nil {
 		return harborDiscoveryError{
 			Kind:         harborSecret,
@@ -245,7 +240,7 @@ func setupHarbor(rt *core.Runtime) error {
 	// Harbor client.
 	//
 	// Only the tunnel is opened at this point. The registry readiness probe
-	// requests a repository-scoped token for a bundle repo, and on a fresh
+	// requests a repository-scoped token for a Catalog repo, and on a fresh
 	// install its project does not exist yet — Harbor answers 401 for an
 	// unknown project rather than 404, which the probe would retry until its
 	// budget expired. So create the projects and the robot account first, then
@@ -438,8 +433,8 @@ func preloadHarbor(rt *core.Runtime) error {
 	// block the install on input that cannot be used. Note the check has to sit
 	// here rather than inside preloader.Preload: that reaches its own
 	// len(images)==0 guard only after remoteHealthCheck has already SSH'd.
-	if len(rt.Bootstrap.Bundle.HarborImages) == 0 {
-		rt.Detailf("no goharbor_images in the bundle manifest, skipping Harbor image preload")
+	if len(rt.Bootstrap.Catalog.HarborImages) == 0 {
+		rt.Detailf("no goharbor_images in the Catalog manifest, skipping Harbor image preload")
 		return nil
 	}
 
@@ -454,7 +449,7 @@ func preloadHarbor(rt *core.Runtime) error {
 	}
 	defer preloader.Close()
 
-	if err := preloader.Preload(context.Background(), rt.Bootstrap.Bundle.HarborImages); err != nil {
+	if err := preloader.Preload(context.Background(), rt.Bootstrap.Catalog.HarborImages); err != nil {
 		return err
 	}
 	return nil
@@ -496,11 +491,11 @@ func promptPreloaderOptions(rt *core.Runtime) (preloader.PreloaderOptions, error
 		Host:             host,
 		User:             user,
 		PrivateKeyPath:   rt.Bootstrap.Config.Preloader.PrivateKeyFile,
-		LocalImageDir:    rt.Bootstrap.Bundle.ImagesDir,
+		LocalImageDir:    rt.Bootstrap.Catalog.ImagesDir,
 		CtrPath:          ctrPath,
 		Port:             rt.Bootstrap.Config.Preloader.SSHPort,
 		ContainerdSocket: containerdSocket,
-		LocalDir:         rt.Bootstrap.Bundle.ImagesDir,
+		LocalDir:         rt.Bootstrap.Catalog.ImagesDir,
 		Progressf: func(e progress.Event) {
 			rt.Reporter.ProgressModel(core.ModelProgress{
 				ID:         fmt.Sprintf("%s\n%s", e.Phase, e.Current),
@@ -625,10 +620,10 @@ func waitRegistryReady(rt *core.Runtime) error {
 		return nil
 	}
 
-	// Probe with a real bundle repo so the token request carries a repository
+	// Probe with a real Catalog repo so the token request carries a repository
 	// scope the robot account actually holds. A scopeless /v2/ probe would
 	// always 401 for a repository-scoped robot and never report ready.
-	models := rt.Bootstrap.Bundle.Models
+	models := rt.Bootstrap.Catalog.Models
 	if len(models) == 0 {
 		return nil
 	}

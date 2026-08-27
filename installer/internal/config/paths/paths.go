@@ -7,20 +7,26 @@ const (
 	// -v "${KUBECONFIG_PATH}:/.kube/config"
 	defaultKubeconfigPath = "/.kube/config"
 
-	// Mount the bundle to:
-	// -v "${BUNDLE_PATH}:/.bundle/bundle.tar.gz:ro"
-	defaultBundlePath = "/.bundle/bundle.tar.gz"
-
 	// DefaultBindMount is the root of installer-owned writable storage.
-	DefaultBindMount = "/var/shaide-installer"
+	defaultBindMount = "/var/shaide-installer"
+
+	// TODO: add comment
+	defaultProjectsSourceDir = "/opt/shaide-installer/projects"
+	defaultManifestsDir      = "/opt/shaide-installer/manifests"
+	defaultImagesDir         = "/opt/shaide-installer/images"
 )
 
 type Paths struct {
-	Kubeconfig    string
-	BundleArchive string
+	Kubeconfig string
 
+	// Read-only files copied into the Docker image.
+	ProjectsSourceDir string
+	ManifestsDir      string
+	ImagesDir         string
+
+	// Writable installer storage.
 	StorageRoot   string
-	Bundle        string
+	ProjectsDir   string
 	ModelCache    string
 	UploadState   string
 	ArtifactCache string
@@ -30,17 +36,21 @@ type Paths struct {
 }
 
 func DefaultPaths() Paths {
-	return NewPaths(DefaultBindMount)
+	return NewPaths(defaultBindMount)
 }
 
 func NewPaths(storageRoot string) Paths {
 	storageRoot = filepath.Clean(storageRoot)
 
 	return Paths{
-		Kubeconfig:    defaultKubeconfigPath,
-		BundleArchive: defaultBundlePath,
+		Kubeconfig: defaultKubeconfigPath,
+
+		ProjectsSourceDir: defaultProjectsSourceDir,
+		ManifestsDir:      defaultManifestsDir,
+		ImagesDir:         defaultImagesDir,
+
 		StorageRoot:   storageRoot,
-		Bundle:        filepath.Join(storageRoot, "bundle"),
+		ProjectsDir:   filepath.Join(storageRoot, "projects"),
 		ModelCache:    filepath.Join(storageRoot, "model-cache"),
 		UploadState:   filepath.Join(storageRoot, "upload-state"),
 		ArtifactCache: filepath.Join(storageRoot, "artifact-cache"),

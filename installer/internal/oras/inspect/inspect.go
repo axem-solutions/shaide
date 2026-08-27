@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/axem-solutions/ai_platform/installer/internal/config/bundle"
+	"github.com/axem-solutions/ai_platform/installer/internal/config/catalog"
 	orasclient "github.com/axem-solutions/ai_platform/installer/internal/oras/client"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"oras.land/oras-go/v2/content"
@@ -53,7 +53,7 @@ func (p Platform) Equal(candidate *ocispec.Platform) bool {
 //
 // It resolves the image reference, selects the manifest matching the requested platform
 // reads the image configuration and returns the given environment variables as name-value pairs.
-func InspectImage(ctx context.Context, image bundle.Image, platform Platform, envVars ...string) (map[string]string, error) {
+func InspectImage(ctx context.Context, image catalog.Image, platform Platform, envVars ...string) (map[string]string, error) {
 	client := orasclient.NewClient(orasclient.ClientOptions{})
 
 	repo, err := client.NewSourceRepository(image)
