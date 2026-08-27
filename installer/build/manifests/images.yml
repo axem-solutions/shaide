@@ -1,0 +1,19 @@
+# Images mirrored into Harbor during installation.
+harbor_upload_images:
+  # app_shaide
+  - { source: "ghcr", project: "shaide", name: "axem-solutions/shaide_server", tag: "v0.11.0" }
+  - { source: "ghcr", project: "shaide", name: "axem-solutions/control_panel", tag: "v0.4.0" }
+  - { source: "ghcr", project: "shaide", name: "axem-solutions/shaide-webapp", tag: "v0.1.1" }
+  - { source: "dockerhub", project: "shaide", name: "rustfs/rustfs", tag: "1.0.0-alpha.92" }
+  - { source: "dockerhub", project: "shaide", name: "qdrant/qdrant", tag: "v1.17" }
+  - { source: "dockerhub", project: "shaide", name: "busybox", tag: "1.37" }
+
+  # app_serving and infrastructure
+  - { source: "ghcr", project: "services", name: "oras-project/oras", tag: "v1.3.1" }
+  - { source: "ghcr", project: "services", name: "llm-d/llm-d-cuda", tag: "v0.4.0" }
+  - { source: "ghcr", project: "services", name: "llm-d/llm-d-routing-sidecar", tag: "v0.8.0" }
+  - { source: "registry_k8s", project: "services", name: "gateway-api-inference-extension/epp", tag: "v1.2.0" }
+  - { source: "dockerhub", project: "services", name: "istio/pilot", tag: "1.28.1" }
+  - { source: "dockerhub", project: "services", name: "istio/proxyv2", tag: "1.28.1" }
+
+goharbor_images: []
