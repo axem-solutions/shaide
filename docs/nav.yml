@@ -1,0 +1,60 @@
+# Navigation manifest.
+# Renderer-neutral: consumed by the Framer upload script and by the offline renderer.
+# Order here is authoritative; filenames carry no numeric prefixes.
+
+- title: Introduction
+  path: introduction
+  pages: [what-is-shaide.md, concepts.md, architecture-overview.md, deployment-targets.md]
+
+
+- title: Cluster requirements
+  path: cluster-requirements
+  pages: [index.md, compute.md, storage.md, networking.md, verification.md]
+
+
+- title: Getting started
+  path: getting-started
+  pages: [prerequisites.md, quickstart.md, verify-installation.md]
+
+
+- title: Installation
+  path: installation
+  pages: [installer-guide.md, walkthrough.md, bundle.md, air-gapped.md, configuration.md, troubleshooting.md]
+
+
+- title: Usage
+  path: usage
+  pages: [openai-api.md, chat-completions.md, embeddings.md, agent-integrations.md, model-catalog.md, authentication.md]
+
+
+- title: Architecture
+  path: architecture
+  pages: [overview.md, traffic-flow.md, platform-services.md, gateway.md, model-serving.md,
+          model-deployment-flow.md, model-storage.md, application-layer.md, mcp.md, observability.md, installer.md]
+
+
+- title: Cluster setup
+  path: cluster-setup
+  pages: [index.md, aws-eks.md, gcp-gke.md, azure-aks.md, on-prem-rke2.md, rke2-cni.md]
+
+
+- title: Operations
+  path: operations
+  pages: [model-management.md, scaling.md, model-registry.md, image-mirroring.md,
+          node-registry-trust.md, tls-certificates.md, storage.md, upgrades.md,
+          backup-restore.md, azure-b2b-login.md, troubleshooting.md]
+
+
+- title: Reference
+  path: reference
+  pages: [configuration.md, ports.md, cli.md, glossary.md]
+
+
+- title: Contributing
+  path: contributing
+  pages: [development-setup.md, local-cluster.md, benchmarking.md, release-process.md, ai-policy.md]
+
+
+- title: Architecture decision records
+  path: adr
+  pages: [001-centralized-logging.md]
