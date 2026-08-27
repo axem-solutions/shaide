@@ -1,0 +1,6 @@
+models:
+  - id: "openai/gpt-oss-20b"
+    revision: "6cee5e81ee83917806bbde320786a8fb61efebee"
+    harbor_project: "ai-models"
+    harbor_name: "gpt-oss-20b"
+    harbor_tag: "1.0.0"

@@ -1,9 +1,45 @@
+# Exclude everything by default. Only files used by installer/build/Dockerfile
+# are added back below.
 **
+
+# Installer source
 !installer/
 !installer/**
 !pkg/
 !pkg/**
-installer/installer-bundle/
-installer/.bundle/
-installer/*.tar*
-installer/**/*.tar*
+
+# App Serving project
+!app_serving/
+!app_serving/deployments/
+!app_serving/deployments/Pulumi.yaml
+!app_serving/deployments/models/
+!app_serving/deployments/models/**
+!app_serving/charts/
+!app_serving/charts/**
+
+# App Shaide project
+!app_shaide/
+!app_shaide/deployments/
+!app_shaide/deployments/Pulumi.yaml
+
+# Infrastructure projects
+!infra/
+
+!infra/cloud-harbor/
+!infra/cloud-harbor/deployment/
+!infra/cloud-harbor/deployment/Pulumi.yaml
+!infra/cloud-harbor/charts/
+!infra/cloud-harbor/charts/**
+
+!infra/gateway-provider/
+!infra/gateway-provider/deployments/
+!infra/gateway-provider/deployments/Pulumi.yaml
+!infra/gateway-provider/crds/
+!infra/gateway-provider/crds/**
+
+# Monitoring project
+!monitoring/
+!monitoring/deployments/
+!monitoring/deployments/Pulumi.yaml
+!monitoring/charts/
+!monitoring/charts/**

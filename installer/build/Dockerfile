@@ -99,4 +99,44 @@ ENV HF_XET_HIGH_PERFORMANCE=1
 # builder stage and are not included in the final image.
 COPY --from=builder /installer /bin/installer
 
+
+# -----------------------------------------------------------------------------
+# Installer assests 
+#
+# Package the  Pulumi project files and manifests into the runtime image. 
+# -----------------------------------------------------------------------------
+
+# App Serving
+COPY app_serving/deployments/Pulumi.yaml \
+    /opt/shaide-installer/projects/app-serving/Pulumi.yaml
+COPY app_serving/deployments/models/ \
+    /opt/shaide-installer/projects/app-serving/models/
+COPY app_serving/charts/ \
+    /opt/shaide-installer/projects/app-serving/charts/
+
+# App Shaide
+COPY app_shaide/deployments/Pulumi.yaml \
+    /opt/shaide-installer/projects/app-shaide/Pulumi.yaml
+
+# Cloud Harbor
+COPY infra/cloud-harbor/deployment/Pulumi.yaml \
+    /opt/shaide-installer/projects/cloud-harbor/Pulumi.yaml
+COPY infra/cloud-harbor/charts/ \
+    /opt/shaide-installer/projects/cloud-harbor/charts/
+
+# Gateway Provider
+COPY infra/gateway-provider/deployments/Pulumi.yaml \
+    /opt/shaide-installer/projects/gateway-provider/Pulumi.yaml
+COPY infra/gateway-provider/crds/ \
+    /opt/shaide-installer/projects/gateway-provider/crds/
+
+# Monitoring
+COPY monitoring/deployments/Pulumi.yaml \
+    /opt/shaide-installer/projects/monitoring/Pulumi.yaml
+COPY monitoring/charts/ \
+    /opt/shaide-installer/projects/monitoring/charts/
+
+# Manifests
+COPY installer/build/manifests/ /opt/shaide-installer/manifests/
+
 CMD ["/bin/installer"]
