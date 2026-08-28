@@ -67,7 +67,7 @@ The `-it` flags are required because the installer is a TUI. `--network host`
 lets the container use local Kubernetes and Harbor port-forwarding behavior
 without extra Docker port mapping. 
 
-During a fresh Harbor install, the TUI prompts for the Harbor node IP or
+During a fresh on-prem Harbor install, the TUI prompts for the Harbor node IP or
 hostname, SSH user, remote `ctr` path, and remote containerd socket used by the
 image preloader.
 
