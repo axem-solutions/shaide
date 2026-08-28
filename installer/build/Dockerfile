@@ -150,7 +150,7 @@ COPY --from=builder /installer /bin/installer
 # -----------------------------------------------------------------------------
 # Installer assests 
 #
-# Package the  Pulumi project files and manifests into the runtime image. 
+# Package the Pulumi project files and manifests into the runtime image. 
 # -----------------------------------------------------------------------------
 
 # App Serving
@@ -167,14 +167,12 @@ COPY app_serving/charts/ \
 COPY app_shaide/deployments/Pulumi.yaml \
     /opt/shaide-installer/projects/app-shaide/Pulumi.yaml
 
-
 # Harbor
 COPY harbor/deployment/Pulumi.yaml \
     /opt/shaide-installer/projects/harbor/Pulumi.yaml
 COPY --from=chart-downloader \
     /opt/shaide-installer/projects/harbor/charts/ \
     /opt/shaide-installer/projects/harbor/charts/
-
 
 # Gateway Provider
 COPY infra/gateway-provider/deployments/Pulumi.yaml \
