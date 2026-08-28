@@ -8,7 +8,7 @@ weight: 20
 
 ## 1. Check the cluster
 
-Confirm your cluster meets [the requirements](../cluster-requirements/index.md):
+Confirm your cluster meets [the requirements](../cluster-requirements/overview.md):
 
 ```bash
 kubectl auth can-i '*' '*'

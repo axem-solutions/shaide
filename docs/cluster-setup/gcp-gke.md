@@ -110,11 +110,75 @@ gcloud container node-pools delete gpu-pool --cluster "${CLUSTER_NAME}" --region
 gcloud container clusters delete "${CLUSTER_NAME}" --region "${GCP_REGION}"
 ```
 
+## 6. Enable the Gateway API
+
+GKE implements Gateway API through its own controller, which must be enabled on the
+cluster:
+
+```bash
+gcloud container clusters update "${CLUSTER_NAME}" \
+  --region "${GCP_REGION}" \
+  --gateway-api=standard
+```
+
+Confirm the GatewayClasses are available — shaide uses
+`gke-l7-regional-external-managed`:
+
+```bash
+kubectl get gatewayclass
+```
+
+## 7. Load balancing and DNS
+
+GKE provisions Google Cloud load balancers directly from Gateway and Service resources,
+so no controller install is needed. Reserve a static address so the ingress IP survives
+recreation:
+
+```bash
+gcloud compute addresses create shaide-gateway-ip --region "${GCP_REGION}"
+gcloud compute addresses describe shaide-gateway-ip --region "${GCP_REGION}" --format='value(address)'
+```
+
+Point your gateway hostname at that address with an `A` record.
+
+## 8. TLS certificates
+
+Enable Certificate Manager, which issues the managed certificate the Gateway references:
+
+```bash
+gcloud services enable certificatemanager.googleapis.com
+```
+
+Managed certificates validate via DNS authorization — add the CNAME record it asks for
+before the certificate will issue.
+
+## 9. Storage
+
+GKE ships `standard-rwo` as the default StorageClass. Confirm it is present and marked
+default:
+
+```bash
+kubectl get storageclass
+```
+
+No action is needed unless the default has been removed or changed.
+
+## 10. Verify the cluster is conformant
+
+Run the checks in [Verification](../cluster-requirements/verification.md) — in particular
+the LoadBalancer test, which must return an `EXTERNAL-IP`.
+
+## Cleanup additions
+
+```bash
+gcloud compute addresses delete shaide-gateway-ip --region "${GCP_REGION}"
+```
+
 ## Next steps
 
-This guide only covers the GKE cluster itself — the actual Gateway resource, TLS, and
-ingress routing are set up by `infra/gateway-provider`, not here.
+This guide covers the GKE cluster and the cloud-side resources shaide depends on. The
+in-cluster gateway (Istio, Gateway API CRDs, the shared Gateway resource) is deployed by
+the platform itself.
 
-With a running cluster and `kubectl` configured, continue with the platform
-deployment order: `infra/cloud-harbor` → `infra/gateway-provider` → `app_serving` →
-`app_shaide`. See the root [`README.md`](../../README.md) for the full architecture.
+With a conformant cluster and `kubectl` configured, continue with the
+[installer](../installation/installer-guide.md).

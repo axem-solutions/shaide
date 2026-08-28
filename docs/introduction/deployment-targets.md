@@ -7,7 +7,7 @@ weight: 40
 # Deployment targets
 
 shaide runs on any conformant Kubernetes cluster meeting the
-[cluster requirements](../cluster-requirements/index.md).
+[cluster requirements](../cluster-requirements/overview.md).
 
 | Target | Managed | Air-gap | Guide |
 | --- | --- | --- | --- |

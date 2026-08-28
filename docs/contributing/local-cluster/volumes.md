@@ -31,7 +31,7 @@ This is a plain Docker bind mount (`docker run -v host-path:container-path`)
 filesystem at the given path. It's two-way and immediate, not a copy: file
 changes on either side are visible on the other without any sync step.
 
-Like `env` (see [`documentation/ENV.md`](ENV.md)), this is a **Docker-level
+Like `env` (see [`documentation/ENV.md`](env.md)), this is a **Docker-level
 construct, not a Kubernetes one** — it has nothing to do with a
 `PersistentVolume`/`PersistentVolumeClaim`, and it's unrelated to
 `sync.fromHost.nodes` (the vcluster config flag covered in the README's

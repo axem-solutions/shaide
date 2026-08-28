@@ -6,6 +6,10 @@ weight: 80
 
 # MCP datasources
 
+> For adding datasources and day-to-day management, see
+> [MCP servers](../operations/mcp-servers.md).
+
+
 Pulumi stack that deploys all Kubernetes infrastructure for MCP Server instances in the `mcp-gateway` namespace. One stack deployment covers all MCP datasources for a single customer cluster.
 
 ## What it does

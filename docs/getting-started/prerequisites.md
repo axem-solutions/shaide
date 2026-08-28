@@ -7,7 +7,7 @@ weight: 10
 # Prerequisites
 
 Cluster-side requirements are covered in
-[Cluster requirements](../cluster-requirements/index.md). This page covers the
+[Cluster requirements](../cluster-requirements/overview.md). This page covers the
 provisioning machine and the credentials the installer needs.
 
 ## Provisioning machine

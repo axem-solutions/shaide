@@ -36,7 +36,7 @@ The installation has two parts:
 | `Kubernetes`          | Load kubeconfig and connect to the target cluster.          |
 | `Discovery`           | Discover Harbor and determine the installation type.         |
 | `Populate Harbor`     | Upload images and selected model artifacts.                 |
-| `Deploy platform`     | Deploy Gateway-Provider, App-Serving, and App-Shaide.       |
+| `Deploy platform`     | Deploy Gateway Provider, App-Serving, App-Shaide, and Monitoring. |
 | `Verify installation` | Check pods, namespaces, gateway resources, and UI access.   |
 | `Preserve state`      | Keep storage, logs, deployment state, and passphrase for reruns. |
 
@@ -75,6 +75,21 @@ For on-prem installations export the private key path inside the installer conta
 ```bash
 export PRIVATE_KEY_PATH='/root/.ssh/id_ed25519'
 ```
+
+#### All environment variables
+
+The installer reads these at startup. Anything omitted that is still needed is prompted
+for during the run.
+
+| Variable | Purpose |
+| --- | --- |
+| `PULUMI_CONFIG_PASSPHRASE` | Encrypts installer state. Reuse the same value on every run |
+| `HF_TOKEN` | Hugging Face token for model downloads |
+| `GHCR_USERNAME` / `GHCR_TOKEN` | Credentials for private GitHub Container Registry images |
+| `DOCKERHUB_USERNAME` / `DOCKERHUB_PASSWORD` | Credentials for Docker Hub, and to avoid anonymous rate limits |
+| `KUBECONFIG` | Kubeconfig path inside the container. Default `/.kube/config` |
+| `BUNDLE_ARCHIVE_PATH` | Bundle path inside the container. Default `/.bundle/bundle.tar.gz` |
+| `PRIVATE_KEY_PATH` | SSH key inside the container, for Harbor image preload on on-prem |
 
 ### 3. Set Run Paths
 
@@ -215,6 +230,20 @@ During this stage, the installer:
 | Harbor resources are missing in a new environment            | Deploy Harbor as part of the fresh-install path.    |
 | Existing Harbor resources are incomplete or invalid          | Ask for corrected namespace, service, or secret.    |
 
+#### Harbor image preload
+
+On-prem only, when Harbor is being installed. Harbor's own images are copied onto the
+Harbor node over SSH, because Harbor does not yet exist to serve them.
+
+| Prompt | Default |
+|---|---|
+| `Harbor node IP or hostname` | — |
+| `Harbor node SSH user` | — |
+| `Remote ctr path` | `/var/lib/rancher/rke2/bin/ctr` |
+| `Remote containerd socket` | `/run/k3s/containerd/containerd.sock` |
+
+The SSH key comes from `PRIVATE_KEY_PATH` and must be readable inside the container.
+
 
 ### `Populate Harbor` stage
 
@@ -274,34 +303,71 @@ Normal installations should select the required models, avoid deleting existing 
 
 The `deploy platform` stage deploys the shaide platform stacks through the installer deployment engine.
 
-The installer runs the stacks in this order:
+The installer runs the stacks in this fixed order:
 
-1. Gateway-Provider
+1. Gateway Provider
 2. App-Serving
 3. App-Shaide
+4. Monitoring
 
-During this stage, the installer uses the bundled deployment configuration. Most deployment values, such as gateway settings, node selectors, image references, and storage configuration, come from the bundle.
+Most deployment values — node selectors, image references, chart and CRD paths — come
+from the bundle. The prompts below cover what cannot be known in advance.
 
-| Prompt                                                   | Options / Input |
-|----------------------------------------------------------|-----------------|
-| `Is this a model-onboarding scenario`                    | `no`, `yes`     |
-| `shaide admin password`                                  | Password input  |
+#### Platform and gateway
 
-#### Recommended Actions
+| Prompt | Options / Input |
+|---|---|
+| `Cloud platform` | `gcp`, `aws`, `azure`, `on-prem`. Detected from the cluster; confirm or override |
+| `Gateway class name` | Selected from the GatewayClasses present in the cluster |
+| `Gateway hostname (e.g. shaide.example.com)` | Public hostname for the shared Gateway |
 
-- Select `no` for a normal installation or update.
-- Select `yes` only when intentionally running a model onboarding flow.
-- Enter the customer-approved shaide admin password and store it securely.
+#### TLS
+
+Which certificate prompt appears depends on the platform selected above.
+
+| Prompt | Platform |
+|---|---|
+| `ACM certificate ARN` | AWS |
+| `Application Gateway certificate name` | Azure |
+| `GKE Certificate Manager certificate name` | GCP |
+| `TLS cert annotation key (empty for none)` | All |
+| `TLS certificate reference (usually empty on-prem)` | All |
+
+#### Storage and application
+
+| Prompt | Options / Input |
+|---|---|
+| `StorageClass for model PVCs` | Leave empty to use the cluster default |
+| `Shaide admin password` | Creates the initial administrator account |
+
+#### App-serving deployment mode
+
+Asked when app-serving is deployed onto an existing installation.
+
+| Option | Effect |
+|---|---|
+| `Update — keep model volumes` | Patches running resources in place. **Default** |
+| `Recreate — destroy the stack, deleting model volumes` | Model weights are deleted and must be pulled from Harbor again |
+
+Choose `Recreate` only when a change cannot be applied in place — it discards the model
+volumes and makes the next start considerably slower.
+
+#### If a stack fails
+
+Each stack has its own recovery prompt offering `Retry` and `Abort`. Retry after fixing
+the underlying cause; the installer resumes from the failed stack rather than restarting
+the run.
 
 #### Expected Behavior
 
 | Step             | Action                                               |
 |------------------|------------------------------------------------------|
-| Gateway-Provider | Gateway resources are deployed successfully.         |
+| Gateway Provider | Gateway resources are deployed successfully.         |
 | App-Serving      | Model-serving resources and workloads are deployed.  |
 | App-Shaide       | shaide application services are deployed.            |
+| Monitoring       | Log aggregation and dashboards are deployed.         |
 
-The stage is complete when all three deployment steps finish successfully.
+The stage is complete when all four deployment steps finish successfully.
 
 
 ## Verification

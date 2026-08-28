@@ -9,13 +9,8 @@ weight: 25
 The **cluster** runs with no internet access. Every container image and model weight it
 needs is served from the internal registry inside the cluster.
 
-The **provisioning machine** is the connected side of the boundary. It reaches the origin
+The **provisioning machine** has internet access. It reaches the origin
 registries and Hugging Face, and pushes what it fetches into the internal registry.
-
-| Side | Internet access |
-| --- | --- |
-| Provisioning machine | Required - origin registries and Hugging Face |
-| Cluster nodes | None |
 
 ## How it works
 
@@ -31,7 +26,7 @@ registries and Hugging Face, and pushes what it fetches into the internal regist
 
 | Item | Detail |
 | --- | --- |
-| Provisioning machine | Reachable: origin registries (GHCR, Docker Hub, Quay, NVCR, registry.k8s.io) and Hugging Face |
+| Provisioning machine | Reachable: origin registries and Hugging Face |
 | Bundle | Deployments, manifests, and Harbor bootstrap archives |
 | Registry trust | Nodes must trust the internal registry's CA |
 | Storage | Capacity for all images and model weights |

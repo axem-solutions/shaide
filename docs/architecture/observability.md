@@ -6,6 +6,10 @@ weight: 90
 
 # Observability
 
+> For what is collected and how to reach the dashboards, see
+> [Observability](../operations/observability.md).
+
+
 Pulumi Go stack that deploys the logging and monitoring stack into Kubernetes.
 This stack owns Loki (log aggregation), Grafana (visualization), Alloy (log collection),
 and optionally Prometheus (metrics), backed by RustFS as the object storage backend for

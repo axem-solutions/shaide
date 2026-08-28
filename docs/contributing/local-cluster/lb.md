@@ -104,7 +104,7 @@ the Service is deleted.
 Note its `PORTS` column: `80/tcp`, with no `0.0.0.0:...->` host-port
 mapping like `vcluster.cp.local-k8s` has. It isn't reachable because
 Docker published a port to the host (like `experimental.docker.ports`,
-see [`PORTS.md`](PORTS.md)) — it's reachable because it has its own IP
+see [`PORTS.md`](ports.md)) — it's reachable because it has its own IP
 directly on the Docker bridge network, which the host can route to
 without any port mapping at all.
 
@@ -162,4 +162,4 @@ On macOS, Docker runs inside a Linux VM (Docker Desktop/Rancher Desktop),
 so the bridge IP isn't reachable from the actual macOS host — you'd need
 `sudo vcluster create` for full HAProxy support, or fall back to
 `experimental.docker.loadBalancer.forwardPorts` / NodePort. See
-[`PORTS.md`](PORTS.md) for the related `forwardPorts` option.
+[`PORTS.md`](ports.md) for the related `forwardPorts` option.
