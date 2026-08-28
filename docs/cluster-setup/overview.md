@@ -7,7 +7,7 @@ weight: 10
 # Cluster setup
 
 Guides for creating a cluster that satisfies the
-[cluster requirements](../cluster-requirements/index.md).
+[cluster requirements](../cluster-requirements/overview.md).
 
 shaide does not create clusters - these guides are provided so you can build one that
 works. If you already have a conformant cluster, skip to

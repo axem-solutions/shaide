@@ -66,7 +66,7 @@ create`/`docker run` time — they can't be injected into a container that's
 already running. `vcluster create --values cluster.yaml --upgrade` only
 creates node containers that don't exist yet; it does not recreate
 already-existing ones to apply config changes. See
-[`documentation/ENV.md`](ENV.md) for the full writeup and confirmation
+[`documentation/ENV.md`](env.md) for the full writeup and confirmation
 against a live cluster (a genuinely *new* node picks up its `env:`
 correctly, since it's created fresh — see README.md step 5, "Adding a
 node" — but an already-existing one does not).

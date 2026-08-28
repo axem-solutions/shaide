@@ -24,39 +24,21 @@ than deploying resources onto one) is out of scope for Pulumi here.
 
 ## Documentation index
 
-This README covers setup and day-to-day usage. Deeper dives into specific
-`cluster.yaml` config knobs and one-off scenarios live under
-[`documentation/`](local-cluster/):
-
-```
-infra/local-k8s/
-├── README.md                        # this file — setup, usage, terminal output examples
-├── cluster.yaml                     # vcluster values file (single source of truth)
-└── documentation/
-    ├── ENV.md                       # setting env vars via experimental.docker.env / nodes[].env
-    ├── K8S_VERSION.md               # pinning the Kubernetes version (controlPlane.distro.k8s.image.tag)
-    ├── LB.md                        # built-in LoadBalancer Service support (no MetalLB needed)
-    ├── MONITORING.md                # checking node/pod resource usage (docker stats, kubectl top)
-    ├── NETWORKING.md                # custom podCIDR / serviceCIDR
-    ├── PORTS.md                     # exposing container ports to the host
-    ├── REMOTE_GPU.md                # joining a remote Azure GPU VM as a Private Node
-    ├── STORAGE.md                   # the default local-path StorageClass
-    ├── TROUBLESHOOTING.md           # common failure modes and fixes
-    └── VOLUMES.md                   # mounting host volumes into node containers
-```
+This page covers setup and day-to-day usage. Deeper dives into specific
+`cluster.yaml` config knobs and one-off scenarios are linked below.
 
 | Doc | What it covers |
 |---|---|
-| [`ENV.md`](local-cluster/ENV.md) | Setting environment variables on node containers via `experimental.docker.env` (all nodes) or `experimental.docker.nodes[].env` (per node). |
-| [`K8S_VERSION.md`](local-cluster/K8S_VERSION.md) | Pinning the Kubernetes version via `controlPlane.distro.k8s.image.tag` so every developer's cluster stays in sync. |
-| [`LB.md`](local-cluster/LB.md) | vind's built-in `LoadBalancer` support — a dedicated HAProxy container per Service, no MetalLB or cloud integration required. |
-| [`MONITORING.md`](local-cluster/MONITORING.md) | Checking node/pod resource usage: `docker stats` (works immediately) vs. `kubectl top` (needs metrics-server, not installed by default). |
-| [`NETWORKING.md`](local-cluster/NETWORKING.md) | Customizing `podCIDR` / `serviceCIDR` (e.g. to avoid clashing with a developer's VPN or home network). |
-| [`PORTS.md`](local-cluster/PORTS.md) | Exposing node-container ports to the host via `experimental.docker.ports`. |
-| [`REMOTE_GPU.md`](local-cluster/REMOTE_GPU.md) | Step-by-step: creating a vind cluster with Private Nodes enabled and joining a remote Azure GPU VM to it. |
-| [`STORAGE.md`](local-cluster/STORAGE.md) | The default `local-path` StorageClass vind ships out of the box — when you need it and when you don't. |
-| [`TROUBLESHOOTING.md`](local-cluster/TROUBLESHOOTING.md) | Known failure modes (e.g. flannel `subnet.env: no such file or directory`) and how to fix them. |
-| [`VOLUMES.md`](local-cluster/VOLUMES.md) | Mounting host paths into node containers via `experimental.docker.volumes`. |
+| [Environment variables](local-cluster/env.md) | Setting environment variables on node containers via `experimental.docker.env` (all nodes) or `experimental.docker.nodes[].env` (per node). |
+| [Kubernetes version](local-cluster/k8s-version.md) | Pinning the Kubernetes version via `controlPlane.distro.k8s.image.tag` so every developer's cluster stays in sync. |
+| [Load balancing](local-cluster/lb.md) | vind's built-in `LoadBalancer` support — a dedicated HAProxy container per Service, no MetalLB or cloud integration required. |
+| [Resource monitoring](local-cluster/monitoring.md) | Checking node/pod resource usage: `docker stats` (works immediately) vs. `kubectl top` (needs metrics-server, not installed by default). |
+| [Networking](local-cluster/networking.md) | Customizing `podCIDR` / `serviceCIDR` (e.g. to avoid clashing with a developer's VPN or home network). |
+| [Port mapping](local-cluster/ports.md) | Exposing node-container ports to the host via `experimental.docker.ports`. |
+| [Remote GPU nodes](local-cluster/remote-gpu.md) | Step-by-step: creating a vind cluster with Private Nodes enabled and joining a remote Azure GPU VM to it. |
+| [Storage](local-cluster/storage.md) | The default `local-path` StorageClass vind ships out of the box — when you need it and when you don't. |
+| [Troubleshooting](local-cluster/troubleshooting.md) | Known failure modes (e.g. flannel `subnet.env: no such file or directory`) and how to fix them. |
+| [Volumes](local-cluster/volumes.md) | Mounting host paths into node containers via `experimental.docker.volumes`. |
 
 ## What is `vind`?
 
@@ -215,7 +197,7 @@ kubectl get node
 
 Per-node `env` config (syntax, what it actually does, and which
 variables are/aren't confirmed to have any effect) is covered in
-[`documentation/ENV.md`](local-cluster/ENV.md).
+[Environment variables](local-cluster/env.md).
 
 ### 6. Multiple clusters from one file
 
@@ -462,11 +444,11 @@ Naming follows `vcluster.<role>.<cluster-name>[.<node-name>]`:
 - **`vcluster.node.<cluster-name>.<worker-name>`** — one per entry under
   `experimental.docker.nodes` (`worker-1`, `worker-2`, `worker-3`). No
   ports published by default; use `experimental.docker.nodes[].ports` (see
-  [`documentation/PORTS.md`](local-cluster/PORTS.md)) to expose one.
+  [Port mapping](local-cluster/ports.md)) to expose one.
 
 This mapping is why `docker exec vcluster.cp.<name> ...` / `docker exec
 vcluster.node.<name>.<worker> ...` shows up throughout the other docs
-(`documentation/ENV.md`, `documentation/TROUBLESHOOTING.md`) — it's the
+(environment variables, troubleshooting) — it's the
 one debugging entry point that works even when the Kubernetes API itself
 is unreachable.
 

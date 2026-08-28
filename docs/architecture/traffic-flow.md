@@ -9,7 +9,7 @@ weight: 15
 ## Generative
 
 ```
-Public ingress (cloud LB, Gateway, or MetalLB on-prem)
+Public ingress (cloud LB or MetalLB on-prem)
   → shaide server
   → per-model Istio Gateway
   → GAIE endpoint picker (InferencePool)

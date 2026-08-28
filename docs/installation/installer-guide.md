@@ -65,11 +65,17 @@ docker run --rm -it \
 
 The `-it` flags are required because the installer is a TUI. `--network host`
 lets the container use local Kubernetes and Harbor port-forwarding behavior
-without extra Docker port mapping. 
+without extra Docker port mapping.
 
-During a fresh on-prem Harbor install, the TUI prompts for the Harbor node IP or
-hostname, SSH user, remote `ctr` path, and remote containerd socket used by the
-image preloader.
+## What happens next
+
+Once the container starts, the installer takes over with a guided terminal workflow. Every
+stage, every prompt, and what to answer is covered step by step in the walkthrough:
+
+> **[→ Installation walkthrough](walkthrough.md)**
+
+It also documents the full set of environment variables, how to re-run the installer, and
+which credentials to keep after installation.
 
 ## Troubleshooting
 

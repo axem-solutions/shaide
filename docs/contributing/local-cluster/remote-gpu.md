@@ -10,7 +10,7 @@ weight: 70
 
 It must be a **standalone VM (or bare-metal box)** — not a node that's already a
 worker in another Kubernetes cluster (e.g. one of the GPU node pools in
-`infra/azure`'s AKS cluster).
+an AKS cluster).
 
 Why: vCluster's Private Nodes join mechanism works by running a join script
 on the target machine that installs/configures `kubeadm`, `containerd`, and

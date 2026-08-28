@@ -29,8 +29,7 @@ The runtime directory is named `manifests/` (plural), not `manifest/`.
 
 | Path | What to put there |
 | --- | --- |
-| `deployments/` | Pulumi projects and stack files, plus all local Helm charts, CRDs, model values, and other files referenced by those projects. Stack files must contain non-secret defaults only. See [stack file configuration](configuration.md). |
-| `images/` | OCI image archives for entries in `manifests/images.yaml` whose `source` is `archive`. Remote image entries do not need a local archive. |
+| `deployments/` | Pulumi projects and stack files, plus all local Helm charts, CRDs, model values, and other files referenced by those projects. Stack files must contain non-secret defaults only. See [Pulumi stack configuration](../reference/pulumi-stacks.md). |
 | `manifests/images.yaml` | The `harbor_upload_images` and `goharbor_images` inventories. Each entry needs `source`, `project`, `name`, and `tag`. |
 | `manifests/models.yaml` | The model inventory. Each entry needs `id`, `revision`, `harbor_project`, `harbor_name`, and `harbor_tag`; `dependencies` is optional. |
 | `checksum.json` | A generated fingerprint of the other bundle files. Do not maintain it manually. The build script rewrites it and places it first in the archive, as required by the bootstrap refactor. |
@@ -51,9 +50,6 @@ must have this file:
 ```text
 images/harbor-core-v2.14.2.tar
 ```
-
-Models are downloaded from Hugging Face during installation and are not stored
-under `images/`.
 
 ## Archive layout
 

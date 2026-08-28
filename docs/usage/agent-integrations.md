@@ -81,3 +81,11 @@ To scale capacity, add replicas rather than endpoints. See
 | Client sends to `api.openai.com` | Base URL not applied - some SDKs need `api_base`, not `base_url` |
 | Tool calling ignored | Served model was not trained for tool use |
 | `429` under load | Replicas saturated - add replicas |
+
+## Extending models with MCP
+
+shaide can run Model Context Protocol servers as datasources, giving models access to
+internal systems — issue trackers, wikis, APIs. Tools exposed by a running datasource
+become available to models served by the platform.
+
+See [MCP servers](../operations/mcp-servers.md).

@@ -91,7 +91,7 @@ PVC is forced back onto the same node.
 
 - **`RECLAIMPOLICY: Delete`** — deleting the PVC also deletes the backing
   directory; no data survives past the claim's lifecycle. Contrast with
-  the static hostPath pattern in [`VOLUMES.md`](VOLUMES.md), which
+  the static hostPath pattern in [`VOLUMES.md`](volumes.md), which
   deliberately uses `Retain`.
 - **`ALLOWVOLUMEEXPANSION: false`** — can't grow a PVC in place; delete
   and recreate it larger instead.
@@ -110,7 +110,7 @@ The node-pinning behavior above is the root cause of all three:
   until the PVC is deleted manually. **This is a real risk on vind
   specifically**: the `docker rm -f vcluster.node.<cluster>.<worker>` +
   `--upgrade` recreation flow documented in
-  [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md) replaces a worker container
+  [`TROUBLESHOOTING.md`](troubleshooting.md) replaces a worker container
   with a fresh one — any `local-path` PV that lived on the old container
   is now orphaned, and any Pod claiming it will be stuck.
 - **Orphaned PVs.** If the node is gone, the provisioner's cleanup helper

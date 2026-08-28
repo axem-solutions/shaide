@@ -354,7 +354,7 @@ See `infra/model-registry/env-vars/example` for the full template.
 ## Stack Deployment Order
 
 ```
-infra/gcp (or infra/aws, infra/azure)   ← cluster creation
+cluster creation (per-cloud, outside this repo)
        ↓
 infra/cloud-harbor                       ← this stack
        ↓

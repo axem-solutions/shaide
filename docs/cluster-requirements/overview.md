@@ -10,7 +10,7 @@ shaide installs onto an existing Kubernetes cluster. Any cluster meeting the req
 below can run it, regardless of distribution or provider.
 
 This chapter lists requirements only. For building a cluster, see
-[Cluster setup](../cluster-setup/index.md).
+[Cluster setup](../cluster-setup/overview.md).
 
 ## Summary
 

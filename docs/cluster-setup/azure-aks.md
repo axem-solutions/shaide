@@ -113,11 +113,90 @@ az aks delete --resource-group "${RESOURCE_GROUP}" --name "${CLUSTER_NAME}"
 az group delete --name "${RESOURCE_GROUP}"
 ```
 
+## 7. Enable workload identity
+
+The ALB Controller authenticates to Azure through workload identity, so the cluster needs
+an OIDC issuer:
+
+```bash
+az aks update --resource-group "${RESOURCE_GROUP}" --name "${CLUSTER_NAME}" \
+  --enable-oidc-issuer --enable-workload-identity
+
+az aks show --resource-group "${RESOURCE_GROUP}" --name "${CLUSTER_NAME}" \
+  --query oidcIssuerProfile.issuerUrl -o tsv
+```
+
+## 8. Load balancing — Application Gateway for Containers
+
+AGC is the supported gateway on AKS. It runs outside the cluster and is programmed by an
+in-cluster controller, so it needs a delegated subnet plus an identity.
+
+Create a subnet delegated to the AGC service:
+
+```bash
+az network vnet subnet create \
+  --resource-group "${RESOURCE_GROUP}" \
+  --vnet-name "${VNET_NAME}" \
+  --name subnet-alb \
+  --address-prefixes <cidr> \
+  --delegations Microsoft.ServiceNetworking/trafficControllers
+```
+
+Create a managed identity for the controller and grant it the roles AGC requires — at
+minimum **AppGw for Containers Configuration Manager** on the resource group, and
+**Network Contributor** on the delegated subnet:
+
+```bash
+az identity create --resource-group "${RESOURCE_GROUP}" --name azure-alb-identity
+```
+
+Federate that identity with the cluster's OIDC issuer for the
+`azure-alb-system/alb-controller-sa` service account, then install the controller:
+
+```bash
+helm install alb-controller \
+  oci://mcr.microsoft.com/application-lb/charts/alb-controller \
+  --namespace azure-alb-system --create-namespace \
+  --set albController.namespace=azure-alb-system \
+  --set albController.podIdentity.clientID=<identity-client-id>
+```
+
+Verify the GatewayClass appears — shaide uses `azure-alb-external`:
+
+```bash
+kubectl get gatewayclass
+kubectl -n azure-alb-system get pods
+```
+
+> AGC requires `Microsoft.ServiceNetworking/trafficControllers`, which is not offered in
+> every Azure region. Confirm your region supports it before creating the cluster.
+
+## 9. Storage
+
+AKS ships `managed-csi` as the default StorageClass. Confirm it is present and marked
+default:
+
+```bash
+kubectl get storageclass
+```
+
+## 10. Verify the cluster is conformant
+
+Run the checks in [Verification](../cluster-requirements/verification.md) — in particular
+the LoadBalancer test, which must return an `EXTERNAL-IP`.
+
+## Cleanup additions
+
+```bash
+helm uninstall alb-controller -n azure-alb-system
+az identity delete --resource-group "${RESOURCE_GROUP}" --name azure-alb-identity
+```
+
 ## Next steps
 
-This guide only covers the AKS cluster itself — the Gateway/ingress mechanism
-(Application Gateway for Containers) is set up by `infra/gateway-provider`, not here.
+This guide covers the AKS cluster and the cloud-side resources shaide depends on. The
+in-cluster gateway (Istio, Gateway API CRDs, the shared Gateway resource) is deployed by
+the platform itself.
 
-With a running cluster and `kubectl` configured, continue with the platform
-deployment order: `infra/cloud-harbor` → `infra/gateway-provider` → `app_serving` →
-`app_shaide`. See the root [`README.md`](../../README.md) for the full architecture.
+With a conformant cluster and `kubectl` configured, continue with the
+[installer](../installation/installer-guide.md).

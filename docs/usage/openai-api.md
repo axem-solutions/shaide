@@ -24,13 +24,6 @@ kubectl -n shaide get svc shaide-server \
   -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
 ```
 
-If shaide is behind a shared Gateway rather than its own LoadBalancer, use the hostname
-from its `HTTPRoute` instead:
-
-```bash
-kubectl -n shaide get httproute -o jsonpath='{.items[*].spec.hostnames[*]}'
-```
-
 ## Authentication
 
 Requests are authenticated with a bearer token, supplied the same way as an OpenAI API
@@ -86,7 +79,7 @@ and the common sampling parameters - `temperature`, `top_p`, `max_tokens`, `stop
 `presence_penalty`, `frequency_penalty`, `seed`.
 
 **Not supported:** Assistants, Threads, Files, fine-tuning, image generation,
-audio/speech, moderation, and the legacy `/v1/completions` endpoint.
+audio/speech, moderation.
 
 Tool and function calling depends on the served model rather than on shaide. Models
 trained for tool use expose it through the standard `tools` parameter; models that were

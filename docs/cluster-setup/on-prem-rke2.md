@@ -137,17 +137,93 @@ RKE2 installs uninstall scripts on every node:
 /usr/local/bin/rke2-agent-uninstall.sh
 ```
 
+## 8. Load balancing — MetalLB
+
+Bare-metal Kubernetes has no `LoadBalancer` implementation, so a `Service` of that type
+stays `<pending>` forever. MetalLB provides one.
+
+```bash
+helm repo add metallb https://metallb.github.io/metallb && helm repo update
+helm install metallb metallb/metallb --namespace metallb-system --create-namespace
+```
+
+Allocate an address range from your LAN that is **not** part of any DHCP scope, and
+advertise it over L2:
+
+```bash
+kubectl apply -f - <<'EOF'
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: default-pool
+  namespace: metallb-system
+spec:
+  addresses:
+    - 10.0.10.200-10.0.10.220
+---
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  name: default
+  namespace: metallb-system
+spec:
+  ipAddressPools:
+    - default-pool
+EOF
+```
+
+Point your gateway hostname at an address from that range.
+
+## 9. Storage
+
+RKE2 ships no dynamic provisioner. Install one and mark it default — Local Path
+Provisioner is the usual choice for single-node or node-pinned storage:
+
+```bash
+kubectl apply -f https://raw.githubusercontent.com/rancher/local-path-provisioner/master/deploy/local-path-storage.yaml
+
+kubectl patch storageclass local-path \
+  -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
+```
+
+Model weights land on whichever node the volume is created on, so ensure that node has
+sufficient disk — see [Storage](../cluster-requirements/storage.md).
+
+## 10. GPU Operator
+
+Install the NVIDIA GPU Operator so GPUs are advertised as `nvidia.com/gpu`. Drivers must
+already be present on the nodes; disable driver installation so the operator uses them:
+
+```bash
+helm repo add nvidia https://helm.ngc.nvidia.com/nvidia && helm repo update
+helm install gpu-operator nvidia/gpu-operator \
+  --namespace gpu-operator --create-namespace \
+  --set driver.enabled=false
+```
+
+Verify:
+
+```bash
+kubectl describe node <gpu-node> | grep -A2 nvidia.com/gpu
+```
+
+## 11. Verify the cluster is conformant
+
+Run the checks in [Verification](../cluster-requirements/verification.md) — in particular
+the LoadBalancer test, which must return an `EXTERNAL-IP` from the MetalLB pool.
+
+## Air-gapped notes
+
+Each component above pulls images from the internet. On a disconnected cluster, mirror the
+MetalLB, Local Path Provisioner and GPU Operator images into your registry first, and pass
+the chart archives from local paths rather than the Helm repositories. See
+[Air-gapped installation](../installation/air-gapped.md).
+
 ## Next steps
 
-This guide only covers the RKE2 cluster itself. Two things it deliberately leaves
-out, owned by later stages of the platform instead:
+This guide covers the RKE2 cluster and the supporting components shaide depends on. The
+in-cluster gateway (Istio, Gateway API CRDs, the shared Gateway resource) is deployed by
+the platform itself.
 
-- **MetalLB** (LoadBalancer IP assignment on bare metal) — deployed by the on-prem
-  services stack, not by this guide or by `infra/gateway-provider`.
-- **Istio + the shared Gateway** (ingress routing, TLS) — set up by
-  `infra/gateway-provider`, which assumes MetalLB is already in place.
-
-With a running cluster and `kubectl` configured, continue with the platform
-deployment order: on-prem services stack (Harbor, MetalLB, GPU Operator) →
-`infra/gateway-provider` → `app_serving` → `app_shaide`. See the root
-[`README.md`](../../README.md) for the full architecture.
+With a conformant cluster and `kubectl` configured, continue with the
+[installer](../installation/installer-guide.md).

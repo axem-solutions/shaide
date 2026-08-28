@@ -9,7 +9,7 @@
 
 - title: Cluster requirements
   path: cluster-requirements
-  pages: [index.md, compute.md, storage.md, networking.md, verification.md]
+  pages: [overview.md, compute.md, storage.md, networking.md, verification.md]
 
 
 - title: Getting started
@@ -19,7 +19,7 @@
 
 - title: Installation
   path: installation
-  pages: [installer-guide.md, walkthrough.md, bundle.md, air-gapped.md, configuration.md, troubleshooting.md]
+  pages: [installer-guide.md, walkthrough.md, bundle.md, air-gapped.md, troubleshooting.md]
 
 
 - title: Usage
@@ -35,26 +35,26 @@
 
 - title: Cluster setup
   path: cluster-setup
-  pages: [index.md, aws-eks.md, gcp-gke.md, azure-aks.md, on-prem-rke2.md, rke2-cni.md]
+  pages: [overview.md, aws-eks.md, gcp-gke.md, azure-aks.md, on-prem-rke2.md, rke2-cni.md]
 
 
 - title: Operations
   path: operations
-  pages: [model-management.md, scaling.md, model-registry.md, image-mirroring.md,
+  pages: [model-management.md, mcp-servers.md, scaling.md, observability.md, model-registry.md, image-mirroring.md,
           node-registry-trust.md, tls-certificates.md, storage.md, upgrades.md,
-          backup-restore.md, azure-b2b-login.md, troubleshooting.md]
+          backup-restore.md, troubleshooting.md]
 
 
 - title: Reference
   path: reference
-  pages: [configuration.md, ports.md, cli.md, glossary.md]
+  pages: [configuration.md, pulumi-stacks.md, ports.md, cli.md, glossary.md]
 
 
 - title: Contributing
   path: contributing
   pages: [development-setup.md, local-cluster.md, benchmarking.md, release-process.md, ai-policy.md]
-
-
-- title: Architecture decision records
-  path: adr
-  pages: [001-centralized-logging.md]
+  sections:
+    - title: Local cluster reference
+      path: contributing/local-cluster
+      pages: [env.md, k8s-version.md, networking.md, ports.md, volumes.md, storage.md,
+              lb.md, monitoring.md, remote-gpu.md, troubleshooting.md]
