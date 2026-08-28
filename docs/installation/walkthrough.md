@@ -23,7 +23,6 @@ The installation has two parts:
 
 | Step                          | Purpose                                                                                            |
 |-------------------------------|----------------------------------------------------------------------------------------------------|
-| **Load the installer image**  | Import the installer Docker image on the provisioner machine.                                      |
 | **Prepare installer storage** | Create persistent local storage for bundle extraction, model cache, deployment state, and logs.    |
 | **Configure credentials**     | Export the tokens and passphrases required by the installer.                                       |
 | **Define run paths**          | Set the kubeconfig, bundle archive, and installer storage paths used by the run command.           |
@@ -43,21 +42,7 @@ The installation has two parts:
 
 
 ## Installer Setup
-### 1. Load Installer Image
-
-Load the installer Docker image from the provided image archive.
-
-```bash
-docker load < onprem-installer.tar.gz
-```
-
-Verify that the image is available locally:
-
-```bash
-docker images onprem-installer:latest
-```
-
-### 2. Prepare Installer Storage
+### 1. Prepare Installer Storage
 
 Create the persistent storage directory used by the installer.
 
@@ -69,7 +54,7 @@ This directory is mounted into the installer container and stores installer stat
 
 Use the same directory for future installer runs.
 
-### 3. Set Credentials
+### 2. Set Credentials
 
 Export the Hugging Face token used for model downloads.
 
@@ -85,15 +70,13 @@ export PULUMI_CONFIG_PASSPHRASE='<choose-and-store-securely>'
 
 Use the same value for future runs against the same cluster.
 
-If your installer release enables Harbor image preloading over SSH, also export the private key path inside the installer container:
+For on-prem installations export the private key path inside the installer container:
 
 ```bash
 export PRIVATE_KEY_PATH='/root/.ssh/id_ed25519'
 ```
 
-Only set `PRIVATE_KEY_PATH` when the release notes or installer package require SSH-based Harbor preload.
-
-### 4. Set Run Paths
+### 3. Set Run Paths
 
 Set shell variables for the local files and directories used by the installer command.
 
@@ -117,7 +100,7 @@ ls -lh "$BUNDLE_ARCHIVE"
 ls -ld "$STORAGE_PATH"
 ```
 
-### 5. Run Installer Container
+### 4. Run Installer Container
 
 ```bash
 docker run --rm -it \
