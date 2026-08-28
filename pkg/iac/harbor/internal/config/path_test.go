@@ -1,4 +1,4 @@
-package harbor
+package config
 
 import (
 	"path/filepath"
@@ -52,7 +52,7 @@ func TestResolveChartPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := resolveChartPath(tt.dir, tt.chartPath)
+			got := resolveProjectPath(tt.dir, tt.chartPath)
 			if got != filepath.Clean(tt.want) && got != tt.want {
 				t.Errorf("resolveChartPath(%q, %q) = %q, want %q",
 					tt.dir, tt.chartPath, got, tt.want)
@@ -64,7 +64,7 @@ func TestResolveChartPath(t *testing.T) {
 func TestDefaultChartPathIsRelative(t *testing.T) {
 	// The default has to stay relative so it goes through the same anchoring
 	// as a configured value; an absolute default would bypass resolveChartPath.
-	if filepath.IsAbs(defaultChartPath) {
-		t.Errorf("defaultChartPath = %q, want a relative path", defaultChartPath)
+	if filepath.IsAbs(DefaultChartPath) {
+		t.Errorf("defaultChartPath = %q, want a relative path", DefaultChartPath)
 	}
 }
