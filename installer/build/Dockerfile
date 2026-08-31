@@ -40,7 +40,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
         -trimpath \
         -ldflags="-s -w" \
         -o /installer \
-        ./cmd/onprem-installer
+        ./cmd/installer
 
 
 # -----------------------------------------------------------------------------

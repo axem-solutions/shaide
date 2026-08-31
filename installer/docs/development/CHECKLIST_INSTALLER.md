@@ -48,13 +48,13 @@ Run all checks below on the provisioner before starting the installer.
    sha256sum <path-to>/bundle.tar.gz
    # compare against the expected value in bundle.tar.gz.sha256
    ```
-6. [ ] The archive contains `models.yml` and all required image archives:
+6. [ ] The archive contains `models.yaml` and all required image archives:
    ```bash
    tar -tzf <path-to>/bundle.tar.gz | sort
    ```
    Expected contents:
 
-   - `models.yml` — model manifest; must be the only `.yml`/`.yaml` in the archive
+   - `models.yaml` — model manifest; must be the only manifest YAML file in the archive
    - All image tarballs listed below (OCI archives):
 
    **Images pushed to Harbor by the installer:**
@@ -94,9 +94,9 @@ Run all checks below on the provisioner before starting the installer.
    |---|---|
    | `harbor-*.tar` | Harbor component images — imported into containerd on the Harbor node before Harbor is deployed via Helm; NOT pushed to Harbor |
 
-7. [ ] `models.yml` is present and contains a non-empty `models` list:
+7. [ ] `models.yaml` is present and contains a non-empty `models` list:
    ```bash
-   tar -xOzf <path-to>/images.tar.gz ./models.yml | grep -c "id:"
+   tar -xOzf <path-to>/images.tar.gz ./models.yaml | grep -c "id:"
    # must return > 0
    ```
 
@@ -341,4 +341,3 @@ Each command must print directory listings without errors. A `No such file or di
         }
       }'
     ```
-

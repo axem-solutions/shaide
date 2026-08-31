@@ -1,0 +1,212 @@
+# GPT OSS 20B ModelService Configuration
+# Creates the resources for GPT-OSS-20B.
+# Single GPU, decode-only (prefill.create is false — decode serves both phases).
+#
+# Images are llm-d v0.7.0 / sidecar v0.8.0, matching the shipped installer
+# bundles. v0.7.0 is also the first llm-d-cuda compiled for Ampere
+# (TORCH_CUDA_ARCH_LIST=8.0;8.6;8.9;9.0;9.0a;10.0;12.0+PTX); v0.4.0 targeted
+# only 9.0a;10.0 and has no sm_86 kernel, so it cannot run on an A10.
+multinode: false
+
+modelArtifacts:
+  name: "openai/gpt-oss-20b"
+  uri: "hf://openai/gpt-oss-20b"
+  size: 60Gi
+  labels:
+    llm-d.ai/inferenceServing: "true"
+    llm-d.ai/model: "ms-gpt-oss-20b-llm-d-modelservice"
+
+routing:
+  servicePort: 8000
+
+  proxy:
+    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.8.0
+    connector: nixlv2
+    secure: false
+
+decode:
+  create: true
+  replicas: 1
+  monitoring:
+    podmonitor:
+      enabled: false
+      portName: "metrics"
+      path: "/metrics"
+      interval: "30s"
+  containers:
+  - name: "vllm"
+    image: "ghcr.io/llm-d/llm-d-cuda:v0.7.0"
+    modelCommand: vllmServe
+    args:
+      - "--tensor-parallel-size"
+      - "1"
+      # 0.85 of a 24 GB A10 leaves room for the ~13.7 GiB of MXFP4 weights, the
+      # KV cache and CUDA graph capture. Higher values let vLLM size a KV cache
+      # it then cannot allocate, and startup fails with a CUDA OOM.
+      - "--gpu-memory-utilization"
+      - "0.85"
+      - "--max-model-len"
+      - "100000"
+      - "--max-num-seqs"
+      - "4"
+      - "--max-num-batched-tokens" 
+      - "8192"
+      - "--block-size"
+      - "16"
+      - "--trust-remote-code"
+    env:
+      # Triton JIT-compiles a CUDA helper at engine start and links the driver
+      # library with -l:libcuda.so.1, using TRITON_LIBCUDA_PATH as the -L dir.
+      # The llm-d image is UBI9 and bakes in /usr/lib64, but the NVIDIA
+      # container runtime injects the driver using the *host's* layout — on
+      # Ubuntu nodes (AKS) that is /usr/lib/x86_64-linux-gnu. Without this the
+      # engine dies at startup with "ld: cannot find -l:libcuda.so.1".
+      # Adjust per node OS if this model runs on a non-Ubuntu host.
+      - name: TRITON_LIBCUDA_PATH
+        value: "/usr/lib/x86_64-linux-gnu"
+      - name: HF_HUB_OFFLINE
+        value: "1"
+      - name: UCX_TLS
+        value: "cuda_ipc,cuda_copy,tcp"
+      - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+        valueFrom:
+          fieldRef:
+            fieldPath: status.podIP
+      - name: VLLM_NIXL_SIDE_CHANNEL_PORT
+        value: "5557"
+      - name: VLLM_LOGGING_LEVEL
+        value: INFO
+      - name: NCCL_P2P_DISABLE
+        value: "1"
+      - name: NCCL_IGNORE_DISABLED_P2P
+        value: "1"
+      - name: NCCL_DEBUG
+        value: "INFO"
+      - name: VLLM_SKIP_P2P_CHECK
+        value: "1"
+      - name: GLOO_SOCKET_IFNAME
+        value: "eth0"
+      - name: NCCL_SOCKET_IFNAME
+        value: "eth0"
+    ports:
+      - containerPort: 5557
+        protocol: TCP
+      - containerPort: 8200
+        name: metrics
+        protocol: TCP
+    resources:
+      limits:
+        nvidia.com/gpu: "1"
+        memory: "40Gi"
+        cpu: "16"
+      requests:
+        nvidia.com/gpu: "1"
+        memory: "40Gi"
+        cpu: "16"
+    mountModelVolume: true
+    volumeMounts:
+    - name: metrics-volume
+      mountPath: /.config
+    - name: torch-compile-cache
+      mountPath: /.cache
+    - name: shm
+      mountPath: /dev/shm
+  volumes:
+  - name: metrics-volume
+    emptyDir: {}
+  - name: torch-compile-cache
+    emptyDir: {}
+  - name: shm
+    emptyDir:
+      medium: Memory
+      sizeLimit: 8Gi
+
+prefill:
+  create: false
+  replicas: 0
+  monitoring:
+    podmonitor:
+      enabled: false
+      portName: "metrics"
+      path: "/metrics"
+      interval: "30s"
+  containers:
+  - name: "vllm"
+    image: "ghcr.io/llm-d/llm-d-cuda:v0.7.0"
+    modelCommand: vllmServe
+    args:
+      - "--tensor-parallel-size"
+      - "1"
+      - "--gpu-memory-utilization"
+      - "0.40"
+      - "--max-model-len"
+      - "131072"
+      - "--block-size"
+      - "16"
+      - "--trust-remote-code"
+    env:
+      # Triton JIT-compiles a CUDA helper at engine start and links the driver
+      # library with -l:libcuda.so.1, using TRITON_LIBCUDA_PATH as the -L dir.
+      # The llm-d image is UBI9 and bakes in /usr/lib64, but the NVIDIA
+      # container runtime injects the driver using the *host's* layout — on
+      # Ubuntu nodes (AKS) that is /usr/lib/x86_64-linux-gnu. Without this the
+      # engine dies at startup with "ld: cannot find -l:libcuda.so.1".
+      # Adjust per node OS if this model runs on a non-Ubuntu host.
+      - name: TRITON_LIBCUDA_PATH
+        value: "/usr/lib/x86_64-linux-gnu"
+      - name: HF_HUB_OFFLINE
+        value: "1"
+      - name: UCX_TLS
+        value: "cuda_ipc,cuda_copy,tcp"
+      - name: VLLM_NIXL_SIDE_CHANNEL_HOST
+        valueFrom:
+          fieldRef:
+            fieldPath: status.podIP
+      - name: VLLM_NIXL_SIDE_CHANNEL_PORT
+        value: "5557"
+      - name: VLLM_LOGGING_LEVEL
+        value: INFO
+      - name: NCCL_P2P_DISABLE
+        value: "1"
+      - name: NCCL_IGNORE_DISABLED_P2P
+        value: "1"
+      - name: NCCL_DEBUG
+        value: "INFO"
+      - name: VLLM_SKIP_P2P_CHECK
+        value: "1"
+      - name: GLOO_SOCKET_IFNAME
+        value: "eth0"
+      - name: NCCL_SOCKET_IFNAME
+        value: "eth0"
+    ports:
+      - containerPort: 5557
+        protocol: TCP
+      - containerPort: 8000
+        name: metrics
+        protocol: TCP
+    resources:
+      limits:
+        nvidia.com/gpu: "1"
+        memory: "40Gi"
+        cpu: "16"
+      requests:
+        nvidia.com/gpu: "1"
+        memory: "40Gi"
+        cpu: "16"
+    mountModelVolume: true
+    volumeMounts:
+    - name: metrics-volume
+      mountPath: /.config
+    - name: torch-compile-cache
+      mountPath: /.cache
+    - name: shm
+      mountPath: /dev/shm
+  volumes:
+  - name: metrics-volume
+    emptyDir: {}
+  - name: torch-compile-cache
+    emptyDir: {}
+  - name: shm
+    emptyDir:
+      medium: Memory
+      sizeLimit: 8Gi

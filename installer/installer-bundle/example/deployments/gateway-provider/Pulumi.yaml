@@ -1,0 +1,8 @@
+name: gateway-provider
+description: Cluster-level gateway provider prerequisites (CRDs + Istio control plane)
+runtime: go
+main: ..
+config:
+  pulumi:tags:
+    value:
+      pulumi:template: kubernetes-go

@@ -1,0 +1,144 @@
+name: monitoring
+runtime: go
+main: ..
+description: Logging and observability services — Loki, Grafana, and Prometheus on Kubernetes backed by RustFS
+
+template:
+  description: |
+    Deploys Loki, Grafana, Alloy, dashboards, and Prometheus on Kubernetes,
+    with RustFS providing S3-compatible object storage for Loki.
+
+  config:
+    # Component selection
+    # Controls which monitoring services are deployed during this installer run.
+    monitoring:components:
+      description: |
+        Components to deploy. Loki stores logs, Grafana provides visualization,
+        Alloy collects pod logs, dashboards provisions the platform dashboards,
+        and Prometheus collects metrics.
+      default: loki
+      options:
+        - loki
+        - grafana
+        - alloy
+        - dashboards
+        - prometheus
+
+    # Cluster defaults
+    # Values identifying the target cluster and the namespace where monitoring
+    # resources are installed.
+    monitoring:kubeconfig:
+      description: |
+        Path to the kubeconfig for the target Kubernetes cluster.
+      default: ~/.kube/rke2-cluster.yaml
+
+    monitoring:namespace:
+      description: |
+        Kubernetes namespace where the monitoring components are deployed.
+      default: monitoring
+
+    monitoring:cloudProvider:
+      description: |
+        Target environment type. Use "on-prem" for installer-managed clusters
+        or "cloud" for managed Kubernetes clusters.
+      default: on-prem
+      prompt: true
+
+    monitoring:nodeSelector:
+      description: |
+        Optional node selector value used to place monitoring workloads.
+        Leave empty to allow Kubernetes to schedule them normally.
+      default: ""
+
+    # RustFS / S3 settings
+    # RustFS is deployed with the application platform and provides Loki's
+    # S3-compatible chunk and ruler storage.
+    monitoring:s3Endpoint:
+      description: |
+        Internal S3-compatible endpoint used by Loki.
+      default: http://rustfs.app-shaide.svc.cluster.local:9000
+
+    monitoring:s3User:
+      description: |
+        S3 access key used by Loki and the bucket-creation job.
+      default: rustfsuser
+
+    monitoring:s3BucketLoki:
+      description: |
+        S3 bucket used for Loki chunks and ruler data.
+      default: loki-chunks
+
+    monitoring:s3ClientImage:
+      description: |
+        AWS CLI-compatible container image used to create the Loki bucket.
+      default: amazon/aws-cli:latest
+
+    # Helm chart versions and local archives
+    # The paths are resolved from the monitoring Pulumi working directory.
+    monitoring:lokiVersion:
+      description: |
+        Loki Helm chart version.
+      default: "14.1.0"
+
+    monitoring:lokiChartPath:
+      description: |
+        Local path to the Loki Helm chart archive.
+      default: charts/loki-14.1.0.tgz
+
+    monitoring:grafanaVersion:
+      description: |
+        Grafana Helm chart version.
+      default: "12.3.2"
+
+    monitoring:grafanaChartPath:
+      description: |
+        Local path to the Grafana Helm chart archive.
+      default: charts/grafana-12.3.2.tgz
+
+    monitoring:alloyVersion:
+      description: |
+        Alloy Helm chart version.
+      default: "1.8.1"
+
+    monitoring:alloyChartPath:
+      description: |
+        Local path to the Alloy Helm chart archive.
+      default: charts/alloy-1.8.1.tgz
+
+    monitoring:prometheusVersion:
+      description: |
+        Prometheus Helm chart version.
+      default: "29.21.0"
+
+    monitoring:prometheusChartPath:
+      description: |
+        Local path to the Prometheus Helm chart archive.
+      default: charts/prometheus-29.21.0.tgz
+
+    # Persistent storage
+    # On installer-managed on-prem clusters, the hostpath StorageClass is
+    # created by the cluster infrastructure deployment.
+    monitoring:lokiStorageClass:
+      description: |
+        StorageClass for Loki's persistent volume. Leave empty to use the
+        cluster default.
+      default: hostpath
+      prompt: true
+
+    monitoring:prometheusStorageClass:
+      description: |
+        StorageClass for Prometheus's persistent volume. Leave empty to use the
+        cluster default.
+      default: hostpath
+      prompt: true
+
+    # Secrets
+    monitoring:s3Password:
+      description: |
+        S3 secret key used by Loki and the bucket-creation job.
+      secret: true
+
+    monitoring:grafanaAdminPassword:
+      description: |
+        Grafana administrator password.
+      secret: true
