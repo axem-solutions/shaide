@@ -489,7 +489,7 @@ Start from an existing, known-good stack file for each project, then change thes
 | Bundle stack file      | Delete value                                                                                                          |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | `Pulumi.serving.yaml`  | `app-serving:kubeconfig`, `app-serving:harborToken`, `encryptionsalt`, `app-serving:orasImage`                        |
-| `Pulumi.shaide.yaml`   | `app-shaide:kubeconfig`, `app-shaide:ghcrToken`, `app-shaide:adminAuthKey`, `app-shaide:s3Password`, `encryptionsalt` |
+| `Pulumi.shaide.yaml`   | `app-shaide:kubeconfig`, `app-shaide:ghcrToken`, `app-shaide:adminAuthKey`, `app-shaide:jwtSecret`, `app-shaide:s3Password`, `encryptionsalt` |
 | `Pulumi.provider.yaml` | `gateway-provider:kubeconfig`, `gateway-provider:istioHub` `encryptionsalt`                                           |
 | `Pulumi.harbor.yaml`   | `cloud-harbor:kubeconfig`, `cloud-harbor:context`, `harbor:adminPassword`, `harbor:robotPassword`, `encryptionsalt`   |
 

@@ -197,6 +197,7 @@ Injected as environment variables via ConfigMap into the shaide-server pod.
 | Config key | Required | Description |
 |---|---|---|
 | `app_shaide:adminAuthKey` | **Secret** | Shaide admin authentication key. Set via: `pulumi config set --secret app_shaide:adminAuthKey <value>`. |
+| `app_shaide:jwtSecret` | **Secret** | Distinct Shaide JWT signing key. Set via: `pulumi config set --secret app_shaide:jwtSecret <random-value>`. The installer generates and preserves this value automatically. |
 | `app_shaide:s3Password` | **Secret** | RustFS (S3) admin password. Set via: `pulumi config set --secret app_shaide:s3Password <value>`. |
 
 ---
@@ -287,5 +288,6 @@ These are never committed in plain text. Set them with `pulumi config set --secr
 | `gateway-provider` | `gateway-provider:tlsKey` | Before `pulumi up` |
 | `app_shaide` | `app_shaide:ghcrToken` | After `ansible-playbook harbor_setup.yml` |
 | `app_shaide` | `app_shaide:adminAuthKey` | Before `pulumi up` |
+| `app_shaide` | `app_shaide:jwtSecret` | Before `pulumi up`; generated automatically by the installer |
 | `app_shaide` | `app_shaide:s3Password` | Before `pulumi up` |
 | `app-serving` | `app-serving:harborToken` | After `ansible-playbook harbor_setup.yml` |

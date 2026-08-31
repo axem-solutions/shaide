@@ -70,7 +70,8 @@ The stack orchestrator and dependency coordinator:
   is what lets Shaide observe pod state across every namespace it needs to (its own,
   `app_serving`'s per-model namespaces, `app_mcp`'s namespace, etc.), not just its own namespace.
 - `configmap.go`: Creates the shared `shaide-config` ConfigMap (non-secret runtime
-  settings, service discovery) and `shaide-secrets` Secret (`adminAuthKey`, `s3Password`).
+  settings, service discovery) and `shaide-secrets` Secret (`adminAuthKey`, `jwtSecret`,
+  `s3Password`).
 - `secret.go`: Creates `ghcr-creds` (`kubernetes.io/dockerconfigjson`). Authenticates
   against `ghcr.io` using `ghcrUser`/`ghcrToken` — or, when `harborHostname` is set,
   against that internal Harbor registry instead, using the same two config keys.
@@ -146,7 +147,7 @@ All parameters are defined in the active stack's `deployments/Pulumi.<stack>.yam
   `TRIAL` env var — only the `trial` stack sets it to `TRUE`).
 - RustFS console exposure (`rustfsConsoleEnabled`).
 - MCP integration (`mcpNamespace`, optional — see [MCP Integration](#mcp-integration-optional)).
-- Secrets (`ghcrToken`, `adminAuthKey`, `s3Password`).
+- Secrets (`ghcrToken`, `adminAuthKey`, `jwtSecret`, `s3Password`).
 
 The `nodeSelector` value must match a `nodegroup` label on the target node pool (e.g. `shaide-nodepool`).
 
@@ -154,7 +155,7 @@ The `nodeSelector` value must match a `nodegroup` label on the target node pool 
 
 - Kubernetes context points to the target cluster.
 - Pulumi stack is selected for this project.
-- Required secrets are set (`ghcrToken`, `adminAuthKey`, `s3Password`).
+- Required secrets are set (`ghcrToken`, `adminAuthKey`, `jwtSecret`, `s3Password`).
 
 ## Workload Identity
 
