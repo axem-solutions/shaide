@@ -10,10 +10,19 @@ const (
 	// DefaultBindMount is the root of installer-owned writable storage.
 	defaultBindMount = "/var/shaide-installer"
 
-	// TODO: add comment
+	// Read-only installer payload, baked into the image at build time.
+	//
+	// The Pulumi projects and the image manifest ship with the installer
+	// because they change with the installer release. The model manifest does
+	// not live here: models change per deployment, so it is supplied at runtime
+	// under the writable storage root instead — see ModelManifestPath.
 	defaultProjectsSourceDir = "/opt/shaide-installer/projects"
 	defaultImageManifestPath = "/opt/shaide-installer/manifests/images.yaml"
-	defaultImagesDir         = "/opt/shaide-installer/images"
+
+	// Container image archives for manifest entries whose source is "archive".
+	// Created by the image build so a missing archive fails on the file, not
+	// on the directory.
+	defaultImagesDir = "/opt/shaide-installer/images"
 )
 
 type Paths struct {
@@ -25,7 +34,11 @@ type Paths struct {
 	ImagesDir         string
 
 	// Writable installer storage.
-	StorageRoot       string
+	StorageRoot string
+
+	// ManifestsDir is created on every run so the operator has somewhere to
+	// place the model manifest before starting the installer.
+	ManifestsDir      string
 	ModelManifestPath string
 	ProjectsDir       string
 	ModelCache        string
@@ -51,6 +64,7 @@ func NewPaths(storageRoot string) Paths {
 		ImagesDir:         defaultImagesDir,
 
 		StorageRoot:       storageRoot,
+		ManifestsDir:      filepath.Join(storageRoot, "manifests"),
 		ModelManifestPath: filepath.Join(storageRoot, "manifests", "models.yaml"),
 		ProjectsDir:       filepath.Join(storageRoot, "projects"),
 		ModelCache:        filepath.Join(storageRoot, "model-cache"),
@@ -65,6 +79,7 @@ func NewPaths(storageRoot string) Paths {
 func (p Paths) StorageDirs() []string {
 	return []string{
 		p.StorageRoot,
+		p.ManifestsDir,
 		p.ModelCache,
 		p.UploadState,
 		p.ArtifactCache,
