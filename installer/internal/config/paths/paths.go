@@ -12,7 +12,7 @@ const (
 
 	// TODO: add comment
 	defaultProjectsSourceDir = "/opt/shaide-installer/projects"
-	defaultManifestsDir      = "/opt/shaide-installer/manifests"
+	defaultImageManifestPath = "/opt/shaide-installer/manifests/images.yaml"
 	defaultImagesDir         = "/opt/shaide-installer/images"
 )
 
@@ -21,18 +21,19 @@ type Paths struct {
 
 	// Read-only files copied into the Docker image.
 	ProjectsSourceDir string
-	ManifestsDir      string
+	ImageManifestPath string
 	ImagesDir         string
 
 	// Writable installer storage.
-	StorageRoot   string
-	ProjectsDir   string
-	ModelCache    string
-	UploadState   string
-	ArtifactCache string
-	PulumiState   string
-	Logs          string
-	Temp          string
+	StorageRoot       string
+	ModelManifestPath string
+	ProjectsDir       string
+	ModelCache        string
+	UploadState       string
+	ArtifactCache     string
+	PulumiState       string
+	Logs              string
+	Temp              string
 }
 
 func DefaultPaths() Paths {
@@ -46,17 +47,18 @@ func NewPaths(storageRoot string) Paths {
 		Kubeconfig: defaultKubeconfigPath,
 
 		ProjectsSourceDir: defaultProjectsSourceDir,
-		ManifestsDir:      defaultManifestsDir,
+		ImageManifestPath: defaultImageManifestPath,
 		ImagesDir:         defaultImagesDir,
 
-		StorageRoot:   storageRoot,
-		ProjectsDir:   filepath.Join(storageRoot, "projects"),
-		ModelCache:    filepath.Join(storageRoot, "model-cache"),
-		UploadState:   filepath.Join(storageRoot, "upload-state"),
-		ArtifactCache: filepath.Join(storageRoot, "artifact-cache"),
-		PulumiState:   filepath.Join(storageRoot, "pulumi-state"),
-		Logs:          filepath.Join(storageRoot, "logs"),
-		Temp:          filepath.Join(storageRoot, "tmp"),
+		StorageRoot:       storageRoot,
+		ModelManifestPath: filepath.Join(storageRoot, "manifests", "models.yaml"),
+		ProjectsDir:       filepath.Join(storageRoot, "projects"),
+		ModelCache:        filepath.Join(storageRoot, "model-cache"),
+		UploadState:       filepath.Join(storageRoot, "upload-state"),
+		ArtifactCache:     filepath.Join(storageRoot, "artifact-cache"),
+		PulumiState:       filepath.Join(storageRoot, "pulumi-state"),
+		Logs:              filepath.Join(storageRoot, "logs"),
+		Temp:              filepath.Join(storageRoot, "tmp"),
 	}
 }
 

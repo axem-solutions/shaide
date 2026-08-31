@@ -181,6 +181,8 @@ COPY --from=chart-downloader \
     /opt/shaide-installer/projects/monitoring/charts/
 
 # Manifests
-COPY installer/build/manifests/ /opt/shaide-installer/manifests/
+# Only the image manifest is copied, the models are provided at runtime.
+COPY installer/build/manifests/images.yaml \
+    /opt/shaide-installer/manifests/images.yaml
 
 CMD ["/bin/installer"]
