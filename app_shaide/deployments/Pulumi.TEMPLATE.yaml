@@ -37,6 +37,7 @@
 #     ghcrToken     — GHCR PAT (read:packages) or Harbor robot secret (see harborHostname below)
 #     adminAuthKey  — shaide-server admin auth key
 #     s3Password    — RustFS S3 credential (paired with s3User above)
+#     jwtSecret     — shaide-server JWT signing secret; random string, at least 32 characters
 #
 # Optional config:
 #   kubeconfig        — path to kubeconfig file; omit to use KUBECONFIG env / ~/.kube/config
@@ -108,6 +109,7 @@
 #   pulumi config set --secret ghcrToken <token-or-harbor-robot-secret>
 #   pulumi config set --secret adminAuthKey <value>
 #   pulumi config set --secret s3Password <value>
+#   pulumi config set --secret jwtSecret <random-string-at-least-32-chars>
 config:
   app-shaide:namespace: app-shaide
   app-shaide:shaideServiceAccountName: shaide-server
@@ -180,10 +182,13 @@ config:
   # --- Secrets (encrypted, set per stack via CLI) ---
   #   pulumi config set --secret adminAuthKey <value>
   #   pulumi config set --secret s3Password <value>
+  #   pulumi config set --secret jwtSecret <random-string-at-least-32-chars>
   app-shaide:adminAuthKey:
     secure: <run `pulumi config set --secret adminAuthKey <value>`>
   app-shaide:s3Password:
     secure: <run `pulumi config set --secret s3Password <value>`>
+  app-shaide:jwtSecret:
+    secure: <run `pulumi config set --secret jwtSecret <random-string-at-least-32-chars>`>
 #
 # Managed by Pulumi.
 # Do not edit or remove the following line — required to decrypt secret config values.

@@ -66,6 +66,7 @@ type AppEnv struct {
 type AppSecrets struct {
 	AdminAuthKey pulumi.StringOutput
 	S3Password   pulumi.StringOutput
+	JWTSecret    pulumi.StringOutput
 }
 
 type RustFSEnv struct {
@@ -190,6 +191,7 @@ func Load(ctx *pulumi.Context) Config {
 		Secrets: AppSecrets{
 			AdminAuthKey: cfg.RequireSecret("adminAuthKey"),
 			S3Password:   cfg.RequireSecret("s3Password"),
+			JWTSecret:    cfg.RequireSecret("jwtSecret"),
 		},
 	}
 }
