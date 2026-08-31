@@ -4,14 +4,14 @@ const (
 	projectGatewayProvider = "gateway-provider"
 	projectAppServing      = "app-serving"
 	projectAppShaide       = "app-shaide"
-	projectCloudHarbor     = "cloud-harbor"
+	projectHarbor          = "harbor"
 	projectOnPremHarbor    = "k8s-onprem-airgap-services"
 	projectMonitoring      = "monitoring"
 
 	stackGatewayProvider = "provider"
 	stackAppServing      = "serving"
 	stackAppShaide       = "shaide"
-	stackCloudHarbor     = "harbor"
+	stackHarbor          = "harbor"
 	stackOnPremHarbor    = "OnPrem"
 	stackMonitoring      = "monitoring"
 

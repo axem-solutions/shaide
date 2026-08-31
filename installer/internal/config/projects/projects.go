@@ -62,7 +62,7 @@ func Validate(dstDir string) error {
 	required := []string{
 		"app-serving/Pulumi.yaml",
 		"app-shaide/Pulumi.yaml",
-		"cloud-harbor/Pulumi.yaml",
+		"harbor/Pulumi.yaml",
 		"gateway-provider/Pulumi.yaml",
 		"monitoring/Pulumi.yaml",
 	}

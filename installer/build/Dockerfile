@@ -149,8 +149,10 @@ COPY --from=builder /installer /bin/installer
 # App Serving
 COPY app_serving/deployments/Pulumi.yaml \
     /opt/shaide-installer/projects/app-serving/Pulumi.yaml
+# app-serving resolves model values as <project>/deployments/models/<category>/<name>
+# (config.go resolveModelPaths), so the deployments/ level must be preserved.
 COPY app_serving/deployments/models/ \
-    /opt/shaide-installer/projects/app-serving/models/
+    /opt/shaide-installer/projects/app-serving/deployments/models/
 COPY app_serving/charts/ \
     /opt/shaide-installer/projects/app-serving/charts/
 

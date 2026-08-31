@@ -44,20 +44,17 @@ func Stage() core.Stage {
 				When:    InstallOnPrem,
 				Recover: recoverPreloadHarbor,
 			},
-			{
-				Name:    "deploy Harbor (on-prem)",
-				Run:     stacks.DeployOnPremHarbor,
-				Recover: pulumi.RecoverHarbor,
-				When:    InstallOnPrem,
-			},
-			// Cloud: the nodes can reach the public internet, so the bundled
-			// Harbor chart pulls goharbor/* straight from Docker Hub. No
+			// Cloud: the nodes can reach the public internet, so the Harbor
+			// chart pulls goharbor/* straight from Docker Hub. No
 			// side-loading, and nothing to SSH into.
+			//
+			// Both paths converge here: the Harbor project selects its storage
+			// behaviour from the configured platform, so one deploy step
+			// serves on-prem and cloud alike.
 			{
-				Name:    "deploy Harbor (cloud)",
+				Name:    "deploy Harbor",
 				Run:     stacks.DeployHarbor,
 				Recover: pulumi.RecoverHarbor,
-				When:    InstallCloud,
 			},
 			{
 				Name: "check Harbor target",

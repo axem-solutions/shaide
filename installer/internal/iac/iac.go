@@ -38,6 +38,8 @@ type DeployerOptions struct {
 	// Destroy runs pulumi destroy before pulumi up.
 	Destroy bool
 
+	SkipRefresh bool
+
 	// Logger receives Pulumi progress output and deployer log messages.
 	Logger io.Writer
 }
@@ -51,6 +53,7 @@ type Deployer struct {
 	Config      auto.ConfigMap
 	Logger      io.Writer
 	Destroy     bool
+	SkipRefresh bool
 }
 
 func NewDeployer(opts DeployerOptions) (*Deployer, error) {
@@ -79,6 +82,7 @@ func NewDeployer(opts DeployerOptions) (*Deployer, error) {
 		Logger:      opts.Logger,
 		Destroy:     opts.Destroy,
 		Passphrase:  opts.Passphrase,
+		SkipRefresh: opts.SkipRefresh,
 	}, nil
 }
 
@@ -212,8 +216,11 @@ func withLockRetry[T any](
 
 func (d *Deployer) upOptions() []optup.Option {
 	opts := []optup.Option{
-		optup.Refresh(),
 		optup.Color("never"),
+	}
+
+	if !d.SkipRefresh {
+		opts = append(opts, optup.Refresh())
 	}
 
 	if d.Logger != nil {

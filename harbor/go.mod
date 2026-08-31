@@ -7,7 +7,8 @@ require (
 	github.com/pulumi/pulumi/sdk/v3 v3.244.0
 )
 
-replace github.com/axem-solutions/ai_platform/pkg => ../../pkg
+
+replace github.com/axem-solutions/ai_platform/pkg => ../pkg
 
 require (
 	dario.cat/mergo v1.0.0 // indirect
