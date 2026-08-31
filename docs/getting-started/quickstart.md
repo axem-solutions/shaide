@@ -74,7 +74,7 @@ docker run --rm -it \
   -v "$HOME/.kube/config:/.kube/config:ro" \
   -v /tmp/manifests/models.yaml:/manifests/models.yaml:ro \
   --mount "type=bind,src=${STORAGE_PATH},dst=/var/shaide-installer" \
-  ghcr.io/axem-solutions/shaide/installer:dev
+  ghcr.io/axem-solutions/shaide/installer:oss
 ```
 
 The installer prompts for configuration and deploys the platform.
