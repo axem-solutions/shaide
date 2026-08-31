@@ -33,6 +33,14 @@ func DeployMonitoring(rt *core.Runtime) error {
 		stackConfig[key.Name] = configValue
 	}
 
+	// The stack file default is an on-prem RKE2 path, so the template value is
+	// unusable inside the installer container. Inject the kubeconfig the
+	// Kubernetes stage validated, exactly as the other stacks do; without this
+	// the Kubernetes provider fails with an unreachable-cluster error.
+	stackConfig[pulumiConfigKey(projectMonitoring, "kubeconfig")] = auto.ConfigValue{
+		Value: rt.Cluster.ConfigPath,
+	}
+
 	deployer, err := iac.NewDeployer(iac.DeployerOptions{
 		ProjectName: projectMonitoring,
 		StackName:   stackMonitoring,

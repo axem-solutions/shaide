@@ -266,22 +266,16 @@ func DeployHarbor(ctx *pulumi.Context, dir string) error {
 		return fmt.Errorf("harbor https passthrough port: %w", err)
 	}
 
-	// Pull secret + Harbor setup + image mirror all require harbor:robotPassword
-	// to be set in stack config. On first pulumi up this key may be absent; set
-	// it then re-run pulumi up.
+	// Pull secret + image mirror require harbor:robotPassword to be set in stack
+	// config. On first pulumi up this key may be absent; the installer creates
+	// the Harbor projects and robot account through the Harbor API, then sets
+	// this key and re-runs pulumi up.
 	if cfg.RobotPasswordSet {
-		// Declares the configured projects (public) and the robot account
-		// in Harbor itself, via a real Pulumi provider — see setup.go. The
-		// returned Output, not cfg.RobotPassword itself, is what's fed into
-		// the pull secret and mirror below, so neither can be created
-		// before the robot account actually exists in Harbor with this
-		// password set.
-		robotPassword, err := ensureHarborSetup(ctx, release, cfg)
-		if err != nil {
-			return fmt.Errorf("harbor setup: %w", err)
-		}
-
-		if err := createHarborPullSecret(ctx, robotPassword, k8sProvider, ns, release, cfg); err != nil {
+		// The installer has already created the robot account and validated
+		// this password against Harbor before starting the second Pulumi pass.
+		// Do not declare the same robot through the Harbor provider here: doing
+		// so attempts a second POST and fails with HTTP 409.
+		if err := createHarborPullSecret(ctx, cfg.RobotPassword, k8sProvider, ns, release, cfg); err != nil {
 			return fmt.Errorf("harbor pull secret: %w", err)
 		}
 
@@ -289,7 +283,7 @@ func DeployHarbor(ctx *pulumi.Context, dir string) error {
 		// a cluster can pull from Harbor without this platform also being
 		// responsible for keeping Harbor populated.
 		if cfg.MirrorEnabled {
-			if err := deployImageMirror(ctx, k8sProvider, cfg, robotPassword); err != nil {
+			if err := deployImageMirror(ctx, k8sProvider, cfg, cfg.RobotPassword); err != nil {
 				return fmt.Errorf("harbor image mirror: %w", err)
 			}
 		}

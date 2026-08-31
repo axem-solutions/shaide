@@ -7,6 +7,9 @@
 package shaide
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+
 	"github.com/axem-solutions/ai_platform/pkg/iac/shaide/internal/cloudprovider"
 	appconfig "github.com/axem-solutions/ai_platform/pkg/iac/shaide/internal/config"
 	"github.com/axem-solutions/ai_platform/pkg/iac/shaide/internal/runtime"
@@ -25,6 +28,10 @@ import (
 // Cloud-specific post-deploy resources are delegated to the provider.
 func Deploy(ctx *pulumi.Context, deps *runtime.DeploymentContext, cfg appconfig.Config, provider cloudprovider.Provider) error {
 	image := cfg.Images.ShaideServer
+	jwtSecretChecksum := cfg.Secrets.JWTSecret.ApplyT(func(secret string) string {
+		sum := sha256.Sum256([]byte(secret))
+		return hex.EncodeToString(sum[:])
+	}).(pulumi.StringOutput)
 
 	podLabels := deps.MetaLabels("shaide-server", "server")
 	if cfg.CloudProvider == "azure" {
@@ -61,6 +68,9 @@ func Deploy(ctx *pulumi.Context, deps *runtime.DeploymentContext, cfg appconfig.
 			Template: &corev1.PodTemplateSpecArgs{
 				Metadata: &metav1.ObjectMetaArgs{
 					Labels: podLabels,
+					Annotations: pulumi.StringMap{
+						"shaide.axem.dev/jwt-secret-checksum": jwtSecretChecksum,
+					},
 				},
 				Spec: &corev1.PodSpecArgs{
 					ServiceAccountName: pulumi.String(cfg.ServiceAccountName),

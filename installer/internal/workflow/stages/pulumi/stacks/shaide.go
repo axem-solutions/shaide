@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/axem-solutions/ai_platform/installer/internal/config"
 	"github.com/axem-solutions/ai_platform/installer/internal/iac"
@@ -15,11 +16,32 @@ import (
 
 func DeployAppShaide(rt *core.Runtime) error {
 	workdir := rt.Bootstrap.Bundle.PulumiWorkDir
+	projectDir := filepath.Join(workdir, projectAppShaide)
 
 	deployConfig := auto.ConfigMap{
 		pulumiConfigKey(projectAppShaide, "kubeconfig"): {
 			Value: rt.Cluster.ConfigPath,
 		},
+	}
+
+	stackFile := stackConfigFile(projectDir, stackAppShaide)
+	namespace, err := stackConfigString(stackFile, pulumiConfigKey(projectAppShaide, "namespace"))
+	if err != nil {
+		return err
+	}
+	if namespace == "" {
+		return fmt.Errorf("app-shaide namespace is missing from %s", stackFile)
+	}
+
+	secretCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	jwtSecret, err := resolveShaideJWTSecret(secretCtx, rt.Cluster.Client, namespace)
+	cancel()
+	if err != nil {
+		return err
+	}
+	deployConfig[pulumiConfigKey(projectAppShaide, "jwtSecret")] = auto.ConfigValue{
+		Value:  jwtSecret,
+		Secret: true,
 	}
 
 	// Reuse the gateway hostname captured during the gateway-provider stage so
@@ -63,7 +85,7 @@ func DeployAppShaide(rt *core.Runtime) error {
 		}
 	}
 
-	ghcrToken, err := shaidePullCredential(rt, filepath.Join(workdir, projectAppShaide))
+	ghcrToken, err := shaidePullCredential(rt, projectDir)
 	if err != nil {
 		return err
 	}
@@ -76,7 +98,7 @@ func DeployAppShaide(rt *core.Runtime) error {
 	deployer, err := iac.NewDeployer(iac.DeployerOptions{
 		ProjectName: projectAppShaide,
 		StackName:   stackAppShaide,
-		WorkDir:     filepath.Join(workdir, projectAppShaide),
+		WorkDir:     projectDir,
 		StateDir:    rt.Bootstrap.Config.Paths.PulumiState,
 		Logger:      rt.Logger.Writer(),
 		Config:      deployConfig,

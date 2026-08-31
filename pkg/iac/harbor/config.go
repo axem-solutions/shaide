@@ -31,9 +31,9 @@ type harborConfig struct {
 	StaticClusterIP string
 	Projects        []string
 
-	// RobotPasswordSet gates the pull secret, Harbor setup, and image mirror
-	// altogether — see DeployHarbor. RobotPassword is only valid when this
-	// is true.
+	// RobotPasswordSet gates the pull secret and image mirror altogether — see
+	// DeployHarbor. The installer creates and validates the Harbor robot before
+	// passing RobotPassword into the second Pulumi deployment.
 	RobotPasswordSet bool
 	RobotPassword    pulumi.StringOutput
 
@@ -93,10 +93,11 @@ func loadHarborConfig(ctx *pulumi.Context, dir string) harborConfig {
 		GhcrPinnedImages: conf.Get("ghcrPinnedImages"),
 	}
 
-	// Pull secret + Harbor setup + image mirror all require robotPassword —
-	// on first pulumi up this key may be absent; set it then re-run pulumi
-	// up. RequireSecret is only called once we know the key is actually
-	// set, since RequireSecret itself panics on a missing key.
+	// Pull secret + image mirror require robotPassword. On the installer's first
+	// pulumi up this key is absent; after the installer creates and validates the
+	// Harbor robot, it sets the key and runs pulumi up again. RequireSecret is
+	// only called once we know the key is actually set, since RequireSecret
+	// itself panics on a missing key.
 	if conf.Get("robotPassword") != "" {
 		cfg.RobotPasswordSet = true
 		cfg.RobotPassword = conf.RequireSecret("robotPassword")

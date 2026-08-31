@@ -57,7 +57,7 @@ func Stage() core.Stage {
 				Name:    "deploy Harbor (cloud)",
 				Run:     stacks.DeployHarbor,
 				Recover: pulumi.RecoverHarbor,
-				When:    InstallCloud,
+				When:    CloudMode,
 			},
 			{
 				Name: "check Harbor target",
@@ -96,6 +96,15 @@ func InstallMode(rt *core.Runtime) bool {
 	return rt.Discovery.Mode == core.Install
 }
 
+// CloudMode keeps installer-owned Harbor resources reconciled on both fresh
+// installs and updates. In particular, update runs must be able to apply
+// node-registry trust added through Pulumi.harbor.yaml after Harbor already
+// exists; gating this step on InstallMode leaves kubelets unable to pull from
+// the in-cluster plain-HTTP registry.
+func CloudMode(rt *core.Runtime) bool {
+	return kube.IsCloud(rt.Bootstrap.CloudPlatform)
+}
+
 // InstallCloud gates steps that only apply to a managed cloud cluster, where
 // nodes can pull from public registries.
 func InstallCloud(rt *core.Runtime) bool {
@@ -117,6 +126,8 @@ func CheckResources(rt *core.Runtime) error {
 		return err
 	}
 
+	loadExistingHarborCredentials(rt)
+
 	if err := EnsurePortForward(rt); err != nil {
 		return err
 	}
@@ -130,6 +141,31 @@ func CheckResources(rt *core.Runtime) error {
 	rt.Detailf("harbor client ready for %s", rt.Discovery.HarborForward.Address())
 
 	return nil
+}
+
+func loadExistingHarborCredentials(rt *core.Runtime) {
+	// Reuse the validated robot password from the existing pull secret so a
+	// Harbor reconcile does not remove that Pulumi-managed secret on update.
+	rt.Discovery.RobotPassword = rt.Discovery.Auth.Password
+
+	// The Harbor chart stores the effective admin password in <release>-core.
+	// Reusing it avoids an unnecessary password prompt and, more importantly,
+	// prevents an update from changing the existing Harbor admin credential.
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	namespace := rt.Bootstrap.Config.Harbor.Namespace
+	secretName := rt.Bootstrap.Config.Harbor.Service + "-core"
+	password, err := kube.ReadSecretKey(
+		ctx,
+		rt.Cluster.Client,
+		namespace,
+		secretName,
+		"HARBOR_ADMIN_PASSWORD",
+	)
+	if err == nil {
+		rt.Discovery.AdminPassword = strings.TrimSpace(string(password))
+	}
 }
 
 func checkHarborTarget(rt *core.Runtime) error {

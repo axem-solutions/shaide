@@ -36,6 +36,7 @@
 #   Secrets (set via `pulumi config set --secret <key> <value>`):
 #     ghcrToken     — GHCR PAT (read:packages) or Harbor robot secret (see harborHostname below)
 #     adminAuthKey  — shaide-server admin auth key
+#     jwtSecret     — shaide-server JWT signing key; use a distinct random value
 #     s3Password    — RustFS S3 credential (paired with s3User above)
 #
 # Optional config:
@@ -107,6 +108,7 @@
 #   pulumi stack init <stack-name>
 #   pulumi config set --secret ghcrToken <token-or-harbor-robot-secret>
 #   pulumi config set --secret adminAuthKey <value>
+#   pulumi config set --secret jwtSecret "$(openssl rand -base64 32)"
 #   pulumi config set --secret s3Password <value>
 config:
   app-shaide:namespace: app-shaide
@@ -179,9 +181,12 @@ config:
 
   # --- Secrets (encrypted, set per stack via CLI) ---
   #   pulumi config set --secret adminAuthKey <value>
+  #   pulumi config set --secret jwtSecret "$(openssl rand -base64 32)"
   #   pulumi config set --secret s3Password <value>
   app-shaide:adminAuthKey:
     secure: <run `pulumi config set --secret adminAuthKey <value>`>
+  app-shaide:jwtSecret:
+    secure: <run `pulumi config set --secret jwtSecret <random-value>`>
   app-shaide:s3Password:
     secure: <run `pulumi config set --secret s3Password <value>`>
 #

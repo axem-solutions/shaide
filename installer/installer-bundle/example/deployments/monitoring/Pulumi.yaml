@@ -29,8 +29,11 @@ template:
     # resources are installed.
     monitoring:kubeconfig:
       description: |
-        Path to the kubeconfig for the target Kubernetes cluster.
-      default: ~/.kube/rke2-cluster.yaml
+        Path to the kubeconfig for the target Kubernetes cluster. The installer
+        overwrites this with the kubeconfig it validated, so it only matters for
+        a direct `pulumi up`. Leave empty to fall back to `KUBECONFIG` or
+        `~/.kube/config`; a non-empty wrong path makes the cluster unreachable.
+      default: ""
 
     monitoring:namespace:
       description: |
