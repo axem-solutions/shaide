@@ -2,7 +2,6 @@ package catalog
 
 import (
 	"fmt"
-	"path/filepath"
 )
 
 // TODO: add comments
@@ -17,13 +16,18 @@ type Catalog struct {
 }
 
 type LoadOptions struct {
-	ManifestsDir string
-	ImagesDir    string
+	ImageManifestPath string
+	ModelManifestPath string
+	ImagesDir         string
 }
 
 func (opts LoadOptions) Validate() error {
-	if opts.ManifestsDir == "" {
-		return fmt.Errorf("manifests directory is required")
+	if opts.ImageManifestPath == "" {
+		return fmt.Errorf("image manifest path is required")
+	}
+
+	if opts.ModelManifestPath == "" {
+		return fmt.Errorf("model manifest path is required")
 	}
 
 	if opts.ImagesDir == "" {
@@ -38,10 +42,7 @@ func Load(opts LoadOptions) (Catalog, error) {
 		return Catalog{}, fmt.Errorf("invalid catalog options: %w", err)
 	}
 
-	imageManifestPath := filepath.Join(opts.ManifestsDir, "images.yml")
-	modelManifestPath := filepath.Join(opts.ManifestsDir, "models.yml")
-
-	images, err := readManifest[imageManifest](imageManifestPath)
+	images, err := readManifest[imageManifest](opts.ImageManifestPath)
 	if err != nil {
 		return Catalog{}, fmt.Errorf("read image manifest: %w", err)
 	}
@@ -54,7 +55,7 @@ func Load(opts LoadOptions) (Catalog, error) {
 		return Catalog{}, fmt.Errorf("resolve Harbor image sizes: %w", err)
 	}
 
-	models, err := readManifest[modelManifest](modelManifestPath)
+	models, err := readManifest[modelManifest](opts.ModelManifestPath)
 	if err != nil {
 		return Catalog{}, fmt.Errorf("read model manifest: %w", err)
 	}
