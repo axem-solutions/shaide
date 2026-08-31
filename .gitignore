@@ -11,13 +11,32 @@ CLAUDE.md
 GEMINI.md
 AGENTS.md
 PLAN.md
-app_shaide/app_shaide
+# Build artifacts
+#
+# Each Go module compiles to a binary named after the last element of its module
+# path, dropped at the module root by `go build ./...`.
+app_mcp/app_mcp
 app_serving/app_serving
-infra/aws/aws-ai-infra
-infra/gcp/gcp-ai-infra
+app_shaide/app_shaide
+harbor/cloud-harbor
 infra/gateway-provider/gateway-provider
-# Pulumi - stack-specific configs and state
-**/aws-ai-infra
+installer/installer
+monitoring/monitoring
+pkg/pkg
+
+# Go test and coverage output
+*.test
+*.out
+coverage.txt
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+
+# Node
+node_modules/
 
 # Ansible
 *.retry
