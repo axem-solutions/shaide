@@ -12,7 +12,7 @@ weight: 50
 | --- | --- |
 | Terminal errors | Add `-it` - the installer is interactive |
 | Permission denied on Docker | Add the user to the `docker` group |
-| Cannot find bundle | Check the `/.bundle/bundle.tar.gz` mount path |
+| Cannot find the model manifest | Check the mount path and `MODEL_MANIFEST_PATH` |
 
 ## State
 
@@ -23,11 +23,11 @@ deployment.
 Confirm the mount points at the same host directory used previously and that
 `PULUMI_CONFIG_PASSPHRASE` is exported.
 
-## Bundle validation
+## Manifest validation
 
-The installer validates `images/`, `deployments/`, `manifests/images.yaml` and
-`manifests/models.yaml`. Every `file` entry in the image manifest must exist under
-`images/`. See [Installer bundle](bundle.md).
+The installer validates the image manifest that ships inside the image, and the model
+manifest you supply. A missing or unreadable model manifest fails at bootstrap with a
+message naming the expected path.
 
 ## Cluster connectivity
 

@@ -37,13 +37,32 @@ export HF_TOKEN="<token>"
 
 ## 3. Run the installer
 
-The installer deploys from a **bundle** — an archive holding the Pulumi deployments,
-manifests, charts and CRDs. Have one ready before you start; see
-[Installer bundle](../installation/bundle.md).
+The installer ships with everything it deploys — Pulumi projects, charts, CRDs and the
+image list are baked into the image. The one thing you supply is the **model manifest**,
+which lists the models to publish into the internal registry.
+
+> [!IMPORTANT]
+> Supplying `models.yaml` by hand is a temporary step. Model selection moves into the
+> installer in the next release, and this file will no longer be required.
+
+Create it:
+
+```bash
+mkdir -p /tmp/manifests
+cat > /tmp/manifests/models.yaml <<'YAML'
+models:
+  - id: "openai/gpt-oss-20b"
+    revision: "6cee5e81ee83917806bbde320786a8fb61efebee"
+    harbor_project: "ai-models"
+    harbor_name: "gpt-oss-20b"
+    harbor_tag: "1.0.0"
+YAML
+```
+
+Then run the installer, mounting it and pointing `MODEL_MANIFEST_PATH` at it:
 
 ```bash
 STORAGE_PATH=<storage-path>
-BUNDLE_ARCHIVE=<path-to>/bundle.tar.gz
 
 mkdir -p "${STORAGE_PATH}"
 
@@ -51,8 +70,9 @@ docker run --rm -it \
   --network host \
   -e PULUMI_CONFIG_PASSPHRASE \
   -e HF_TOKEN \
+  -e MODEL_MANIFEST_PATH=/manifests/models.yaml \
   -v "$HOME/.kube/config:/.kube/config:ro" \
-  -v "${BUNDLE_ARCHIVE}:/.bundle/bundle.tar.gz:ro" \
+  -v /tmp/manifests/models.yaml:/manifests/models.yaml:ro \
   --mount "type=bind,src=${STORAGE_PATH},dst=/var/shaide-installer" \
   ghcr.io/axem-solutions/shaide/installer:dev
 ```

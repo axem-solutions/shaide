@@ -20,36 +20,36 @@ Run the Docker build from the repository root:
 docker build -f installer/build/Dockerfile -t onprem-installer:latest .
 ```
 
-Use this when changing installer code. It does not refresh the bundle;
-changing images, manifests, Pulumi stack files, charts, CRDs, or deployment
-values requires rebuilding the bundle archive separately.
+Rebuild the image after changing installer code, Pulumi projects, charts, CRDs, the
+image manifest, or deployment values — all of them ship inside it. The model manifest is
+the exception: it is supplied at runtime and needs no rebuild.
 
 ## How it works
 
 The installer has two separate moving parts:
 
 - the installer container image, built from `installer/build/Dockerfile`;
-- the bundle archive, mounted at runtime as `/.bundle/bundle.tar.gz`.
+- the model manifest, supplied at runtime under the storage mount.
 
 At runtime the installer:
 
 1. verifies it is running in an interactive terminal;
 2. verifies and prepares persistent installer storage;
-3. extracts the mounted bundle into `/var/shaide-installer/bundle`;
-4. reads `manifests/images.yaml` and `manifests/models.yaml`;
+3. copies the packaged Pulumi projects from `/opt/shaide-installer/projects` into
+   `/var/shaide-installer/projects` and validates them;
+4. reads the packaged image manifest and the supplied model manifest;
 5. reads the mounted kubeconfig and lets the user select a context;
 6. discovers whether Harbor already exists in the selected cluster;
 7. deploys or configures Harbor when needed;
 8. downloads selected Hugging Face models and uploads model/image artifacts to
    Harbor through ORAS;
-9. runs the bundled Pulumi workdirs through Pulumi Automation API;
+9. runs the Pulumi projects through the Pulumi Automation API;
 10. writes runtime-generated stack config, secrets, cache files, upload state,
     Pulumi state, and logs under `/var/shaide-installer`.
 
-The installation payload is not baked into the installer image. Rebuilding the
-installer image changes the TUI and workflow code only. Changing images, model
-manifests, charts, CRDs, deployment values, or Pulumi stack files requires
-refreshing the bundle.
+The installation payload ships inside the installer image, so the image version pins the
+platform version. Only the model manifest is external, which is what lets a model be
+added without an image rebuild.
 
 ## Workflow Stages
 
@@ -57,7 +57,7 @@ The default workflow is defined in `installer/internal/workflow/workflow.go`.
 
 | Stage | Purpose |
 | --- | --- |
-| `bootstrap` | Check terminal/storage, extract the bundle, load manifests, require `HF_TOKEN`, and read `GHCR_TOKEN`. |
+| `bootstrap` | Check terminal/storage, prepare the Pulumi projects, load manifests, require `HF_TOKEN`, and read `GHCR_TOKEN`. |
 | `initK8s` | Load kubeconfig, prompt for a Kubernetes context, and build the Kubernetes client. |
 | `discovery` | Find or deploy Harbor, create Harbor projects and robot credentials, and open a local port-forward. |
 | `populate Harbor` | Check model artifacts, download selected models, upload models, upload service images, and optionally delete models. |
@@ -83,7 +83,7 @@ resource name, continue an update flow, or abort.
 | Path | Purpose |
 | --- | --- |
 | `installer/cmd/onprem-installer` | Installer entrypoint. |
-| `installer/internal/config` | Runtime defaults, bundle extraction, manifest parsing, and storage paths. |
+| `installer/internal/config` | Runtime defaults, project preparation, manifest parsing, and storage paths. |
 | `installer/internal/workflow` | Stage runner, recovery behavior, and workflow state. |
 | `installer/internal/workflow/stages` | Bootstrap, Kubernetes, discovery, artifact, and Pulumi stages. |
 | `installer/internal/ui` | Bubble Tea terminal UI. |
@@ -93,7 +93,6 @@ resource name, continue an update flow, or abort.
 | `installer/internal/preloader` | SSH/containerd preload support for Harbor bootstrap images. |
 | `installer/internal/iac` | Pulumi Automation API wrapper. |
 | `installer/build/Dockerfile` | Container image build. |
-| `installer/installer-bundle` | Bundle staging trees, manifests, Pulumi workdirs, charts, CRDs, and values. |
 | `installer/documentation` | Supporting developer notes and older troubleshooting references. |
 | `shaide-installer-data` | Typical host-side persistent runtime storage when using the local run command above. |
 
@@ -106,9 +105,9 @@ host under `shaide-installer-data`.
 | Container path | Purpose |
 | --- | --- |
 | `/.kube/config` | Mounted kubeconfig. |
-| `/.bundle/bundle.tar.gz` | Mounted bundle archive. |
 | `/var/shaide-installer` | Persistent installer storage root. |
-| `/var/shaide-installer/bundle` | Extracted bundle. |
+| `/var/shaide-installer/projects` | Pulumi projects, re-seeded from the image on every run. |
+| `/var/shaide-installer/manifests` | Where the supplied model manifest is read from by default. |
 | `/var/shaide-installer/model-cache` | Hugging Face model cache. |
 | `/var/shaide-installer/upload-state` | ORAS upload state for resumable uploads. |
 | `/var/shaide-installer/artifact-cache` | OCI artifact cache used by model uploads. |
@@ -116,9 +115,9 @@ host under `shaide-installer-data`.
 | `/var/shaide-installer/logs` | TUI log exports. |
 | `/var/shaide-installer/tmp` | Process-wide temporary files, including ORAS upload spools. |
 
-The bundle extractor writes `.bundle-extract.json` under the extracted bundle
-directory and reuses an extraction when the mounted archive path, size, and
-mtime still match.
+The projects directory is removed and re-copied from the image on every run, so project
+files always match the installer version. Pulumi state and stack config live outside it
+and survive.
 
 Press `ctrl+y` in the TUI to save visible installer logs to
 `/var/shaide-installer/logs/`.
@@ -130,25 +129,26 @@ Press `ctrl+y` in the TUI to save visible installer logs to
 1. Update Go code under `installer/cmd` or `installer/internal`.
 2. Run `cd installer && go test ./...`.
 3. Rebuild the installer image.
-4. Reuse the existing bundle unless the payload contract changed.
+4. Rebuild the image; the projects are re-seeded from it on the next run.
 
 ### Add A Service Image
 
-1. Add an entry under `harbor_upload_images` in `manifests/images.yaml`.
+1. Add an entry under `harbor_upload_images` in `installer/build/manifests/images.yaml`.
 2. Set `source` to the registry it is fetched from, plus `project`, `name`, and `tag`.
 3. Use a Harbor project the installer provisions: `ai-models`, `shaide`, `services`.
-4. Rebuild `installer/installer-bundle/bundle.tar.gz`.
+4. Rebuild the installer image.
 
-No archive is staged — the installer pulls the image from the named registry.
+The installer pulls the image from the named registry at install time.
 
 ### Add A Harbor Bootstrap Image
 
 On-prem only.
 
 1. Add an entry under `goharbor_images` with `source: archive`.
-2. Stage the archive under `images/`, named `<name-with-slashes-as-dashes>-<tag>.tar`.
+2. Stage the archive under `/opt/shaide-installer/images` in the image build, named
+   `<name-with-slashes-as-dashes>-<tag>.tar`.
 3. Confirm the preloader can reach the target Harbor node over SSH.
-4. Rebuild and verify the bundle.
+4. Rebuild the installer image.
 
 The current preloader options in `discovery.preloadHarbor` include
 environment-specific host, user, SSH key, node, containerd socket, and `ctr`
@@ -157,12 +157,11 @@ runtime config.
 
 ### Add A Model Artifact
 
-1. Add the model to `manifests/models.yaml`.
+1. Add the model to your `models.yaml`.
 2. Set `id`, `harbor_project`, `harbor_name`, `harbor_tag`, and a pinned
    `revision`.
 3. Add `dependencies` when the model requires additional Hugging Face repos.
-4. Rebuild the bundle.
-5. Run the installer and select the model when prompted.
+4. Run the installer and select the model when prompted — no image rebuild needed.
 
 ### Add Or Modify An App-Serving Deployment
 
@@ -177,8 +176,8 @@ runtime config.
 
 ### Refresh Pulumi Deployment Assets
 
-1. Update stack files, charts, CRDs, or values under the bundle staging tree.
-2. Keep secrets out of the stack files.
-3. Rebuild `bundle.tar.gz`.
+1. Update the Pulumi project files, charts, CRDs, or values in the repository.
+2. Keep secrets out of the project files.
+3. Rebuild the installer image.
 4. Run a local development install/update against a disposable cluster when the
    change affects stack behavior.

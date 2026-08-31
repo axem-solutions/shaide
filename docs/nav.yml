@@ -19,7 +19,7 @@
 
 - title: Installation
   path: installation
-  pages: [installer-guide.md, bundle.md, air-gapped.md, troubleshooting.md]
+  pages: [installer-guide.md, air-gapped.md, troubleshooting.md]
 
 
 - title: Usage

@@ -18,24 +18,74 @@ Use this page after completing the [Prerequisites](../getting-started/provisioni
 
 ## What the installer needs
 
-The installer image contains only the application code. The installation payload is
-supplied separately as a **bundle** — a gzip-compressed tar archive holding the Pulumi
-deployments, manifests, charts and CRDs it installs from, plus Harbor's bootstrap image
-archives on on-prem targets.
+The installer image is self-contained: the Pulumi projects, Helm charts, CRDs and the
+image list all ship inside it. Container images are copied into the internal registry
+from their origin registries at install time.
 
-Preparing one, and the full manifest schema, is covered in
-[Installer bundle](bundle.md).
+The one input you supply is the **model manifest**, which lists the models to download
+from Hugging Face and publish into the registry. See
+[Model manifest](#model-manifest) below.
 
 The container expects:
 
 | Input | Required | Container path or env | Purpose |
 | --- | --- | --- | --- |
 | Kubeconfig | Yes | `/.kube/config` by default | Context selection and cluster access |
-| Bundle archive | Yes | `/.bundle/bundle.tar.gz` by default | Installer payload, extracted during bootstrap |
-| Persistent storage | Yes | `/var/shaide-installer` | Bundle extraction, model cache, upload state, Pulumi state, logs |
+| Model manifest | Yes | `<STORAGE_PATH>/manifests/models.yaml`, or `MODEL_MANIFEST_PATH` | Models to publish into the registry |
+| Persistent storage | Yes | `/var/shaide-installer` | Model cache, upload state, Pulumi state, logs |
 | Hugging Face token | Yes | `HF_TOKEN` | Downloads selected model snapshots |
 | Registry credentials | Optional | `GHCR_TOKEN`, `DOCKERHUB_PASSWORD` | Private images and rate limits |
 | SSH private key | On-prem Harbor install | `PRIVATE_KEY_PATH` | Path inside the container, for Harbor image preload |
+
+## Model manifest
+
+> [!IMPORTANT]
+> Supplying `models.yaml` by hand is a temporary step. Model selection moves into the
+> installer in the next release, and this file will no longer be required.
+
+The manifest is a `models` list. Each entry names a Hugging Face repository, a pinned
+revision, and where the artifact lands in the internal registry:
+
+```yaml
+models:
+  - id: "openai/gpt-oss-20b"
+    revision: "6cee5e81ee83917806bbde320786a8fb61efebee"
+    harbor_project: "ai-models"
+    harbor_name: "gpt-oss-20b"
+    harbor_tag: "1.0.0"
+```
+
+| Field | Meaning |
+| --- | --- |
+| `id` | Hugging Face model repository ID |
+| `revision` | Commit to download. Pin it for reproducibility |
+| `harbor_project` | Registry project the artifact is published to |
+| `harbor_name` | Repository name inside that project |
+| `harbor_tag` | Tag used to detect and publish the artifact |
+| `dependencies` | Optional extra Hugging Face repos fetched alongside the model |
+
+The entry above is published as
+`<registry-host>/ai-models/gpt-oss-20b:1.0.0`, as an OCI artifact of type
+`application/vnd.cnai.model`.
+
+### Supplying it
+
+Either drop it into the storage mount, where the installer looks by default:
+
+```bash
+mkdir -p "${STORAGE_PATH}/manifests"
+cp models.yaml "${STORAGE_PATH}/manifests/models.yaml"
+```
+
+Or keep it elsewhere and mount it, pointing `MODEL_MANIFEST_PATH` at the container path:
+
+```bash
+-e MODEL_MANIFEST_PATH=/manifests/models.yaml \
+-v /tmp/manifests/models.yaml:/manifests/models.yaml:ro \
+```
+
+The installer fails at bootstrap with a message naming the expected path if the manifest
+is missing.
 
 ## Overview
 
@@ -48,16 +98,17 @@ The installation has two parts:
 
 | Step                          | Purpose                                                                                            |
 |-------------------------------|----------------------------------------------------------------------------------------------------|
-| **Prepare installer storage** | Create persistent local storage for bundle extraction, model cache, deployment state, and logs.    |
+| **Prepare installer storage** | Create persistent local storage for the model cache, deployment state, and logs.                   |
 | **Configure credentials**     | Export the tokens and passphrases required by the installer.                                       |
-| **Define run paths**          | Set the kubeconfig, bundle archive, and installer storage paths used by the run command.           |
+| **Write the model manifest**  | List the models to publish into the internal registry.                                             |
+| **Define run paths**          | Set the kubeconfig, model manifest, and installer storage paths used by the run command.           |
 | **Start the installer**       | Run the installer container with the required mounts, environment variables, and cluster access.   |
 
 ### Installer Workflow Stages
 
 | Installer stage       | Action                                                      |
 |-----------------------|-------------------------------------------------------------|
-| `Bootstrap`           | Validate storage, installer state, and bundle archive.      |
+| `Bootstrap`           | Validate storage, installer state, and the manifests.       |
 | `Kubernetes`          | Load kubeconfig and connect to the target cluster.          |
 | `Discovery`           | Discover Harbor and determine the installation type.         |
 | `Populate Harbor`     | Upload images and selected model artifacts.                 |
@@ -75,7 +126,7 @@ Create the persistent storage directory used by the installer.
 mkdir -p /var/lib/shaide-installer
 ```
 
-This directory is mounted into the installer container and stores installer state, logs, bundle extraction output, deployment state, and model cache.
+This directory is mounted into the installer container and stores installer state, logs, deployment state, and the model cache.
 
 Use the same directory for future installer runs.
 
@@ -113,7 +164,7 @@ for during the run.
 | `GHCR_USERNAME` / `GHCR_TOKEN` | Credentials for private GitHub Container Registry images |
 | `DOCKERHUB_USERNAME` / `DOCKERHUB_PASSWORD` | Credentials for Docker Hub, and to avoid anonymous rate limits |
 | `KUBECONFIG` | Kubeconfig path inside the container. Default `/.kube/config` |
-| `BUNDLE_ARCHIVE_PATH` | Bundle path inside the container. Default `/.bundle/bundle.tar.gz` |
+| `MODEL_MANIFEST_PATH` | Model manifest path inside the container. Default `<STORAGE_PATH>/manifests/models.yaml` |
 | `PRIVATE_KEY_PATH` | SSH key inside the container, for Harbor image preload on on-prem |
 
 ### 3. Set Run Paths
@@ -122,7 +173,7 @@ Set shell variables for the local files and directories used by the installer co
 
 ```bash
 HOST_KUBECONFIG="$HOME/.kube/config"
-BUNDLE_ARCHIVE="$PWD/bundle.tar.gz"
+MODEL_MANIFEST="$PWD/models.yaml"
 STORAGE_PATH="/var/lib/shaide-installer"
 ```
 
@@ -136,7 +187,7 @@ Verify the required paths exist:
 
 ```bash
 ls -lh "$HOST_KUBECONFIG"
-ls -lh "$BUNDLE_ARCHIVE"
+ls -lh "$MODEL_MANIFEST"
 ls -ld "$STORAGE_PATH"
 ```
 
@@ -148,8 +199,9 @@ docker run --rm -it \
   -e HF_TOKEN \
   -e PULUMI_CONFIG_PASSPHRASE \
   -e PRIVATE_KEY_PATH \
+  -e MODEL_MANIFEST_PATH=/manifests/models.yaml \
   -v "${HOST_KUBECONFIG}:/.kube/config:ro" \
-  -v "${BUNDLE_ARCHIVE}:/.bundle/bundle.tar.gz:ro" \
+  -v "${MODEL_MANIFEST}:/manifests/models.yaml:ro" \
   --mount "type=bind,src=${STORAGE_PATH},dst=/var/shaide-installer" \
   ghcr.io/axem-solutions/shaide/installer:dev
 ```
@@ -157,12 +209,6 @@ docker run --rm -it \
 The installer requires an interactive terminal, so `-it` is required.
 
 The `--network host` option allows the installer container to reach the Kubernetes API server through the same network path as the provisioner machine.
-
-The bundle must be mounted at:
-
-```text
-/.bundle/bundle.tar.gz
-```
 
 The persistent storage directory must be mounted at:
 
@@ -175,7 +221,7 @@ The persistent storage directory must be mounted at:
 
 After the container starts, the installer runs a terminal UI workflow. The workflow is split into stages. Some stages only validate state, while others ask for operator input.
 
-Duration depends on bundle size, model size, network speed, storage speed, and cluster performance. The estimates below are typical planning ranges, not hard limits.
+Duration depends on model size, network speed, storage speed, and cluster performance. The estimates below are typical planning ranges, not hard limits.
 
 ### `Bootstrap` stage
 
@@ -186,7 +232,7 @@ During this stage, it:
 - verifies that the installer is running in an interactive terminal
 - checks that persistent storage is mounted
 - prepares the installer storage directories
-- validates the mounted bundle
+- validates the model and image manifests
 - loads the required runtime configuration
 
 | Prompt                                                                      | Options     | Recommended |
@@ -281,13 +327,13 @@ During this stage, the installer:
 - checks available installer storage
 - downloads selected models from Hugging Face
 - uploads model artifacts to Harbor
-- uploads bundled container images to Harbor
+- copies container images from their origin registries into Harbor
 - optionally deletes selected model repositories from Harbor
 
 
 | Prompt                                                   | Options / Input                                                                     |
 |---------------------------------------------------------|--------------------------------------------------------------------------------------|
-| `Select models to download from manifest`               | Models listed in the bundle manifest                                                 |
+| `Select models to download from manifest`               | Models listed in the model manifest                                                  |
 | `No model selected. Are you sure you want to continue?` | `No`, `Yes`                                                                          |
 | `Do you want to delete models from Harbor?`             | `No`, `Yes`                                                                          |
 | `Select models to delete from Harbor`                   | Existing model repositories in Harbor                                                |
@@ -315,11 +361,11 @@ During this stage, the installer:
 | Step                    | Action                                                       |
 |-------------------------|--------------------------------------------------------------|
 | Check model artifacts   | Existing models in Harbor are detected and skipped.          |
-| Select models           | Missing models from the bundle manifest are shown.           |
+| Select models           | Missing models from the model manifest are shown.            |
 | Check storage           | Installer storage is checked before downloading models.      |
 | Download models         | Selected models are downloaded into the installer cache.     |
 | Upload models           | Downloaded model artifacts are uploaded to Harbor.           |
-| Upload images           | Container images from the bundle are uploaded to Harbor.     |
+| Upload images           | Container images are copied from their origin registries into Harbor. |
 | Delete models           | Optional cleanup for intentionally removed model artifacts.  |
 
 Normal installations should select the required models, avoid deleting existing models, and continue only after storage checks pass.
@@ -335,8 +381,8 @@ The installer runs the stacks in this fixed order:
 3. App-Shaide
 4. Monitoring
 
-Most deployment values — node selectors, image references, chart and CRD paths — come
-from the bundle. The prompts below cover what cannot be known in advance.
+Most deployment values — node selectors, image references, chart and CRD paths — ship
+with the installer. The prompts below cover what cannot be known in advance.
 
 #### Platform and gateway
 
@@ -428,7 +474,7 @@ Re-runs use the existing installer deployment state and allow the installer to c
 
 Use re-runs to:
 
-- apply bundle updates
+- apply updates from a newer installer image
 - upload new image or model versions
 - continue after a failed or interrupted installation
 - update existing platform resources
@@ -443,10 +489,9 @@ Do not delete the persistent installer storage directory unless you intentionall
 | Harbor preload fails with SSH error   | Confirm SSH access works from the provisioner machine to the target cluster nodes.      |
 | Installer state unlock fails          | Confirm `PULUMI_CONFIG_PASSPHRASE` matches the passphrase used on the previous run.     |
 | Installer logs are needed             | Press `Ctrl+Y` in the TUI to save logs under `<STORAGE_PATH>/logs/`.                    |
-| `/.bundle/bundle.tar.gz does not exist` | The bundle was not mounted, or `BUNDLE_ARCHIVE_PATH` points elsewhere.                |
+| `model manifest ... is not readable` | The manifest was not placed under `<STORAGE_PATH>/manifests/`, or `MODEL_MANIFEST_PATH` points elsewhere. |
 | `/var/shaide-installer is not a mount point` | The storage bind mount is missing. The TUI may let you continue, but state and logs will not persist. |
 | `Hugging Face token was not set`      | `HF_TOKEN` is required during bootstrap.                                               |
-| `stat archive for image ...`          | A `source: archive` entry has no matching file under `images/`. Check the derived filename: `name` with `/` replaced by `-`, then `-<tag>.tar`. |
 | Image pull failures in the artifact stage | The provisioning machine cannot reach the registry named by an entry's `source`.   |
 | `models must be non-empty`            | `app-serving:models` has no enabled generative or embedder entries.                    |
 | `no gaie-*` / `no ms-* subdirectory found` | The model folder does not satisfy the values directory contract.                  |
@@ -467,7 +512,7 @@ Keep the following values and files after installation:
 
 - `PULUMI_CONFIG_PASSPHRASE`: Required to unlock installer-managed deployment state on future runs. Use the same value for every re-run, update, or model onboarding operation against this cluster.
 
-- `<STORAGE_PATH>/`: Contains deployment state, model cache, extracted bundle data, upload state, and installer logs. Preserve this directory across installer re-runs.
+- `<STORAGE_PATH>/`: Contains deployment state, model cache, upload state, and installer logs. Preserve this directory across installer re-runs.
 
 - `Harbor admin password`: Required for Harbor administration after installation.
 
