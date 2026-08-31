@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/axem-solutions/ai_platform/pkg/kube/connection"
+	"github.com/axem-solutions/ai_platform/pkg/kube/platform"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	pulumiconfig "github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
 )
@@ -14,14 +16,11 @@ const (
 )
 
 type Config struct {
-	Platform Platform
-	Storage  Storage
-	Mirror   Mirror
+	Platform   platform.Platform
+	Kubernetes connection.Connection
 
-	Kubernetes struct {
-		KubeconfigPath string
-		Context        string
-	}
+	Storage Storage
+	Mirror  Mirror
 
 	Harbor struct {
 		AdminPassword pulumi.StringOutput
@@ -62,10 +61,6 @@ func Load(ctx *pulumi.Context, projectDir string) (Config, error) {
 		return Config{}, fmt.Errorf("apply defaults: %w", err)
 	}
 
-	if err := cfg.Validate(); err != nil {
-		return Config{}, fmt.Errorf("validate config: %w", err)
-	}
-
 	return cfg, nil
 }
 
@@ -75,12 +70,11 @@ func loadKubernetes(root *pulumiconfig.Config, cfg *Config) {
 }
 
 func loadHarbor(harbor *pulumiconfig.Config, cfg *Config, projectDir string) error {
-	projects, err := loadProjects(harbor)
-	if err != nil {
-		return err
+	projects := []string{
+		"ai-models",
+		"shaide",
+		"services",
 	}
-
-	cfg.Platform = Platform(harbor.Require("platform"))
 
 	cfg.Harbor.AdminPassword = harbor.RequireSecret("adminPassword")
 	cfg.Harbor.Namespace = harbor.Get("namespace")
@@ -130,10 +124,6 @@ func loadMirror(harbor *pulumiconfig.Config, cfg *Config) {
 }
 
 func (cfg Config) Validate() error {
-	if err := cfg.Platform.Validate(); err != nil {
-		return err
-	}
-
 	if err := cfg.Storage.Validate(); err != nil {
 		return err
 	}
@@ -160,15 +150,6 @@ func applyDefaults(cfg *Config) error {
 
 	if cfg.Harbor.ChartPath == "" {
 		cfg.Harbor.ChartPath = DefaultChartPath
-	}
-
-	if cfg.Storage.Mode == "" {
-		mode, err := cfg.Platform.DefaultStorageMode()
-		if err != nil {
-			return err
-		}
-
-		cfg.Storage.Mode = mode
 	}
 
 	if cfg.Storage.Mode == StorageModeHostPath &&
@@ -207,4 +188,27 @@ func loadProjects(conf *pulumiconfig.Config) ([]string, error) {
 	}
 
 	return projects, nil
+}
+
+func (cfg *Config) ApplyPlatform(p platform.Platform) error {
+	if err := p.Validate(); err != nil {
+		return err
+	}
+
+	cfg.Platform = p
+
+	if cfg.Storage.Mode == "" {
+		mode, err := defaultStorageMode(p)
+		if err != nil {
+			return err
+		}
+
+		cfg.Storage.Mode = mode
+	}
+
+	if err := cfg.Validate(); err != nil {
+		return fmt.Errorf("validate Harbor config: %w", err)
+	}
+
+	return nil
 }

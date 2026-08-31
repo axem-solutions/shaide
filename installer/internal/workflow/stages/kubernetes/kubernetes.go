@@ -11,7 +11,7 @@ import (
 	"github.com/axem-solutions/ai_platform/installer/internal/kube"
 	"github.com/axem-solutions/ai_platform/installer/internal/oras/inspect"
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/core"
-	pkgkube "github.com/axem-solutions/ai_platform/pkg/kube"
+	"github.com/axem-solutions/ai_platform/pkg/kube/connection"
 )
 
 const cudaImageName = "llm-d/llm-d-cuda"
@@ -36,10 +36,10 @@ func Stage() core.Stage {
 				Name: "detect cluster platform",
 				Run:  detectClusterPlatform,
 			},
-			{
-				Name: "check Nvidia driver compatibility",
-				Run:  checkDriverCompatibility,
-			},
+			// {
+			// 	Name: "check Nvidia driver compatibility",
+			// 	Run:  checkDriverCompatibility,
+			// },
 		},
 	}
 }
@@ -142,9 +142,11 @@ func findImageByName(images []catalog.Image, name string) (catalog.Image, error)
 }
 
 func buildKubernetesClient(rt *core.Runtime) error {
-	client, cfg, err := pkgkube.NewK8sClient(
-		rt.Cluster.ConfigPath,
-		rt.Cluster.SelectedContext,
+	client, cfg, err := connection.NewK8sClient(
+		connection.Connection{
+			KubeconfigPath: rt.Cluster.ConfigPath,
+			Context:        rt.Cluster.SelectedContext,
+		},
 	)
 	if err != nil {
 		return err

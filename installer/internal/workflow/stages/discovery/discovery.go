@@ -44,8 +44,6 @@ func Stage() core.Stage {
 				When:    InstallOnPrem,
 				Recover: recoverPreloadHarbor,
 			},
-			// Cloud: the nodes can reach the public internet, so the Harbor
-			// chart pulls goharbor/* straight from Docker Hub. No
 			// side-loading, and nothing to SSH into.
 			//
 			// Both paths converge here: the Harbor project selects its storage
@@ -61,24 +59,24 @@ func Stage() core.Stage {
 				Run:  checkHarborTarget,
 				When: InstallMode,
 			},
-			{
-				Name:    "set up Harbor",
-				Run:     setupHarbor,
-				When:    InstallMode,
-				Recover: recoverScrapeHarbor,
-			},
+			// {
+			// 	Name:    "set up Harbor",
+			// 	Run:     setupHarbor,
+			// 	When:    InstallMode,
+			// 	Recover: recoverScrapeHarbor,
+			// },
 			// The Harbor stack only creates the harbor-pull-secret when
 			// harbor:robotPassword is set, and that password is not known until
 			// "set up Harbor" has prompted for it and created the robot account.
 			// The first deploy above therefore leaves the secret out, and this
 			// second pass adds it — the two-phase sequence the pull secret block
 			// in pkg/iac/harbor documents.
-			{
-				Name:    "redeploy Harbor with robot credentials",
-				Run:     stacks.DeployHarbor,
-				Recover: pulumi.RecoverHarbor,
-				When:    InstallCloud,
-			},
+			// {
+			// 	Name:    "redeploy Harbor with robot credentials",
+			// 	Run:     stacks.DeployHarbor,
+			// 	Recover: pulumi.RecoverHarbor,
+			// 	When:    InstallCloud,
+			// },
 			{
 				Name:    "check Harbor pull secret",
 				Run:     checkHarborPullSecret, // fills rt.Discovery.Auth

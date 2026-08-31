@@ -1,6 +1,7 @@
 package shaide
 
 import (
+	iackube "github.com/axem-solutions/ai_platform/pkg/iac/kubernetes"
 	"github.com/axem-solutions/ai_platform/pkg/iac/shaide/internal/cloudprovider"
 	"github.com/axem-solutions/ai_platform/pkg/iac/shaide/internal/components/controlpanel"
 	"github.com/axem-solutions/ai_platform/pkg/iac/shaide/internal/components/qdrant"
@@ -10,7 +11,6 @@ import (
 	appconfig "github.com/axem-solutions/ai_platform/pkg/iac/shaide/internal/config"
 	"github.com/axem-solutions/ai_platform/pkg/iac/shaide/internal/platform"
 	"github.com/axem-solutions/ai_platform/pkg/iac/shaide/internal/runtime"
-	pkg "github.com/axem-solutions/ai_platform/pkg/platform"
 	"github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
@@ -30,7 +30,7 @@ func DeployAppShaide(ctx *pulumi.Context) error {
 	providerOpt := pulumi.Provider(k8sProvider)
 
 	// --- Namespace ---
-	ns, err := pkg.CreateNamespace(ctx, appConfig.Namespace, providerOpt)
+	ns, err := iackube.CreateNamespace(ctx, appConfig.Namespace, providerOpt)
 	if err != nil {
 		return err
 	}
