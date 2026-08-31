@@ -24,6 +24,9 @@ installer/installer
 monitoring/monitoring
 pkg/pkg
 
+# MkDocs generated site
+site/
+
 # Go test and coverage output
 *.test
 *.out

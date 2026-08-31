@@ -76,7 +76,9 @@
 
     var fallbackText = article.innerText;
     var sourceUrl = markdownSourceUrl();
-    var pageUrl = "https://www.axem.dev/docs" + window.location.pathname;
+    // Derived from the live location so the link is correct wherever the site
+    // is hosted — GitHub Pages serves it from a /shaide/ subpath.
+    var pageUrl = window.location.origin + window.location.pathname;
     var prompt = "Read " + pageUrl + " so I can ask questions about it.";
 
     var titleRow = document.createElement("div");
