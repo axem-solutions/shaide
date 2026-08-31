@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"syscall"
 	"time"
+
+	"github.com/axem-solutions/ai_platform/pkg/kube/connection"
 )
 
 // Environment variables that trigger and configure the detached port-forward
@@ -153,6 +155,7 @@ func spawnDaemon(kubeconfigPath, contextName, namespace, service string, localPo
 func runDaemon() {
 	kubeconfigPath := os.Getenv(daemonKubeconfigEnv)
 	contextName := os.Getenv(daemonContextEnv)
+
 	namespace := os.Getenv(daemonNamespaceEnv)
 	service := os.Getenv(daemonServiceEnv)
 	localPort, err := strconv.Atoi(os.Getenv(daemonLocalPortEnv))
@@ -160,7 +163,10 @@ func runDaemon() {
 		return
 	}
 
-	clientset, restCfg, err := NewK8sClient(kubeconfigPath, contextName)
+	clientset, restCfg, err := connection.NewK8sClient(connection.Connection{
+		kubeconfigPath,
+		contextName,
+	})
 	if err != nil {
 		return
 	}

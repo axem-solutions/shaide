@@ -1,6 +1,10 @@
 package config
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/axem-solutions/ai_platform/pkg/kube/platform"
+)
 
 const DefaultHostPathBase = "/var/lib/hostpath/harbor"
 
@@ -22,17 +26,25 @@ type Storage struct {
 	NodeHostname string
 }
 
+func defaultStorageMode(p platform.Platform) (StorageMode, error) {
+	switch p {
+	case platform.PlatformOnPrem:
+		return StorageModeHostPath, nil
+
+	case platform.PlatformGCP, platform.PlatformAWS, platform.PlatformAzure:
+		return StorageModeDynamic, nil
+
+	default:
+		return "", fmt.Errorf("unsupported Harbor platform %q", p)
+	}
+}
+
 func (m StorageMode) Validate() error {
 	switch m {
 	case StorageModeDynamic, StorageModeHostPath:
 		return nil
 	default:
-		return fmt.Errorf(
-			"invalid harbor:storageMode %q: expected %q or %q",
-			m,
-			StorageModeDynamic,
-			StorageModeHostPath,
-		)
+		return fmt.Errorf("invalid harbor:storageMode %q: expected %q or %q", m, StorageModeDynamic, StorageModeHostPath)
 	}
 }
 

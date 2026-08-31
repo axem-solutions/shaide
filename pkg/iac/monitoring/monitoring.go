@@ -1,13 +1,13 @@
 package monitoring
 
 import (
+	iackube "github.com/axem-solutions/ai_platform/pkg/iac/kubernetes"
 	"github.com/axem-solutions/ai_platform/pkg/iac/monitoring/internal/components/alloy"
 	"github.com/axem-solutions/ai_platform/pkg/iac/monitoring/internal/components/dashboards"
 	"github.com/axem-solutions/ai_platform/pkg/iac/monitoring/internal/components/grafana"
 	"github.com/axem-solutions/ai_platform/pkg/iac/monitoring/internal/components/loki"
 	"github.com/axem-solutions/ai_platform/pkg/iac/monitoring/internal/components/prometheus"
 	appconfig "github.com/axem-solutions/ai_platform/pkg/iac/monitoring/internal/config"
-	"github.com/axem-solutions/ai_platform/pkg/platform"
 	"github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
@@ -31,7 +31,7 @@ func DeployMonitoring(ctx *pulumi.Context, projectDir string) error {
 	providerOpt := pulumi.Provider(k8sProvider)
 
 	// --- Namespace ---
-	ns, err := platform.CreateNamespace(ctx, cfg.Namespace, providerOpt)
+	ns, err := iackube.CreateNamespace(ctx, cfg.Namespace, providerOpt)
 	if err != nil {
 		return err
 	}
