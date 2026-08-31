@@ -1,0 +1,121 @@
+site_name: shaide documentation
+docs_dir: docs
+repo_url: https://github.com/axem-solutions/shaide
+repo_name: axem-solutions/shaide
+
+hooks:
+  - hooks.py
+
+theme:
+  name: material
+  logo: assets/shaide-logo-white.svg
+  palette:
+    scheme: slate
+    primary: black
+    accent: custom
+  features:
+    - navigation.top
+    - navigation.indexes
+    - content.code.copy
+    - search.suggest
+
+extra_css:
+  - stylesheets/extra.css
+
+extra_javascript:
+  - javascripts/header-buttons.js
+
+plugins:
+  - search
+  - glightbox:
+      touchNavigation: true
+      loop: false
+      effect: fade
+      slide_effect: slide
+      zoomable: true
+      draggable: true
+
+nav:
+  - Introduction:
+      - What is shaide?: introduction/what-is-shaide.md
+      - Concepts: introduction/concepts.md
+      - Architecture overview: introduction/architecture-overview.md
+      - Deployment targets: introduction/deployment-targets.md
+  - Cluster requirements:
+      - Overview: cluster-requirements/overview.md
+      - Compute: cluster-requirements/compute.md
+      - Storage: cluster-requirements/storage.md
+      - Networking: cluster-requirements/networking.md
+      - Verification: cluster-requirements/verification.md
+  - Getting started:
+      - Provisioner Prerequisites: getting-started/provisioning-prerequisites.md
+      - Quickstart: getting-started/quickstart.md
+      - Verify installation: getting-started/verify-installation.md
+  - Installation:
+      - Installer guide: installation/installer-guide.md
+      - Air-gapped: installation/air-gapped.md
+      - Troubleshooting: installation/troubleshooting.md
+  - Usage:
+      - OpenAI-compatible API: usage/openai-api.md
+      - Chat completions: usage/chat-completions.md
+      - Embeddings: usage/embeddings.md
+      - Agent integrations: usage/agent-integrations.md
+      - Model catalog: usage/model-catalog.md
+      - Authentication: usage/authentication.md
+  - Architecture:
+      - Overview: architecture/overview.md
+      - Traffic flow: architecture/traffic-flow.md
+      - Platform services: architecture/platform-services.md
+      - Gateway: architecture/gateway.md
+      - Model serving: architecture/model-serving.md
+      - Model deployment flow: architecture/model-deployment-flow.md
+      - Model storage: architecture/model-storage.md
+      - Application layer: architecture/application-layer.md
+      - MCP: architecture/mcp.md
+      - Observability: architecture/observability.md
+      - Installer: architecture/installer.md
+  - Cluster setup:
+      - Overview: cluster-setup/overview.md
+      - AWS EKS: cluster-setup/aws-eks.md
+      - GCP GKE: cluster-setup/gcp-gke.md
+      - Azure AKS: cluster-setup/azure-aks.md
+      - On-prem RKE2: cluster-setup/on-prem-rke2.md
+      - RKE2 CNI: cluster-setup/rke2-cni.md
+  - Operations:
+      - Model management: operations/model-management.md
+      - MCP servers: operations/mcp-servers.md
+      - Scaling: operations/scaling.md
+      - Observability: operations/observability.md
+      - Model registry: operations/model-registry.md
+      - Image mirroring: operations/image-mirroring.md
+      - Node registry trust: operations/node-registry-trust.md
+      - TLS certificates: operations/tls-certificates.md
+      - Storage: operations/storage.md
+      - Upgrades: operations/upgrades.md
+      - Backup and restore: operations/backup-restore.md
+      - Troubleshooting: operations/troubleshooting.md
+  - Contributing:
+      - Development setup: contributing/development-setup.md
+      - Local cluster: contributing/local-cluster.md
+      - Benchmarking: contributing/benchmarking.md
+      - Release process: contributing/release-process.md
+      - AI policy: contributing/ai-policy.md
+      - Local cluster reference:
+          - Environment variables: contributing/local-cluster/env.md
+          - Kubernetes version: contributing/local-cluster/k8s-version.md
+          - Networking: contributing/local-cluster/networking.md
+          - Port mapping: contributing/local-cluster/ports.md
+          - Volumes: contributing/local-cluster/volumes.md
+          - Storage: contributing/local-cluster/storage.md
+          - Load balancing: contributing/local-cluster/lb.md
+          - Resource monitoring: contributing/local-cluster/monitoring.md
+          - Remote GPU nodes: contributing/local-cluster/remote-gpu.md
+          - Troubleshooting: contributing/local-cluster/troubleshooting.md
+
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences

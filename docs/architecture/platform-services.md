@@ -63,7 +63,7 @@ pkg/kube/                         # Port-forward helpers setup.go uses to reach 
 
 The actual Harbor deployment logic (namespace, Helm release, pull secret) lives in the
 shared `pkg` module, at
-[`pkg/iac/harbor/harbor.go`](../../pkg/iac/harbor/harbor.go).
+[`pkg/iac/harbor/harbor.go`](https://github.com/axem-solutions/shaide/blob/main/pkg/iac/harbor/harbor.go).
 
 ---
 

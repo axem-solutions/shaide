@@ -321,7 +321,7 @@ and rejects `/v1/embeddings`. `main.go` picks one branch or the other based on
 
 ## Stack Configurations
 
-See [`deployments/Pulumi.TEMPLATE.yaml`](deployments/Pulumi.TEMPLATE.yaml) for the full,
+See [`app_serving/deployments/Pulumi.TEMPLATE.yaml`](https://github.com/axem-solutions/shaide/blob/main/app_serving/deployments/Pulumi.TEMPLATE.yaml) for the full,
 up-to-date config reference with every key documented. The two examples below illustrate
 the cloud vs. on-prem shape; copy the template to create a real stack (`cp
 deployments/Pulumi.TEMPLATE.yaml deployments/Pulumi.<stack-name>.yaml`).

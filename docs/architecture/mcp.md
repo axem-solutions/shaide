@@ -202,7 +202,7 @@ Kubernetes propagates the updated ConfigMap to running pods within ~60 seconds (
 
 ## Stack config
 
-See [`deployments/Pulumi.TEMPLATE.yaml`](deployments/Pulumi.TEMPLATE.yaml) for full documentation of every config key with examples.
+See [`app_mcp/deployments/Pulumi.TEMPLATE.yaml`](https://github.com/axem-solutions/shaide/blob/main/app_mcp/deployments/Pulumi.TEMPLATE.yaml) for full documentation of every config key with examples.
 
 Required keys: `namespace`, `shaideNamespace`, `shaideServiceAccountName`, `datasources`.
 
