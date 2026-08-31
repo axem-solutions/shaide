@@ -10,8 +10,6 @@ import (
 	"github.com/axem-solutions/ai_platform/pkg/iac/harbor/internal/setup"
 	"github.com/axem-solutions/ai_platform/pkg/iac/harbor/internal/storage"
 	iackube "github.com/axem-solutions/ai_platform/pkg/iac/kubernetes"
-	"github.com/axem-solutions/ai_platform/pkg/kube/connection"
-	"github.com/axem-solutions/ai_platform/pkg/kube/platform"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
@@ -19,20 +17,6 @@ func DeployHarbor(ctx *pulumi.Context, projectDir string) error {
 	cfg, err := config.Load(ctx, projectDir)
 	if err != nil {
 		return fmt.Errorf("load Harbor config: %w", err)
-	}
-
-	client, _, err := connection.NewK8sClient(cfg.Kubernetes)
-	if err != nil {
-		return fmt.Errorf("create Kubernetes client: %w", err)
-	}
-
-	platform, err := platform.Detect(ctx.Context(), client)
-	if err != nil {
-		return fmt.Errorf("detect Kubernetes platform: %w", err)
-	}
-
-	if err := cfg.ApplyPlatform(platform); err != nil {
-		return fmt.Errorf("configure Harbor for platform: %w", err)
 	}
 
 	provider, err := iackube.NewProvider(ctx, cfg.Kubernetes)

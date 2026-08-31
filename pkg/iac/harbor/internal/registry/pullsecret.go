@@ -12,7 +12,7 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
-const pullSecretName = "k8s-harbor-sa-secret"
+const pullSecretName = "harbor-pull-secret"
 
 func NewPullSecret(
 	ctx *pulumi.Context,

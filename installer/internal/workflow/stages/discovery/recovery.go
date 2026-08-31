@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 
-	harborerrors "github.com/axem-solutions/ai_platform/installer/internal/harbor/errors"
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/core"
 )
 
@@ -164,52 +163,6 @@ func recoverHarborSecret(rt *core.Runtime) (core.RecoveryAction, error) {
 	default:
 		return core.RecoveryFail, nil
 	}
-}
-
-func recoverScrapeHarbor(rt *core.Runtime, runErr error) (core.RecoveryAction, error) {
-	var harborErr *harborerrors.Error
-	if !errors.As(runErr, &harborErr) {
-		return core.RecoveryFail, nil
-	}
-
-	target := harborErr.Project
-	if harborErr.Repository != "" {
-		target = fmt.Sprintf("%s/%s", harborErr.Project, harborErr.Repository)
-	}
-
-	title := fmt.Sprintf(
-		"Could not %s from Harbor %q: %s",
-		harborErr.Op,
-		target,
-		harborerrors.UserMessage(harborErr.Kind),
-	)
-	options := []string{
-		"Retry",
-		"Continue without Harbor models",
-		"Fresh install",
-		"Abort",
-	}
-
-	selected, promptErr := rt.Reporter.Select(title, "Retry", options)
-	if promptErr != nil {
-		return core.RecoveryFail, promptErr
-	}
-
-	switch selected {
-	case "Retry":
-		return core.RecoveryRetryStep, nil
-
-	case "Continue without Harbor models":
-		return core.RecoveryContinue, nil
-
-	case "Fresh install":
-		rt.Discovery.Mode = core.Install
-		return core.RecoveryContinue, nil
-
-	default:
-		return core.RecoveryFail, nil
-	}
-
 }
 
 func recoverPreloadHarbor(rt *core.Runtime, runErr error) (core.RecoveryAction, error) {

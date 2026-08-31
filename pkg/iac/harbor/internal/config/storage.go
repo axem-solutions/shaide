@@ -15,6 +15,10 @@ const (
 	StorageModeHostPath StorageMode = "hostpath"
 )
 
+func (m StorageMode) String() string {
+	return string(m)
+}
+
 type Storage struct {
 	Mode StorageMode
 
