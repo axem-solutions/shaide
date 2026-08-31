@@ -11,7 +11,7 @@ prepared Kubernetes cluster: it uploads the required artifacts, configures model
 workloads, and stores installation state for future updates. It is designed for both
 on-prem and cloud targets.
 
-Use this page after completing the [Prerequisites](../getting-started/prerequisites.md).
+Use this page after completing the [Prerequisites](../getting-started/provisioning-prerequisites.md).
 
 > For the installer's runtime workflow, storage layout and source layout, see
 > [Installer](../architecture/installer.md) in the architecture chapter.

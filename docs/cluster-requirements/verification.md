@@ -64,5 +64,5 @@ installing shaide.
 
 ## Next
 
-Continue to [Prerequisites](../getting-started/prerequisites.md) for what the installer
+Continue to [Prerequisites](../getting-started/provisioning-prerequisites.md) for what the installer
 itself requires.

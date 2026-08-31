@@ -11,7 +11,7 @@ Guides for creating a cluster that satisfies the
 
 shaide does not create clusters - these guides are provided so you can build one that
 works. If you already have a conformant cluster, skip to
-[Getting started](../getting-started/prerequisites.md).
+[Getting started](../getting-started/provisioning-prerequisites.md).
 
 | Target | Guide |
 | --- | --- |

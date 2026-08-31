@@ -37,8 +37,13 @@ export HF_TOKEN="<token>"
 
 ## 3. Run the installer
 
+The installer deploys from a **bundle** — an archive holding the Pulumi deployments,
+manifests, charts and CRDs. Have one ready before you start; see
+[Installer bundle](../installation/bundle.md).
+
 ```bash
 STORAGE_PATH=<storage-path>
+BUNDLE_ARCHIVE=<path-to>/bundle.tar.gz
 
 mkdir -p "${STORAGE_PATH}"
 
@@ -47,13 +52,14 @@ docker run --rm -it \
   -e PULUMI_CONFIG_PASSPHRASE \
   -e HF_TOKEN \
   -v "$HOME/.kube/config:/.kube/config:ro" \
+  -v "${BUNDLE_ARCHIVE}:/.bundle/bundle.tar.gz:ro" \
   --mount "type=bind,src=${STORAGE_PATH},dst=/var/shaide-installer" \
   ghcr.io/axem-solutions/shaide/installer:dev
 ```
 
-The installer prompts for configuration and deploys the platform. 
-Installation can take some time, becase model weights must be uploaded to the internal Harbor 
-registry and pulled onto GPU nodes.
+The installer prompts for configuration and deploys the platform.
+Installation can take some time, because model weights must be uploaded to the internal
+Harbor registry and pulled onto GPU nodes.
 
 Full walkthrough: [Installer guide](../installation/installer-guide.md).
 

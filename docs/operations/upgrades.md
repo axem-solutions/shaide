@@ -12,17 +12,17 @@ Re-run the installer with a newer bundle, reusing the same state directory and
 passphrase:
 
 ```bash
-STORAGE_PATH=<storage-path>
-PULUMI_CONFIG_PASSPHRASE=<choose-a-passphrase>
+STORAGE_PATH=<same-path-as-the-original-install>
+BUNDLE_ARCHIVE=<path-to>/bundle-<new-version>.tar.gz
+PULUMI_CONFIG_PASSPHRASE=<same-passphrase-as-the-original-install>
 HF_TOKEN=<your-huggingface-token>
-
-mkdir -p "${STORAGE_PATH}"
 
 docker run --rm -it \
   --network host \
   -e PULUMI_CONFIG_PASSPHRASE \
   -e HF_TOKEN \
   -v "$HOME/.kube/config:/.kube/config:ro" \
+  -v "${BUNDLE_ARCHIVE}:/.bundle/bundle.tar.gz:ro" \
   --mount "type=bind,src=${STORAGE_PATH},dst=/var/shaide-installer" \
   ghcr.io/axem-solutions/shaide/installer:dev
 ```

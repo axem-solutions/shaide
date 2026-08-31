@@ -14,7 +14,7 @@
 
 - title: Getting started
   path: getting-started
-  pages: [prerequisites.md, quickstart.md, verify-installation.md]
+  pages: [provisioning-prerequisites.md, quickstart.md, verify-installation.md]
 
 
 - title: Installation
