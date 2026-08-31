@@ -44,42 +44,22 @@ func ensureResources(ctx *pulumi.Context, release *helmv3.Release, cfg config.Co
 	// EnsureDurableForward creates a detached port-forward because Harbor
 	// provider operations may continue after the Pulumi program has finished
 	// registering resources, including during destroy.
-	forwardedURL := pulumi.All(
-		release.ResourceNames,
-		cfg.Harbor.AdminPassword,
-	).ApplyT(func(args []interface{}) (string, error) {
-		return pkgkube.EnsureDurableForward(
-			cfg.Kubernetes.KubeconfigPath,
-			cfg.Kubernetes.Context,
-			cfg.Harbor.Namespace,
-			chart.ServiceName,
-		)
-	}).(pulumi.StringOutput)
-
-	harborAPI, err := harborprovider.NewProvider(
-		ctx,
-		"harbor-api",
-		&harborprovider.ProviderArgs{
-			Url:      forwardedURL.ToStringPtrOutput(),
-			Username: pulumi.String("admin"),
-			Password: cfg.Harbor.AdminPassword.ToStringPtrOutput(),
+	forwardedURL := pulumi.All(release.ResourceNames, cfg.Harbor.AdminPassword).ApplyT(
+		func(args []interface{}) (string, error) {
+			return pkgkube.EnsureDurableForward(cfg.Kubernetes.KubeconfigPath, cfg.Kubernetes.Context, cfg.Harbor.Namespace, chart.ServiceName)
 		},
-		pulumi.DependsOn([]pulumi.Resource{
-			release,
-		}),
-	)
+	).(pulumi.StringOutput)
+
+	harborAPI, err := harborprovider.NewProvider(ctx, "harbor-api", &harborprovider.ProviderArgs{
+		Url:      forwardedURL.ToStringPtrOutput(),
+		Username: pulumi.String("admin"),
+		Password: cfg.Harbor.AdminPassword.ToStringPtrOutput(),
+	}, pulumi.DependsOn([]pulumi.Resource{release}))
 	if err != nil {
-		return pulumi.StringOutput{}, fmt.Errorf(
-			"harbor provider: %w",
-			err,
-		)
+		return pulumi.StringOutput{}, fmt.Errorf("harbor provider: %w", err)
 	}
 
-	projects := make(
-		[]pulumi.Resource,
-		0,
-		len(cfg.Harbor.Projects),
-	)
+	projects := make([]pulumi.Resource, 0, len(cfg.Harbor.Projects))
 
 	for _, name := range cfg.Harbor.Projects {
 		project, err := harborprovider.NewProject(

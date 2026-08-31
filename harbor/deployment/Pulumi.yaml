@@ -25,13 +25,16 @@ template:
         Optional kubeconfig context. Empty uses the current context.
       default: ""
 
-    harbor:platform:
-      description: |
-        Cluster platform: gcp, aws, azure, or on-prem. Set by the installer
-        from the platform detected on the cluster's nodes; storage placement
-        is selected from it.
-      default: ""
+    # -------------------------------------------------------------------------
+    # Storage
+    # -------------------------------------------------------------------------
 
+
+    harbor:nodeHostname:
+      description: |
+        Kubernetes node where Harbor hostPath storage is located. Required when storageMode is hostpath.
+      default: ""
+      prompt: true
 
     # -------------------------------------------------------------------------
     # Secrets

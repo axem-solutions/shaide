@@ -48,6 +48,8 @@ func Load(ctx *pulumi.Context, projectDir string) (Config, error) {
 
 	var cfg Config
 
+	loadPlatform(conf, &cfg)
+
 	if err := loadHarbor(conf, &cfg, projectDir); err != nil {
 		return Config{}, err
 	}
@@ -61,7 +63,19 @@ func Load(ctx *pulumi.Context, projectDir string) (Config, error) {
 		return Config{}, fmt.Errorf("apply defaults: %w", err)
 	}
 
+	// Resolve after defaults are applied so the default chart path is anchored
+	// just like an explicitly configured relative path.
+	cfg.Harbor.ChartPath = resolveProjectPath(projectDir, cfg.Harbor.ChartPath)
+
+	if err := cfg.Validate(); err != nil {
+		return Config{}, fmt.Errorf("validate Harbor config: %w", err)
+	}
+
 	return cfg, nil
+}
+
+func loadPlatform(root *pulumiconfig.Config, cfg *Config) {
+	cfg.Platform = platform.Platform(root.Get("platform"))
 }
 
 func loadKubernetes(root *pulumiconfig.Config, cfg *Config) {
@@ -80,8 +94,6 @@ func loadHarbor(harbor *pulumiconfig.Config, cfg *Config, projectDir string) err
 	cfg.Harbor.Namespace = harbor.Get("namespace")
 	cfg.Harbor.ChartPath = harbor.Get("chartPath")
 	cfg.Harbor.Projects = projects
-
-	cfg.Harbor.ChartPath = resolveProjectPath(projectDir, cfg.Harbor.ChartPath)
 
 	loadRobot(harbor, cfg)
 
@@ -124,6 +136,10 @@ func loadMirror(harbor *pulumiconfig.Config, cfg *Config) {
 }
 
 func (cfg Config) Validate() error {
+	if err := cfg.Platform.Validate(); err != nil {
+		return err
+	}
+
 	if err := cfg.Storage.Validate(); err != nil {
 		return err
 	}
@@ -144,6 +160,15 @@ func (cfg Config) Validate() error {
 }
 
 func applyDefaults(cfg *Config) error {
+	if cfg.Storage.Mode == "" {
+		mode, err := defaultStorageMode(cfg.Platform)
+		if err != nil {
+			return err
+		}
+
+		cfg.Storage.Mode = mode
+	}
+
 	if cfg.Harbor.Namespace == "" {
 		cfg.Harbor.Namespace = DefaultNamespace
 	}
@@ -188,27 +213,4 @@ func loadProjects(conf *pulumiconfig.Config) ([]string, error) {
 	}
 
 	return projects, nil
-}
-
-func (cfg *Config) ApplyPlatform(p platform.Platform) error {
-	if err := p.Validate(); err != nil {
-		return err
-	}
-
-	cfg.Platform = p
-
-	if cfg.Storage.Mode == "" {
-		mode, err := defaultStorageMode(p)
-		if err != nil {
-			return err
-		}
-
-		cfg.Storage.Mode = mode
-	}
-
-	if err := cfg.Validate(); err != nil {
-		return fmt.Errorf("validate Harbor config: %w", err)
-	}
-
-	return nil
 }

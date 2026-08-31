@@ -121,7 +121,7 @@ func displayStack(target stackTarget) string {
 	case stackAppShaide:
 		return "App-Shaide"
 	case stackCloudHarbor:
-		return "Cloud-Harbor"
+		return "Harbor"
 	case stackMonitoring:
 		return "Monitoring"
 	default:

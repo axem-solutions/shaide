@@ -68,3 +68,20 @@ func TestDefaultChartPathIsRelative(t *testing.T) {
 		t.Errorf("defaultChartPath = %q, want a relative path", DefaultChartPath)
 	}
 }
+
+func TestDefaultChartPathIsAnchoredAfterDefaults(t *testing.T) {
+	cfg := Config{}
+	cfg.Storage.Mode = StorageModeHostPath
+
+	if err := applyDefaults(&cfg); err != nil {
+		t.Fatalf("applyDefaults() error = %v", err)
+	}
+
+	projectDir := "/var/shaide-installer/projects/harbor"
+	cfg.Harbor.ChartPath = resolveProjectPath(projectDir, cfg.Harbor.ChartPath)
+
+	want := filepath.Join(projectDir, "charts/harbor-1.18.2.tgz")
+	if cfg.Harbor.ChartPath != want {
+		t.Errorf("default chart path = %q, want %q", cfg.Harbor.ChartPath, want)
+	}
+}
