@@ -12,8 +12,6 @@
 # Images and model artifact served from internal Harbor; no internet access required on cluster nodes.
 #
 # Image upload, run on provisioner laptop before pulumi up:
-#   skopeo copy docker://ghcr.io/llm-d/llm-d-routing-sidecar:v0.8.0 \
-#     oci-archive:infra/on-prem/ansible/artifacts/images/llm-d-routing-sidecar-v0.8.0.tar
 #   skopeo copy docker://ghcr.io/llm-d/llm-d-cuda:v0.7.0 \
 #     oci-archive:infra/on-prem/ansible/artifacts/images/llm-d-cuda-v0.7.0.tar
 #   ansible-playbook -i inventory-dev harbor_upload.yml
@@ -44,12 +42,6 @@ modelArtifacts:
 
 routing:
   servicePort: 8000
-
-  proxy:
-    # Air-gapped on-prem: served from internal Harbor (mirror before pulumi up).
-    image: "harbor.harbor.svc.cluster.local/images-shaide/llm-d/llm-d-routing-sidecar:v0.8.0"
-    connector: nixlv2
-    secure: false
 
 decode:
   create: true

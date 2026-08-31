@@ -120,7 +120,6 @@ config:
     qdrant/qdrant:v1.17|images-shaide/qdrant/qdrant:v1.17
     docker.io/istio/pilot:1.28.1|images-shaide/pilot:1.28.1
     docker.io/istio/proxyv2:1.28.1|images-shaide/proxyv2:1.28.1
-    ghcr.io/llm-d/llm-d-routing-sidecar:v0.4.0-rc.1|images-shaide/llm-d/llm-d-routing-sidecar:v0.4.0-rc.1
     ghcr.io/llm-d/llm-d-cuda:v0.4.0|images-shaide/llm-d/llm-d-cuda:v0.4.0
     registry.k8s.io/gateway-api-inference-extension/epp:v1.2.0|images-shaide/gateway-api-inference-extension/epp:v1.2.0
     ghcr.io/oras-project/oras:v1.3.1|images-infra/oras-project/oras:v1.3.1
