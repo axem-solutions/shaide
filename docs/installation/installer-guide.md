@@ -203,7 +203,7 @@ docker run --rm -it \
   -v "${HOST_KUBECONFIG}:/.kube/config:ro" \
   -v "${MODEL_MANIFEST}:/manifests/models.yaml:ro" \
   --mount "type=bind,src=${STORAGE_PATH},dst=/var/shaide-installer" \
-  ghcr.io/axem-solutions/shaide/installer:dev
+  ghcr.io/axem-solutions/shaide/installer:oss
 ```
 
 The installer requires an interactive terminal, so `-it` is required.

@@ -17,7 +17,7 @@ For installing shaide, see the [Installer guide](../installation/installer-guide
 Run the Docker build from the repository root:
 
 ```bash
-docker build -f installer/build/Dockerfile -t onprem-installer:latest .
+docker build -f installer/build/Dockerfile -t installer:local .
 ```
 
 Rebuild the image after changing installer code, Pulumi projects, charts, CRDs, the
@@ -82,7 +82,7 @@ resource name, continue an update flow, or abort.
 
 | Path | Purpose |
 | --- | --- |
-| `installer/cmd/onprem-installer` | Installer entrypoint. |
+| `installer/cmd/installer` | Installer entrypoint. |
 | `installer/internal/config` | Runtime defaults, project preparation, manifest parsing, and storage paths. |
 | `installer/internal/workflow` | Stage runner, recovery behavior, and workflow state. |
 | `installer/internal/workflow/stages` | Bootstrap, Kubernetes, discovery, artifact, and Pulumi stages. |

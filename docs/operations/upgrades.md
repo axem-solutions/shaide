@@ -22,7 +22,7 @@ docker run --rm -it \
   -e HF_TOKEN \
   -v "$HOME/.kube/config:/.kube/config:ro" \
   --mount "type=bind,src=${STORAGE_PATH},dst=/var/shaide-installer" \
-  ghcr.io/axem-solutions/shaide/installer:dev
+  ghcr.io/axem-solutions/shaide/installer:oss
 ```
 
 The installer diffs desired against current state and applies only what changed.
