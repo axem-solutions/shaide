@@ -33,5 +33,5 @@ Budget additional capacity per model you intend to serve.
 
 ## Provisioning machine
 
-The host running the installer needs **100 GB** of free local disk for the bundle and
-extracted artifacts, in a directory preserved across installer runs and upgrades.
+The host running the installer needs **100 GB** of free local disk for the model cache
+and installer state, in a directory preserved across installer runs and upgrades.

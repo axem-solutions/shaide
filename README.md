@@ -83,7 +83,28 @@ installations with no internet access at all.
 shaide installs onto an **existing** Kubernetes cluster. Check it against the prerequisites:
 > **[→ Prerequisites](docs/cluster-requirements/overview.md)**
 
-### 2. Run the installer
+### 2. Choose your models
+
+The installer ships with everything it deploys. The one input you supply is a **model
+manifest** listing the models to publish into the internal registry.
+
+> [!IMPORTANT]
+> Supplying `models.yaml` by hand is a temporary step. Model selection moves into the
+> installer in the next release, and this file will no longer be required.
+
+```bash
+mkdir -p /tmp/manifests
+cat > /tmp/manifests/models.yaml <<'YAML'
+models:
+  - id: "openai/gpt-oss-20b"
+    revision: "6cee5e81ee83917806bbde320786a8fb61efebee"
+    harbor_project: "ai-models"
+    harbor_name: "gpt-oss-20b"
+    harbor_tag: "1.0.0"
+YAML
+```
+
+### 3. Run the installer
 
 Create a directory to hold the installer data and run the installer container:
 
@@ -98,14 +119,16 @@ docker run --rm -it \
   --network host \
   -e PULUMI_CONFIG_PASSPHRASE \
   -e HF_TOKEN \
+  -e MODEL_MANIFEST_PATH=/manifests/models.yaml \
   -v "$HOME/.kube/config:/.kube/config:ro" \
+  -v /tmp/manifests/models.yaml:/manifests/models.yaml:ro \
   --mount "type=bind,src=${STORAGE_PATH},dst=/var/shaide-installer" \
   ghcr.io/axem-solutions/shaide/installer:dev
 ```
 
-> **[→ Installer guide](installer/README.md)**
+> **[→ Installer guide](docs/installation/installer-guide.md)**
 
-### 3. Verify
+### 4. Verify
 
 Once the installer completes, check that the platform is serving:
 
@@ -150,7 +173,7 @@ shaide is built in layers, each deployed as an independent Pulumi program:
 Deployment proceeds in a fixed order:
 
 ```
-1. Internal OCI registry       infra/cloud-harbor
+1. Internal OCI registry       harbor
 2. Gateway + Istio             infra/gateway-provider
 3. Model serving               app_serving
 4. Application layer           app_shaide
@@ -173,7 +196,8 @@ shaide is developed across three open-source repositories:
 ├── app_serving/      Per-model LLM serving stacks (vLLM + llm-d)
 ├── app_shaide/       Application layer: shaide server and control panel
 ├── app_mcp/          MCP server datasources deployed into the shared gateway
-├── infra/            In-cluster platform services: OCI registry and gateway
+├── harbor/           Internal OCI registry for images and model weights
+├── infra/            In-cluster platform services: the shared gateway
 ├── installer/        Containerized interactive installer
 ├── monitoring/       Observability stack
 └── pkg/              Shared Go module with the Pulumi deployment logic

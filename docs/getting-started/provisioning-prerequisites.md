@@ -33,10 +33,10 @@ This must be preserved across re-runs and upgrades - it holds installer state.
 
 | File | Purpose |
 | --- | --- |
-| `bundle.tar.gz` | Installation payload |
+| `models.yaml` | Models to publish into the internal registry |
 | Installer image | Pulled from `ghcr.io` |
 
-See [Installer bundle](../installation/bundle.md).
+See [Model manifest](../installation/installer-guide.md#model-manifest).
 
 ## Credentials
 

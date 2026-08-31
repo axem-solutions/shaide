@@ -15,7 +15,7 @@ weight: 20
 | **GAIE / EPP** | Gateway API Inference Extension and its Endpoint Picker, which selects a replica per request |
 | **Gateway** | The Istio + Gateway API ingress layer fronting model serving |
 | **Internal registry** | The in-cluster OCI registry holding images and model weights |
-| **Bundle** | The archive the installer deploys from |
+
 | **Stack** | A Pulumi deployment unit with its own configuration |
 | **Nodegroup** | A labelled set of nodes targeted by workload placement |
 | **KV cache** | Per-request attention state; a primary driver of VRAM use |
@@ -26,7 +26,7 @@ weight: 20
 A **model** is deployed as a **ModelService**, which creates pods running **vLLM** under
 **llm-d**. Replicas of that model form an **InferencePool**. Requests arrive at the
 **Gateway**, and **GAIE** picks a replica. Images and weights come from the **internal
-registry**, populated by the installer from the **bundle**.
+registry**, populated by the installer from the origin registries and Hugging Face.
 
 Embedding models bypass the Gateway and GAIE - the inference gateway understands
 chat-completion traffic only.

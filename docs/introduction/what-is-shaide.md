@@ -28,7 +28,7 @@ internet access.
 | Distributed inference | vLLM engine, llm-d multi-instance orchestration |
 | Multi-model serving | Generative and embedding models concurrently |
 | OpenAI-compatible API | Existing SDKs and agents work unchanged |
-| One-command install | Interactive installer driven by a bundled deployment definition |
+| One-command install | Self-contained interactive installer |
 | Air-gap support | Internal registry mirrors all images and weights |
 | Infrastructure as code | Every layer a Pulumi program |
 

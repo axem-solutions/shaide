@@ -17,7 +17,8 @@ weight: 40
 | Object storage | Object storage PVC | Uploaded artifacts |
 | Registry contents | Registry PVC | Images and model weights |
 
-Registry contents are reproducible from the bundle, so they are the lowest priority.
+Registry contents are reproducible from their origin registries and Hugging Face, so
+they are the lowest priority.
 
 ## Volumes
 

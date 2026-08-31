@@ -8,12 +8,11 @@ weight: 30
 
 ## Platform
 
-Re-run the installer with a newer bundle, reusing the same state directory and
+Re-run the installer with a newer image, reusing the same state directory and
 passphrase:
 
 ```bash
 STORAGE_PATH=<same-path-as-the-original-install>
-BUNDLE_ARCHIVE=<path-to>/bundle-<new-version>.tar.gz
 PULUMI_CONFIG_PASSPHRASE=<same-passphrase-as-the-original-install>
 HF_TOKEN=<your-huggingface-token>
 
@@ -22,7 +21,6 @@ docker run --rm -it \
   -e PULUMI_CONFIG_PASSPHRASE \
   -e HF_TOKEN \
   -v "$HOME/.kube/config:/.kube/config:ro" \
-  -v "${BUNDLE_ARCHIVE}:/.bundle/bundle.tar.gz:ro" \
   --mount "type=bind,src=${STORAGE_PATH},dst=/var/shaide-installer" \
   ghcr.io/axem-solutions/shaide/installer:dev
 ```
@@ -45,5 +43,5 @@ Keep every node on the same version - shaide does not support mixed-version clus
 
 ## Rollback
 
-Re-run the installer with the previous bundle. Rollback is not always clean: schema or
+Re-run the previous installer image. Rollback is not always clean: schema or
 storage-format changes may not reverse. Restore from backup when in doubt.
