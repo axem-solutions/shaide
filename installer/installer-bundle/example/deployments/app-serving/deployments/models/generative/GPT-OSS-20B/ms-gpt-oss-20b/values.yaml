@@ -19,11 +19,6 @@ modelArtifacts:
 routing:
   servicePort: 8000
 
-  proxy:
-    image: ghcr.io/llm-d/llm-d-routing-sidecar:v0.8.0
-    connector: nixlv2
-    secure: false
-
 decode:
   create: true
   replicas: 1

@@ -4,8 +4,6 @@
 # Images served from internal Harbor; no internet access required on cluster nodes.
 #
 # Image upload (run on provisioner laptop before pulumi up):
-#   skopeo copy docker://ghcr.io/llm-d/llm-d-routing-sidecar:v0.4.0-rc.1 \
-#     oci-archive:infra/on-prem/ansible/artifacts/images/llm-d-routing-sidecar-v0.4.0-rc.1.tar
 #   skopeo copy docker://ghcr.io/llm-d/llm-d-cuda:v0.4.0 \
 #     oci-archive:infra/on-prem/ansible/artifacts/images/llm-d-cuda-v0.4.0.tar
 #   ansible-playbook -i inventory-dev harbor_upload.yml
@@ -21,12 +19,6 @@ modelArtifacts:
 
 routing:
   servicePort: 8000
-
-  proxy:
-    # source: ghcr.io/llm-d/llm-d-routing-sidecar:v0.4.0-rc.1
-    image: harbor.harbor.svc.cluster.local/images-shaide/llm-d/llm-d-routing-sidecar:v0.4.0-rc.1
-    connector: nixlv2
-    secure: false
 
 decode:
   create: true

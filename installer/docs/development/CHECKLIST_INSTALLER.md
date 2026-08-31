@@ -81,7 +81,6 @@ Run all checks below on the provisioner before starting the installer.
    | `busybox-*.tar` | Shaide app | Utility image |
    | `istio-pilot-*.tar` | Istio | Istio control plane |
    | `istio-proxyv2-*.tar` | Istio | Istio sidecar proxy |
-   | `llm-d-routing-sidecar-*.tar` | llm-d | LLM-D routing sidecar |
    | `llm-d-inference-sim-*.tar` | llm-d | LLM-D inference simulator |
    | `epp-*.tar` | llm-d | Gateway API inference EPP |
    | `llm-d-inference-scheduler-*.tar` | llm-d | LLM-D inference scheduler |

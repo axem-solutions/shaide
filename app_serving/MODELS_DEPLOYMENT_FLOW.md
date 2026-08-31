@@ -271,11 +271,9 @@ Deploys per-model decode and prefill pods. Each pod contains two containers:
   - `modelCommand: custom` — user provides `command` and `args` directly. The chart
     still mounts the model PVC and injects `HF_HUB_CACHE` (from `pvc+hf://` URI), but
     does not generate any inference args. The inference server **must listen on port 8200**
-    for decode pods (port 8000 is taken by the routing-proxy init container).
+    for decode pods.
   - `modelCommand: imageDefault` — uses the container image's default entrypoint with
     chart-generated args.
-- **Routing sidecar** (`llm-d-routing-sidecar`) — init container; handles NIXL-based
-  KV-cache transfer between prefill and decode nodes.
 
 **Inference server for CPU-only embedding models (on-prem)**:
 For CPU-only verification of embedding models, `michaelf34/infinity` can be used instead
@@ -403,9 +401,6 @@ The full list of images and their skopeo download commands is maintained in
 # Download image archives (see images.yml for full list and download commands)
 skopeo copy docker://ghcr.io/llm-d/llm-d-inference-sim:v0.7.1 \
   oci-archive:infra/on-prem/ansible/artifacts/images/llm-d-inference-sim-v0.7.1.tar
-
-skopeo copy docker://ghcr.io/llm-d/llm-d-routing-sidecar:v0.4.0-rc.1 \
-  oci-archive:infra/on-prem/ansible/artifacts/images/llm-d-routing-sidecar-v0.4.0-rc.1.tar
 
 skopeo copy docker://registry.k8s.io/gateway-api-inference-extension/epp:v1.2.0 \
   oci-archive:infra/on-prem/ansible/artifacts/images/epp-v1.2.0.tar
