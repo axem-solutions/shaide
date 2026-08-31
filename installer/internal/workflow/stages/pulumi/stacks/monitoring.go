@@ -50,7 +50,7 @@ func DeployMonitoring(rt *core.Runtime) error {
 	// directory. Pass the project root explicitly so chart paths are resolved
 	// from the copied monitoring project, not the launch directory.
 	_, err = deployer.Deploy(context.Background(), func(ctx *pulumi.Context) error {
-		return monitoring.DeployMonitoring(ctx, projectDir)
+		return monitoring.DeployMonitoring(ctx, workDir)
 	})
 	if err != nil {
 		return err

@@ -24,9 +24,16 @@ type harborConfig struct {
 	KubeconfigPath string
 	KubeContext    string
 
-	AdminPassword   pulumi.StringOutput
-	Namespace       string
-	ChartPath       string
+	AdminPassword pulumi.StringOutput
+	Namespace     string
+	ChartPath     string
+
+	// Platform is the cluster type the installer detected from the nodes'
+	// spec.providerID ("gcp", "aws", "azure", "on-prem"). Storage placement
+	// differs by platform: on-prem pins Harbor to NodeHostname and uses
+	// hostPath, while cloud clusters rely on a dynamic StorageClass.
+	Platform string
+
 	NodeHostname    string
 	StaticClusterIP string
 	Projects        []string
@@ -79,6 +86,7 @@ func loadHarborConfig(ctx *pulumi.Context, dir string) harborConfig {
 		AdminPassword:   conf.RequireSecret("adminPassword"),
 		Namespace:       namespace,
 		ChartPath:       resolveChartPath(dir, chartPath),
+		Platform:        conf.Get("platform"),
 		NodeHostname:    conf.Get("nodeHostname"),
 		StaticClusterIP: conf.Get("staticClusterIP"),
 		Projects:        parseProjectNames(conf.Get("projects")),

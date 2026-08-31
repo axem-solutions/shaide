@@ -1,0 +1,59 @@
+name: harbor
+runtime: go
+main: ..
+
+description: Harbor OCI registry for Kubernetes — supports on-prem, GCP, AWS, and Azure deployments
+
+template:
+  description: |
+    Deploys Harbor as the platform OCI registry on Kubernetes.
+    Storage behavior is selected from the configured platform.
+
+  config:
+    # -------------------------------------------------------------------------
+    # Kubernetes
+    # Connection settings for the target Kubernetes cluster.
+    # -------------------------------------------------------------------------
+
+    harbor:kubeconfig:
+      description: |
+        Path to the kubeconfig used to connect to the target cluster.
+      default: /.kube/config
+
+    harbor:context:
+      description: |
+        Optional kubeconfig context. Empty uses the current context.
+      default: ""
+
+    harbor:platform:
+      description: |
+        Cluster platform: gcp, aws, azure, or on-prem. Set by the installer
+        from the platform detected on the cluster's nodes; storage placement
+        is selected from it.
+      default: ""
+
+
+    # -------------------------------------------------------------------------
+    # Secrets
+    # Credentials required to administer Harbor and authenticate workloads.
+    # -------------------------------------------------------------------------
+
+    harbor:adminPassword:
+      description: |
+        Harbor administrator password.
+      secret: true
+
+    harbor:robotPassword:
+      description: |
+        Password for the Harbor robot account used by workloads.
+      secret: true
+
+    # -------------------------------------------------------------------------
+    # Storage
+    # -------------------------------------------------------------------------
+
+    harbor:nodeHostname:
+      description: |
+        Kubernetes node where Harbor hostPath storage is located. Required when storageMode is hostpath.
+      default: ""
+      prompt: true

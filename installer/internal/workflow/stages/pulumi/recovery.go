@@ -108,7 +108,7 @@ const (
 	stackAppServing      stackTarget = "app-serving"
 	stackGatewayProvider stackTarget = "gateway-provider"
 	stackAppShaide       stackTarget = "app-shaide"
-	stackCloudHarbor     stackTarget = "cloud-harbor"
+	stackCloudHarbor     stackTarget = "harbor"
 	stackMonitoring      stackTarget = "monitoring"
 )
 

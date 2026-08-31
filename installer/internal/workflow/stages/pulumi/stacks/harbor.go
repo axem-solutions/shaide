@@ -2,9 +2,11 @@ package stacks
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 
 	"github.com/axem-solutions/ai_platform/installer/internal/iac"
+	"github.com/axem-solutions/ai_platform/installer/internal/iac/decoder"
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/core"
 	"github.com/axem-solutions/ai_platform/pkg/iac/harbor"
 	"github.com/pulumi/pulumi/sdk/v3/go/auto"
@@ -12,61 +14,53 @@ import (
 )
 
 func DeployHarbor(rt *core.Runtime) error {
-	workDir := filepath.Join(rt.Bootstrap.Config.Paths.ProjectsDir, projectCloudHarbor)
+	workDir := filepath.Join(rt.Bootstrap.Config.Paths.ProjectsDir, projectHarbor)
+	stackFile := filepath.Join(workDir, "Pulumi.yaml")
 
-	deployConfig := auto.ConfigMap{
-		pulumiConfigKey(projectCloudHarbor, "kubeconfig"): {
-			Value: rt.Cluster.ConfigPath,
-		},
-		pulumiConfigKey(projectCloudHarbor, "context"): {
-			Value: rt.Cluster.SelectedContext,
-		},
+	_, keys, err := decoder.LoadTemplateFile(stackFile)
+	if err != nil {
+		return err
 	}
 
-	adminPassword := rt.Discovery.AdminPassword
+	stackConfig := auto.ConfigMap{}
 
-	if adminPassword == "" {
-		for {
-			value, err := rt.Reporter.Input("Harbor admin password", "", "defaultPassword")
-			if err != nil {
-				return err
-			}
-			if value != "" {
-				adminPassword = value
-				break
-			}
+	for _, key := range keys {
+		configValue, err := resolveConfigKey(rt.Reporter, key.Key)
+		if err != nil {
+			return err
 		}
+		stackConfig[key.Name] = configValue
 	}
 
-	// adminPassword and robotPassword belong to the "harbor" config namespace,
-	// not the project one: the Harbor program reads them with
-	// config.New(ctx, "harbor"), the same namespace Pulumi.harbor.yaml uses for
-	// chartPath and namespace. kubeconfig and context above are read with
-	// config.New(ctx, ""), which resolves to the project, so those stay as-is.
-	rt.Discovery.AdminPassword = adminPassword
-	deployConfig[pulumiConfigKey(configNamespaceHarbor, "adminPassword")] = auto.ConfigValue{
-		Value:  adminPassword,
-		Secret: true,
+	stackConfig["harbor:platform"] = auto.ConfigValue{
+		Value: rt.Bootstrap.CloudPlatform,
+	}
+	stackConfig["harbor:kubeconfig"] = auto.ConfigValue{
+		Value: rt.Cluster.ConfigPath,
+	}
+	stackConfig["harbor:context"] = auto.ConfigValue{
+		Value: rt.Cluster.SelectedContext,
 	}
 
-	if rt.Discovery.RobotPassword != "" {
-		deployConfig[pulumiConfigKey(configNamespaceHarbor, "robotPassword")] = auto.ConfigValue{
-			Value:  rt.Discovery.RobotPassword,
-			Secret: true,
-		}
+	adminPassword, ok := stackConfig["harbor:adminPassword"]
+	if !ok {
+		return fmt.Errorf("harbor admin password is missing")
 	}
+
+	rt.Discovery.AdminPassword = adminPassword.Value
 
 	// &Deployer should be in a stage struct
 	// Change stage struct and stage specific structs so those
 	deployer, err := iac.NewDeployer(iac.DeployerOptions{
-		ProjectName: projectCloudHarbor,
-		StackName:   stackCloudHarbor,
+		ProjectName: projectHarbor,
+		StackName:   projectHarbor,
 		WorkDir:     workDir,
 		StateDir:    rt.Bootstrap.Config.Paths.PulumiState,
 		Logger:      rt.Logger.Writer(),
-		Config:      deployConfig,
+		Config:      stackConfig,
 		Destroy:     false,
 		Passphrase:  rt.Bootstrap.Config.Pulumi.ConfigPassphrase,
+		SkipRefresh: true,
 	})
 	if err != nil {
 		return err
