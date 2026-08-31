@@ -38,14 +38,17 @@ export HF_TOKEN="<token>"
 ## 3. Run the installer
 
 ```bash
+STORAGE_PATH=<storage-path>
+
+mkdir -p "${STORAGE_PATH}"
+
 docker run --rm -it \
   --network host \
   -e PULUMI_CONFIG_PASSPHRASE \
   -e HF_TOKEN \
   -v "$HOME/.kube/config:/.kube/config:ro" \
-  -v "$PWD/bundle.tar.gz:/.bundle/bundle.tar.gz:ro" \
-  --mount "type=bind,src=$PWD/shaide-installer-data,dst=/var/shaide-installer" \
-  ghcr.io/axem-solutions/shaide/installer:latest
+  --mount "type=bind,src=${STORAGE_PATH},dst=/var/shaide-installer" \
+  ghcr.io/axem-solutions/shaide/installer:dev
 ```
 
 The installer prompts for configuration and deploys the platform. 

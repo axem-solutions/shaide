@@ -12,13 +12,19 @@ Re-run the installer with a newer bundle, reusing the same state directory and
 passphrase:
 
 ```bash
+STORAGE_PATH=<storage-path>
+PULUMI_CONFIG_PASSPHRASE=<choose-a-passphrase>
+HF_TOKEN=<your-huggingface-token>
+
+mkdir -p "${STORAGE_PATH}"
+
 docker run --rm -it \
   --network host \
   -e PULUMI_CONFIG_PASSPHRASE \
+  -e HF_TOKEN \
   -v "$HOME/.kube/config:/.kube/config:ro" \
-  -v "$PWD/bundle-<new-version>.tar.gz:/.bundle/bundle.tar.gz:ro" \
-  --mount "type=bind,src=$PWD/shaide-installer-data,dst=/var/shaide-installer" \
-  ghcr.io/axem-solutions/shaide/installer:latest
+  --mount "type=bind,src=${STORAGE_PATH},dst=/var/shaide-installer" \
+  ghcr.io/axem-solutions/shaide/installer:dev
 ```
 
 The installer diffs desired against current state and applies only what changed.

@@ -19,7 +19,7 @@
 
 - title: Installation
   path: installation
-  pages: [installer-guide.md, walkthrough.md, bundle.md, air-gapped.md, troubleshooting.md]
+  pages: [installer-guide.md, bundle.md, air-gapped.md, troubleshooting.md]
 
 
 - title: Usage
@@ -44,10 +44,6 @@
           node-registry-trust.md, tls-certificates.md, storage.md, upgrades.md,
           backup-restore.md, troubleshooting.md]
 
-
-- title: Reference
-  path: reference
-  pages: [configuration.md, pulumi-stacks.md, ports.md, cli.md, glossary.md]
 
 
 - title: Contributing

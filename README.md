@@ -81,8 +81,7 @@ installations with no internet access at all.
 ### 1. Prepare a cluster
 
 shaide installs onto an **existing** Kubernetes cluster. Check it against the prerequisites:
-
-> **[→ Prerequisites](installer/docs/customer/prerequisites.md)**
+> **[→ Prerequisites](docs/cluster-requirements/overview.md)**
 
 ### 2. Run the installer
 

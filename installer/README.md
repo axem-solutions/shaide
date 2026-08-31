@@ -635,9 +635,9 @@ mkdir -p "${STORAGE_PATH}"
 docker run --rm -it \
   --network host \
   -e CLOUDSDK_CONFIG="/root/.config/gcloud" \
-  -e HF_TOKEN="${HF_TOKEN}" \
-  -e GHCR_TOKEN="${GHCR_TOKEN}" \
-  -e PRIVATE_KEY_PATH="${PRIVATE_KEY_PATH}" \
+  -e HF_TOKEN \
+  -e GHCR_TOKEN \
+  -e PRIVATE_KEY_PATH \
   -v "${HOST_KUBECONFIG}:/.kube/config:ro" \
   -v "${HOST_GCLOUD_CONFIG}:/root/.config/gcloud" \
   -v "${HOST_SSH_DIR}:/root/.ssh:ro" \

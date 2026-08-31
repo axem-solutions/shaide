@@ -12,6 +12,9 @@ below can run it, regardless of distribution or provider.
 This chapter lists requirements only. For building a cluster, see
 [Cluster setup](../cluster-setup/overview.md).
 
+For the provsioning machine that runs the installer, see 
+[Provisioning prerequisites](../getting-started/provisioning-prerequisites.md).
+
 ## Summary
 
 | Area | Requirement |

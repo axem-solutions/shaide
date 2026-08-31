@@ -21,7 +21,6 @@ you own - including fully air-gapped ones.
 | [Architecture](architecture/overview.md) | How the platform is built |
 | [Cluster setup](cluster-setup/overview.md) | Creating a cluster on EKS, GKE, AKS or RKE2 |
 | [Operations](operations/model-management.md) | Day-two operations |
-| [Reference](reference/configuration.md) | Configuration, ports, glossary |
 | [Contributing](contributing/development-setup.md) | Development and contribution |
 
 ## Common paths
