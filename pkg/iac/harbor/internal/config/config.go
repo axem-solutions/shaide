@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/axem-solutions/ai_platform/pkg/kube/connection"
+	kubernetes "github.com/axem-solutions/ai_platform/pkg/kube/connection"
 	"github.com/axem-solutions/ai_platform/pkg/kube/platform"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	pulumiconfig "github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
@@ -17,7 +17,7 @@ const (
 
 type Config struct {
 	Platform   platform.Platform
-	Kubernetes connection.Connection
+	Kubernetes kubernetes.Connection
 
 	Storage Storage
 	Mirror  Mirror

@@ -12,10 +12,10 @@ import (
 type Platform string
 
 const (
-	PlatformGCP    Platform = "gcp"
-	PlatformAWS    Platform = "aws"
-	PlatformAzure  Platform = "azure"
-	PlatformOnPrem Platform = "on-prem"
+	GCP    Platform = "gcp"
+	AWS    Platform = "aws"
+	Azure  Platform = "azure"
+	OnPrem Platform = "on-prem"
 )
 
 // providerIDPrefixes maps the scheme of a Node's spec.providerID to a platform.
@@ -25,23 +25,23 @@ var providerIDPrefixes = []struct {
 	prefix   string
 	platform Platform
 }{
-	{"azure://", PlatformAzure},
-	{"gce://", PlatformGCP},
-	{"aws://", PlatformAWS},
+	{"azure://", Azure},
+	{"gce://", GCP},
+	{"aws://", AWS},
 }
 
 func (p Platform) Validate() error {
 	switch p {
-	case PlatformOnPrem, PlatformGCP, PlatformAWS, PlatformAzure:
+	case OnPrem, GCP, AWS, Azure:
 		return nil
 	default:
 		return fmt.Errorf(
 			"invalid platform %q: expected %q, %q, %q, or %q",
 			p,
-			PlatformOnPrem,
-			PlatformGCP,
-			PlatformAWS,
-			PlatformAzure,
+			OnPrem,
+			GCP,
+			AWS,
+			Azure,
 		)
 	}
 }
@@ -49,7 +49,7 @@ func (p Platform) Validate() error {
 // IsCloud reports whether the platform is a managed cloud provider.
 func (p Platform) IsCloud() bool {
 	switch p {
-	case PlatformGCP, PlatformAWS, PlatformAzure:
+	case GCP, AWS, Azure:
 		return true
 	default:
 		return false
@@ -92,5 +92,5 @@ func platformForProviderID(providerID string) Platform {
 		}
 	}
 
-	return PlatformOnPrem
+	return OnPrem
 }
