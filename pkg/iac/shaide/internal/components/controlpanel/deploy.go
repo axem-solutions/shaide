@@ -61,6 +61,15 @@ func Deploy(ctx *pulumi.Context, deps *runtime.DeploymentContext, cfg appconfig.
 									Name:  pulumi.String("SHAIDE_SERVER_PORT"),
 									Value: pulumi.String("80"),
 								},
+								&corev1.EnvVarArgs{
+									Name: pulumi.String("SESSION_SECRET"),
+									ValueFrom: &corev1.EnvVarSourceArgs{
+										SecretKeyRef: &corev1.SecretKeySelectorArgs{
+											Name: pulumi.String("shaide-secrets"),
+											Key:  pulumi.String("SESSION_SECRET"),
+										},
+									},
+								},
 							},
 							Ports: corev1.ContainerPortArray{
 								&corev1.ContainerPortArgs{
