@@ -100,6 +100,7 @@ func DeployAppServing(rt *core.Runtime) error {
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 

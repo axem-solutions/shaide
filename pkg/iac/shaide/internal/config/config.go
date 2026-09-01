@@ -79,22 +79,23 @@ type RustFSEnv struct {
 
 // Config is the typed view of Pulumi stack config used by this stack.
 type Config struct {
-	Namespace                 string
-	NodeSelectorKey           string // label key used for node selection (default: nodegroup)
-	NodeSelector              string // global fallback — applies to all components when no per-component key is set
-	NodeSelectorShaide        string // optional — overrides NodeSelector for shaide-server
-	NodeSelectorControlPanel  string // optional — overrides NodeSelector for control-panel
-	NodeSelectorWebApp        string // optional — overrides NodeSelector for webapp
-	NodeSelectorRustfs        string // optional — overrides NodeSelector for rustfs
-	NodeSelectorQdrant        string // optional — overrides NodeSelector for qdrant
-	CloudProvider             string // informational only — identifies the target platform (e.g. "gcp", "aws", "on-prem")
-	StorageClassName          string // optional — if empty, PVCs use the cluster default StorageClass
-	PVNodeHostname            string // optional — node hostname for hostPath PV nodeAffinity (on-prem only)
-	HarborHostname            string // optional — internal Harbor registry hostname (on-prem only, e.g. harbor.internal.lan)
-	Kubeconfig                string // optional — path to kubeconfig file; empty = use KUBECONFIG env / ~/.kube/config
-	ShaidePVSize              string // optional — shaide-server PV/PVC size (default: 5Gi)
-	RustfsPVSize              string // optional — rustfs PV/PVC size (default: 5Gi)
-	QdrantPVSize              string // optional — qdrant PV/PVC size (default: 5Gi)
+	Namespace                string
+	NodeSelectorKey          string // label key used for node selection (default: nodegroup)
+	NodeSelector             string // global fallback — applies to all components when no per-component key is set
+	NodeSelectorShaide       string // optional — overrides NodeSelector for shaide-server
+	NodeSelectorControlPanel string // optional — overrides NodeSelector for control-panel
+	NodeSelectorWebApp       string // optional — overrides NodeSelector for webapp
+	NodeSelectorRustfs       string // optional — overrides NodeSelector for rustfs
+	NodeSelectorQdrant       string // optional — overrides NodeSelector for qdrant
+	CloudProvider            string // informational only — identifies the target platform (e.g. "gcp", "aws", "on-prem")
+	StorageClassName         string // optional — if empty, PVCs use the cluster default StorageClass
+	PVNodeHostname           string // optional — node hostname for hostPath PV nodeAffinity (on-prem only)
+	HarborHostname           string // optional — internal Harbor registry hostname (on-prem only, e.g. harbor.internal.lan)
+	Kubeconfig               string // optional — path to kubeconfig file; empty = use KUBECONFIG env / ~/.kube/config
+	ShaidePVSize             string // optional — shaide-server PV/PVC size (default: 5Gi)
+	RustfsPVSize             string // optional — rustfs PV/PVC size (default: 5Gi)
+	QdrantPVSize             string // optional — qdrant PV/PVC size (default: 5Gi)
+
 	LBAnnotations             map[string]string
 	ServiceAccountAnnotations map[string]string
 	ServiceAccountName        string

@@ -278,7 +278,7 @@ discovery.kubernetes "pods" { role = "pod" }
 discovery.relabel "pod_logs" {
   targets = discovery.kubernetes.pods.targets
   # promotes namespace / pod / container / job and AI Platform labels
-  # drops any pod that does not carry axem.ai/platform=ai-platform
+  # drops any pod that does not carry axem.dev/platform=ai-platform
 }
 
 loki.source.kubernetes "pod_logs" {
@@ -302,7 +302,7 @@ loki.write "default" {
 Alloy runs as a DaemonSet with cluster-wide pod discovery, so without filtering it would
 collect logs from every namespace — `kube-system`, `cert-manager`, `ingress-nginx`, the
 monitoring stack itself. A `keep` rule in `discovery.relabel` drops any pod that does not
-carry the `axem.ai/platform=ai-platform` label, scoping ingestion to AI Platform workloads
+carry the `axem.dev/platform=ai-platform` label, scoping ingestion to AI Platform workloads
 only. This reduces Loki storage consumption and eliminates noise in dashboards.
 
 **Noisy log filtering**
@@ -446,7 +446,7 @@ labels. All `__meta_kubernetes_*` discovery labels are internal and dropped auto
 unless a `target_label` rule promotes them.
 
 Rules that use `regex = "(.+)"` are **conditional** — the label is only set when the pod
-actually carries it. Pods without `axem.ai/model-slug` (e.g. app_shaide components) produce
+actually carries it. Pods without `axem.dev/model-slug` (e.g. app_shaide components) produce
 no `model_slug` label and no empty-value noise in Loki.
 
 ### Promoted Labels
@@ -461,10 +461,10 @@ no `model_slug` label and no empty-value noise in Loki.
 | `component` | `app.kubernetes.io/component` | app_shaide | `"server"`, `"console"` |
 | `part_of` | `app.kubernetes.io/part-of` | app_shaide + app_serving | `"app-shaide"`, `"app-serving"` |
 | `managed_by` | `app.kubernetes.io/managed-by` | app_shaide + app_serving | `"pulumi"` |
-| `platform` | `axem.ai/platform` | app_shaide + app_serving | `"ai-platform"` |
-| `model_slug` | `axem.ai/model-slug` | app_serving | `"gpt-oss-20b"` |
-| `model_category` | `axem.ai/model-category` | app_serving | `"generative"`, `"embedder"` |
-| `nodegroup` | `axem.ai/nodegroup` | app_serving | `"rtx6000pro-nodepool"` |
+| `platform` | `axem.dev/platform` | app_shaide + app_serving | `"ai-platform"` |
+| `model_slug` | `axem.dev/model-slug` | app_serving | `"gpt-oss-20b"` |
+| `model_category` | `axem.dev/model-category` | app_serving | `"generative"`, `"embedder"` |
+| `nodegroup` | `axem.dev/nodegroup` | app_serving | `"rtx6000pro-nodepool"` |
 
 `nodegroup` is absent on on-prem pods that use `workload: gpu` as their nodeSelector key
 instead of `nodegroup`.

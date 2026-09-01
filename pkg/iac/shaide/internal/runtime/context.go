@@ -47,7 +47,7 @@ func NewDeploymentContext(
 				"app.kubernetes.io/part-of":    pulumi.String("app-shaide"),
 				"app.kubernetes.io/component":  pulumi.String(component),
 				"app.kubernetes.io/managed-by": pulumi.String("pulumi"),
-				"axem.ai/platform":             pulumi.String("ai-platform"),
+				"axem.dev/platform":            pulumi.String("ai-platform"),
 			}
 		},
 	}

@@ -19,7 +19,7 @@ pkg/iac/shaide/
     ├── runtime/context.go                  # DeploymentContext — shared labels + dependency options
     ├── platform/
     │   ├── k8s-serviceaccount.go           # shaide-server ServiceAccount (+ workload-identity annotations)
-    │   ├── k8s-rbac.go                     # ClusterRole/ClusterRoleBinding — cluster-wide pod watch
+    │   ├── k8s-rbac.go                     # ClusterRole/ClusterRoleBinding — cluster-wide pod/service/namespace read
     │   ├── configmap.go                    # shaide-config ConfigMap + shaide-secrets Secret
     │   └── secret.go                       # ghcr-creds pull secret (ghcr.io or Harbor)
     ├── components/
@@ -32,9 +32,9 @@ pkg/iac/shaide/
         ├── provider.go, gcp.go, aws.go, azure.go, on-prem.go, generic.go
 ```
 
-## What Each Component Does
+## What Each File Does
 
-### `main.go`
+### `shaide.go` (package root — `DeployAppShaide`)
 
 Compiles the stack binary and delegates to `shaide.DeployAppShaide(ctx)`.
 
@@ -53,6 +53,10 @@ The stack orchestrator and dependency coordinator:
 - Threads shared dependencies through a `runtime.DeploymentContext` so resources only
   create after their inputs are ready.
 
+### `pkg/iac/shaide/internal/config/config.go`
+
+Loads and types all Pulumi stack config into a single `Config` struct.
+
 ### `pkg/iac/shaide/internal/platform/`
 
 - `k8s-serviceaccount.go`: Creates the ServiceAccount used by `shaide-server`
@@ -60,9 +64,11 @@ The stack orchestrator and dependency coordinator:
   `serviceAccountAnnotations` — a generic map, so the same code handles GKE Workload
   Identity, AKS Workload Identity, EKS IRSA, or nothing at all (on-prem/generic).
 - `k8s-rbac.go`: Creates a cluster-scoped `ClusterRole`/`ClusterRoleBinding` granting
-  `shaide-server`'s ServiceAccount `get`/`list`/`watch` on `pods` **cluster-wide** — this
-  is what lets Shaide observe pod state across every namespace it needs to (its own,
-  `app_serving`'s per-model namespaces, `app_mcp`'s namespace, etc.), not just its own namespace.
+  `shaide-server`'s ServiceAccount `get`/`list`/`watch` on `pods`, `services`, and
+  `namespaces` **cluster-wide** — this is what lets Shaide observe pod state and discover
+  installed-model topology across every namespace it needs to (its own, `app_serving`'s
+  per-model namespaces, `app_mcp`'s namespace, etc.), not just its own namespace. See
+  [Installed Model Discovery](#installed-model-discovery) below.
 - `configmap.go`: Creates the shared `shaide-config` ConfigMap (non-secret runtime
   settings, service discovery) and `shaide-secrets` Secret (`adminAuthKey`, `s3Password`, `jwtSecret`, `sessionSecret`).
 - `secret.go`: Creates `ghcr-creds` (`kubernetes.io/dockerconfigjson`). Authenticates
@@ -79,7 +85,9 @@ The stack orchestrator and dependency coordinator:
   `cloudprovider.Provider`.
 - `controlpanel/deploy.go`: Deploys the control panel as a Deployment (single replica,
   no persistence) with a `ClusterIP` Service on port `3000`. Receives `SESSION_SECRET`
-  from the shared `shaide-secrets` Secret.
+  from the shared `shaide-secrets` Secret. It has no direct knowledge of installed
+  models — it consumes shaide-server's own model API. See
+  [Installed Model Discovery](#installed-model-discovery) below.
 - `webapp/deploy.go`: Deploys the end-user facing web application as a Deployment
   (single replica, no persistence) with a `ClusterIP` Service on port `8787`. Same shape
   as the control panel — internal-only, points at `shaide-server` via
@@ -129,6 +137,29 @@ before the main container starts:
 - Starts the main `rustfs` container after permissions are correct.
 
 This matches RustFS expectations (`0o755`) and avoids runtime permission errors.
+
+## Installed Model Discovery
+
+This stack does not hand the Control Panel a model list. Responsibilities
+are kept with their actual sources:
+
+- **Kubernetes / `app_serving`**: topology and routing. Each model's
+  routable Service (`llmd-gateway-<slug>` for generative,
+  `ms-<slug>-embeddings` for embedders) is labeled with
+  `axem.dev/model-slug`, `axem.dev/model-category`, and
+  `app.kubernetes.io/part-of=app-serving` — see `Model.MetaLabels()` in
+  `pkg/iac/serving/internal/config/naming.go`.
+- **vLLM**: model-owned metadata (name, context size, ...), served by each
+  model's own `/server-info` endpoint.
+- **shaide-server**: combines the two at runtime — discovers model Services
+  cluster-wide via the labels above (`k8s-rbac.go` grants the `services`/
+  `namespaces` read access this needs) and queries each one's `/server-info`
+  — and exposes a stable model API.
+- **Control Panel**: consumes that API only; it has no model-related config
+  or mount of its own.
+
+This stack's only job for installed models, then, is granting shaide-server
+the RBAC to discover them (`k8s-rbac.go`) — it carries no model list.
 
 ## Configuration Source of Truth
 

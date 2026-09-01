@@ -404,6 +404,37 @@ The code validates that:
 
 Mismatches (e.g. `gaie-alma-pro` + `ms-amla-pro`) will produce a clear error at `pulumi preview` time.
 
+## Exposing Installed Models
+
+app_serving does not export a model list. Instead, each model's routable
+Service is labeled with `axem.dev/model-slug`, `axem.dev/model-category`
+(`generative`/`embedder`), and `app.kubernetes.io/part-of=app-serving` (see
+`Model.MetaLabels()` in `internal/config/naming.go`) — the generative path's
+`llmd-gateway-<slug>` ExternalName Service and the embedder path's
+`ms-<slug>-embeddings` ClusterIP Service.
+
+app-shaide grants shaide-server cluster-wide read access to `services` and
+`namespaces` (see `pkg/iac/shaide/internal/platform/k8s-rbac.go`) so it can
+discover this topology by label selector at runtime and pair each Service
+with the model-owned metadata (name, context size, ...) served by vLLM's own
+`/server-info` endpoint — rather than app_serving parsing `values.yaml` to
+rebuild state vLLM already owns. `values.yaml` still configures the model's
+actual deployment; it is no longer a source consumed to describe it.
+
+Two enabled models resolving to the same slug collide on the Kubernetes
+objects they'd create (same `llm-d-<slug>` namespace, same release names),
+so the deploy fails — just at apply time against the cluster, not at plan
+time.
+
+Note this is a different check from the one that used to exist:
+`BuildModelsJSON` rejected duplicate *served* model names (`modelArtifacts.name`
+in `ms-<slug>/values.yaml` — what a client puts in the OpenAI `model`
+field), which is orthogonal to the slug. Two different slugs deploying the
+same underlying model under the same served name will both come up fine
+today — nothing in this repo detects that anymore. Catching it belongs
+with whatever aggregates `/server-info` across models (shaide-server), the
+same place that now owns served-name resolution in the first place.
+
 ## Dependencies
 
 The project uses:
@@ -479,7 +510,7 @@ implementation lives in the shared `pkg` module, at `pkg/iac/serving/`:
 - `main.go`: Compiles the stack binary; delegates to `pkg/iac/serving.DeployAppServing`
 - `pkg/iac/serving/serving.go`: Orchestration — loops over all models in `config.Models`
 - `pkg/iac/serving/internal/config/config.go`: Config loading and convention-based model discovery; returns a single `Config` containing one `Model` entry per enabled model
-- `pkg/iac/serving/internal/config/naming.go`: Release name derivation from slug
+- `pkg/iac/serving/internal/config/naming.go`: Release name derivation from slug, plus `ChatCompletionEndpoint()`/`EmbeddingURL()` and `MetaLabels()` (the labels shaide-server discovers a model's Service by)
 - `pkg/iac/serving/internal/components/*/deploy.go`: Component-specific installation functions (llmd-infra, gaie, modelservice, httproute, embeddingservice)
 - `pkg/iac/serving/internal/platform/secret.go`: Harbor pull secret creation (`harbor-creds`)
 - `pkg/iac/serving/internal/platform/model_storage.go`: PVC + ORAS pull Job creation for `modelSource`
