@@ -32,10 +32,10 @@ type Storage struct {
 
 func defaultStorageMode(p platform.Platform) (StorageMode, error) {
 	switch p {
-	case platform.PlatformOnPrem:
+	case platform.OnPrem:
 		return StorageModeHostPath, nil
 
-	case platform.PlatformGCP, platform.PlatformAWS, platform.PlatformAzure:
+	case platform.GCP, platform.AWS, platform.Azure:
 		return StorageModeDynamic, nil
 
 	default:

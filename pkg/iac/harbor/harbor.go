@@ -19,7 +19,7 @@ func DeployHarbor(ctx *pulumi.Context, projectDir string) error {
 		return fmt.Errorf("load Harbor config: %w", err)
 	}
 
-	provider, err := iackube.NewProvider(ctx, cfg.Kubernetes)
+	provider, err := iackube.NewProvider(ctx, cfg.Kubernetes, iackube.ProviderOptions{})
 	if err != nil {
 		return fmt.Errorf("create Kubernetes provider: %w", err)
 	}

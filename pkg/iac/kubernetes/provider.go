@@ -7,7 +7,17 @@ import (
 	"github.com/axem-solutions/ai_platform/pkg/kube/connection"
 )
 
-func NewProvider(ctx *pulumi.Context, connection connection.Connection) (*pulumikubernetes.Provider, error) {
+type ProviderOptions struct {
+	Name                  string
+	EnableServerSideApply *bool
+}
+
+func NewProvider(
+	ctx *pulumi.Context,
+	connection connection.Connection,
+	options ProviderOptions,
+	opts ...pulumi.ResourceOption,
+) (*pulumikubernetes.Provider, error) {
 	args := &pulumikubernetes.ProviderArgs{}
 
 	if connection.KubeconfigPath != "" {
@@ -18,5 +28,21 @@ func NewProvider(ctx *pulumi.Context, connection connection.Connection) (*pulumi
 		args.Context = pulumi.StringPtr(connection.Context)
 	}
 
-	return pulumikubernetes.NewProvider(ctx, "k8s", args)
+	if options.EnableServerSideApply != nil {
+		args.EnableServerSideApply = pulumi.BoolPtr(
+			*options.EnableServerSideApply,
+		)
+	}
+
+	name := options.Name
+	if name == "" {
+		name = "k8s"
+	}
+
+	return pulumikubernetes.NewProvider(
+		ctx,
+		name,
+		args,
+		opts...,
+	)
 }
