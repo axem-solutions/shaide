@@ -5,7 +5,8 @@
 //
 //	pulumi config set --secret adminAuthKey <value>
 //	pulumi config set --secret s3Password <value>
-//	pulumi config set --secret jwtSecret <value>   (random string, at least 32 characters)
+//	pulumi config set --secret jwtSecret <value>       (random string, at least 32 characters)
+//	pulumi config set --secret sessionSecret <value>   (random string, at least 32 characters)
 package platform
 
 import (
@@ -59,6 +60,7 @@ func CreateAppShaideConfig(ctx *pulumi.Context, cfg appconfig.Config, providerOp
 		"ADMIN_AUTH_KEY": cfg.Secrets.AdminAuthKey,
 		"S3_PASSWORD":    cfg.Secrets.S3Password,
 		"JWT_SECRET":     cfg.Secrets.JWTSecret,
+		"SESSION_SECRET": cfg.Secrets.SessionSecret,
 	}
 
 	shaideSecrets, err := corev1.NewSecret(ctx, "shaide-secrets", &corev1.SecretArgs{

@@ -64,7 +64,7 @@ The stack orchestrator and dependency coordinator:
   is what lets Shaide observe pod state across every namespace it needs to (its own,
   `app_serving`'s per-model namespaces, `app_mcp`'s namespace, etc.), not just its own namespace.
 - `configmap.go`: Creates the shared `shaide-config` ConfigMap (non-secret runtime
-  settings, service discovery) and `shaide-secrets` Secret (`adminAuthKey`, `s3Password`, `jwtSecret`).
+  settings, service discovery) and `shaide-secrets` Secret (`adminAuthKey`, `s3Password`, `jwtSecret`, `sessionSecret`).
 - `secret.go`: Creates `ghcr-creds` (`kubernetes.io/dockerconfigjson`). Authenticates
   against `ghcr.io` using `ghcrUser`/`ghcrToken` — or, when `harborHostname` is set,
   against that internal Harbor registry instead, using the same two config keys.
@@ -78,7 +78,8 @@ The stack orchestrator and dependency coordinator:
   `lbAnnotations`. Delegates cloud-specific post-deploy resources to the active
   `cloudprovider.Provider`.
 - `controlpanel/deploy.go`: Deploys the control panel as a Deployment (single replica,
-  no persistence) with a `ClusterIP` Service on port `3000`.
+  no persistence) with a `ClusterIP` Service on port `3000`. Receives `SESSION_SECRET`
+  from the shared `shaide-secrets` Secret.
 - `webapp/deploy.go`: Deploys the end-user facing web application as a Deployment
   (single replica, no persistence) with a `ClusterIP` Service on port `8787`. Same shape
   as the control panel — internal-only, points at `shaide-server` via
@@ -140,7 +141,7 @@ All parameters are defined in the active stack's `deployments/Pulumi.<stack>.yam
   `TRIAL` env var — only the `trial` stack sets it to `TRUE`).
 - RustFS console exposure (`rustfsConsoleEnabled`).
 - MCP integration (`mcpNamespace`, optional — see [MCP Integration](#mcp-integration-optional)).
-- Secrets (`ghcrToken`, `adminAuthKey`, `s3Password`, `jwtSecret`).
+- Secrets (`ghcrToken`, `adminAuthKey`, `s3Password`, `jwtSecret`, `sessionSecret`).
 
 The `nodeSelector` value must match a `nodegroup` label on the target node pool (e.g. `shaide-nodepool`).
 
@@ -148,7 +149,7 @@ The `nodeSelector` value must match a `nodegroup` label on the target node pool 
 
 - Kubernetes context points to the target cluster.
 - Pulumi stack is selected for this project.
-- Required secrets are set (`ghcrToken`, `adminAuthKey`, `s3Password`, `jwtSecret`).
+- Required secrets are set (`ghcrToken`, `adminAuthKey`, `s3Password`, `jwtSecret`, `sessionSecret`).
 
 ## Workload Identity
 
