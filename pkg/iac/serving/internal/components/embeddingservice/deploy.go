@@ -22,6 +22,11 @@ func Deploy(ctx *pulumi.Context, dep pulumi.Resource, model appConfig.Model, opt
 		Metadata: &metav1.ObjectMetaArgs{
 			Name:      pulumi.String(svcName),
 			Namespace: pulumi.String(model.Namespace),
+			// Labeled (not just the Namespace) so a client with cluster-wide
+			// Service read access — e.g. shaide-server — can discover this
+			// model's endpoint directly via label selector instead of
+			// reconstructing the naming convention.
+			Labels: model.MetaLabels(),
 		},
 		Spec: &corev1.ServiceSpecArgs{
 			Type: pulumi.String("ClusterIP"),

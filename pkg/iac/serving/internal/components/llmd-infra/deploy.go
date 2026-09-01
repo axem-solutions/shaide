@@ -87,6 +87,11 @@ func Deploy(ctx *pulumi.Context, model appConfig.Model, lldChartPath string, opt
 		Metadata: &metav1.ObjectMetaArgs{
 			Name:      pulumi.String(gatewayServiceName),
 			Namespace: pulumi.String(model.Namespace),
+			// Labeled so a client with cluster-wide Service read access —
+			// e.g. shaide-server — can discover this model's chat-completion
+			// endpoint directly via label selector, without needing to know
+			// the Istio-generated Service naming convention it wraps.
+			Labels: model.MetaLabels(),
 		},
 		Spec: &corev1.ServiceSpecArgs{
 			Type:         pulumi.String("ExternalName"),

@@ -70,30 +70,30 @@ discovery.relabel "pod_logs" {
     target_label  = "managed_by"
   }
 
-  // axem.ai/platform → platform  (set by app_shaide + app_serving)
+  // axem.dev/platform → platform  (set by app_shaide + app_serving)
   rule {
-    source_labels = ["__meta_kubernetes_pod_label_axem_ai_platform"]
+    source_labels = ["__meta_kubernetes_pod_label_axem_dev_platform"]
     regex         = "(.+)"
     target_label  = "platform"
   }
 
-  // axem.ai/model-slug → model_slug  (set by app_serving; absent on app_shaide pods)
+  // axem.dev/model-slug → model_slug  (set by app_serving; absent on app_shaide pods)
   rule {
-    source_labels = ["__meta_kubernetes_pod_label_axem_ai_model_slug"]
+    source_labels = ["__meta_kubernetes_pod_label_axem_dev_model_slug"]
     regex         = "(.+)"
     target_label  = "model_slug"
   }
 
-  // axem.ai/model-category → model_category  (set by app_serving)
+  // axem.dev/model-category → model_category  (set by app_serving)
   rule {
-    source_labels = ["__meta_kubernetes_pod_label_axem_ai_model_category"]
+    source_labels = ["__meta_kubernetes_pod_label_axem_dev_model_category"]
     regex         = "(.+)"
     target_label  = "model_category"
   }
 
-  // axem.ai/nodegroup → nodegroup  (absent on on-prem workload:gpu pods)
+  // axem.dev/nodegroup → nodegroup  (absent on on-prem workload:gpu pods)
   rule {
-    source_labels = ["__meta_kubernetes_pod_label_axem_ai_nodegroup"]
+    source_labels = ["__meta_kubernetes_pod_label_axem_dev_nodegroup"]
     regex         = "(.+)"
     target_label  = "nodegroup"
   }
@@ -101,7 +101,7 @@ discovery.relabel "pod_logs" {
   // Drop pods that don't belong to the AI Platform — keeps kube-system,
   // cert-manager, ingress controllers, and the monitoring stack itself out of Loki.
   rule {
-    source_labels = ["__meta_kubernetes_pod_label_axem_ai_platform"]
+    source_labels = ["__meta_kubernetes_pod_label_axem_dev_platform"]
     regex         = "ai-platform"
     action        = "keep"
   }
