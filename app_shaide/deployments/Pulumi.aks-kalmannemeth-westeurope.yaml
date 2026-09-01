@@ -145,7 +145,13 @@ config:
   #   pulumi stack select aks-axem-trial-westeurope
   #   pulumi config set --secret adminAuthKey <value>
   #   pulumi config set --secret s3Password <value>
+  #   pulumi config set --secret jwtSecret <random-string-at-least-32-chars>
   # ==========================================================================
+  # jwtSecret has no encrypted value here yet — this file's ciphertext is tied
+  # to this stack's own encryptionsalt, so it can't be hand-written like the
+  # other secure: blocks above. Run the CLI command above against this stack
+  # before the next `pulumi up`, or the shaide-server deploy will fail on the
+  # new required jwtSecret config key.
   app-shaide:adminAuthKey:
     secure: v1:ml0cTXNfKRO5Y0G6:+oOUq0qVZWl7/ClSpizb3Hf5TjfG
   app-shaide:s3Password:
