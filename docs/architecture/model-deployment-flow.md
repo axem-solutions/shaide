@@ -226,8 +226,9 @@ Deploys:
 Additionally creates two plain Kubernetes resources:
 - An `ExternalName` Service (`llmd-gateway-<slug>`) resolving to the gateway's in-cluster
   FQDN — used by `app_shaide` to reach the inference gateway.
-- A `ConfigMap` (`gateway-defaults-<slug>`) that injects the stack's `nodeSelector` into the
-  Istio Gateway pod via the `istio` GatewayClass defaults mechanism.
+- A `ConfigMap` (`gateway-defaults-<slug>`) that injects a hard `nodeAffinity` (built from the
+  stack's `nodeSelector` config) into the Istio Gateway pod via the `istio` GatewayClass
+  defaults mechanism.
 
 ---
 
@@ -265,8 +266,9 @@ chart from `https://llm-d-incubation.github.io/llm-d-modelservice/` at version
 Values are merged from two sources:
 1. `deployments/models/<category>/<modelName>/ms-<slug>/values.yaml` — model-specific
    settings (model URI, container images, GPU resources, inference server args).
-2. Programmatic values in `modelservice/deploy.go` — `nodeSelector` and, when the stack sets
-   `gpuToleration`, a matching toleration applied to both decode and prefill pods. The
+2. Programmatic values in `modelservice/deploy.go` — a hard `nodeAffinity` (built from the
+   stack's `nodeSelector` config) and, when the stack sets `gpuToleration`, a matching
+   toleration applied to both decode and prefill pods. The
    toleration's key/value/effect are read from stack config, not hardcoded — they must match
    whatever taint is actually applied to the GPU node.
 

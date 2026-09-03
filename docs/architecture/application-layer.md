@@ -148,7 +148,10 @@ All parameters are defined in the active stack's `deployments/Pulumi.<stack>.yam
 - MCP integration (`mcpNamespace`, optional — see [MCP Integration](#mcp-integration-optional)).
 - Secrets (`ghcrToken`, `adminAuthKey`, `s3Password`).
 
-The `nodeSelector` value must match a `nodegroup` label on the target node pool (e.g. `shaide-nodepool`).
+The `nodeSelector` value is rendered as a soft (preferred, not required) `nodeAffinity` for a
+`nodegroup` label on the target node pool (e.g. `shaide-nodepool`) — components prefer a
+matching node but can still schedule elsewhere if none is available. Each component also gets
+a soft `podAntiAffinity` spreading its own replicas across nodes.
 
 ## Prereqs
 
