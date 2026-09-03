@@ -6,3 +6,149 @@ config:
   pulumi:tags:
     value:
       pulumi:template: kubernetes-go
+
+template:
+  description: |
+    Deploys the Gateway API prerequisites, optional Istio control plane, and
+    shared Gateway for on-prem, GCP, AWS, or Azure Kubernetes clusters.
+
+  config:
+    # Kubernetes connection
+    gateway-provider:kubeconfig:
+      description: |
+        Path to the kubeconfig used to connect to the target cluster. Leave
+        empty to use KUBECONFIG or the default kubeconfig.
+      default: ""
+
+    gateway-provider:context:
+      description: |
+        Optional kubeconfig context. Empty uses the current context.
+      default: ""
+
+    # Platform and shared Gateway
+    gateway-provider:cloudProvider:
+      description: |
+        Cloud platform
+      default: on-prem
+      prompt: true
+      required: true
+      options:
+        - gcp
+        - aws
+        - azure
+        - on-prem
+
+    gateway-provider:gatewayClassName:
+      description: |
+        Gateway class name (empty uses the platform default)
+      default: ""
+      prompt: true
+
+    gateway-provider:gatewayNamespace:
+      description: |
+        Kubernetes namespace where the shared Gateway is created.
+      default: gateway-system
+
+    gateway-provider:gatewayHostname:
+      description: |
+        Gateway hostname (e.g. shaide.example.com)
+      default: ""
+      prompt: true
+      required: true
+
+    # Gateway implementation and Istio
+    gateway-provider:provider:
+      description: |
+        Gateway implementation installed by this project. The default installs
+        Istio; another value skips the Istio control plane.
+      default: istio
+
+    gateway-provider:namespace:
+      description: |
+        Kubernetes namespace where the Istio control plane is installed.
+      default: istio-system
+
+    gateway-provider:istioHub:
+      description: |
+        Registry prefix for Istio images. Override this for air-gapped clusters.
+      default: docker.io/istio
+
+    gateway-provider:istioTag:
+      description: |
+        Istio image and Helm chart version.
+      default: "1.28.1"
+
+    # Gateway API CRDs
+    gateway-provider:installGatewayApiCrds:
+      description: |
+        Whether this project installs Gateway API CRDs. Empty uses the platform
+        default: enabled except on Azure, where the managed service owns them.
+      default: ""
+
+    gateway-provider:gatewayApiCrdsPath:
+      description: |
+        Local Kustomize directory or remote URL containing Gateway API CRDs.
+      default: crds/gateway-api/standard
+
+    gateway-provider:gieCrdsPath:
+      description: |
+        Local Kustomize directory or remote URL containing Gateway API
+        Inference Extension CRDs.
+      default: crds/gie
+
+    # TLS
+    gateway-provider:gatewayCertName:
+      description: |
+        Gateway certificate name or ARN (leave empty to skip cloud TLS binding)
+      default: ""
+      prompt: true
+
+    gateway-provider:tlsCertAnnotation:
+      description: |
+        TLS certificate annotation key (empty uses the platform default)
+      default: ""
+      prompt: true
+
+    gateway-provider:certManagerIssuer:
+      description: |
+        Optional cert-manager ClusterIssuer used to provision Gateway TLS.
+      default: ""
+      prompt: true
+
+    gateway-provider:tlsSecretName:
+      description: |
+        TLS Secret referenced by the Gateway. When certManagerIssuer is set,
+        empty defaults to gateway-tls.
+      default: ""
+
+    gateway-provider:bootstrapTlsSecret:
+      description: |
+        Seed the TLS Secret with a temporary self-signed certificate for an
+        Azure AGC first deployment.
+      default: false
+
+    # Cloud infrastructure direct values
+    gateway-provider:albName:
+      description: |
+        Azure Application Gateway for Containers name (for example shared-alb;
+        leave empty when not using Azure AGC)
+      default: ""
+      prompt: true
+
+    gateway-provider:albSubnetId:
+      description: |
+        Azure subnet resource ID used by Application Gateway for Containers.
+      default: ""
+      prompt: true
+
+    gateway-provider:gatewayStaticIPName:
+      description: |
+        Name of the preallocated static IP, used by providers such as GCP.
+      default: ""
+      prompt: true
+
+    gateway-provider:gatewayStaticIP:
+      description: |
+        Literal preallocated static IP, used by Azure with Istio.
+      default: ""
+      prompt: true

@@ -43,6 +43,18 @@ func Deploy(
 		return nil
 	}
 
+	// Istio creates its GatewayClass as part of this update, so that class may
+	// legitimately be absent while the Pulumi program is being evaluated.
+	classCreatedByThisUpdate := cfg.Istio.Enabled && cfg.Gateway.ClassName == "istio"
+	if err := validateGatewayClass(
+		ctx.Context(),
+		cfg.Kubernetes,
+		cfg.Gateway.ClassName,
+		classCreatedByThisUpdate,
+	); err != nil {
+		return fmt.Errorf("validate GatewayClass: %w", err)
+	}
+
 	infra, err := resolveInfrastructure(ctx, cfg)
 	if err != nil {
 		return fmt.Errorf("resolve infrastructure: %w", err)
@@ -75,7 +87,7 @@ func Deploy(
 		return fmt.Errorf("deploy gateway: %w", err)
 	}
 
-	exportOutputs(ctx, cfg)
+	exportOutputs(ctx, cfg, infra)
 
 	return nil
 }
@@ -86,9 +98,11 @@ func isConfigured(cfg config.Config) bool {
 	return cfg.Gateway.InfraStackRef != "" || cfg.Gateway.Hostname != ""
 }
 
-func exportOutputs(ctx *pulumi.Context, cfg config.Config) {
+func exportOutputs(ctx *pulumi.Context, cfg config.Config, infra infrastructure) {
 	ctx.Export("gatewayName", pulumi.String(gatewayName))
 	ctx.Export("gatewayNamespace", pulumi.String(cfg.Gateway.Namespace))
+	ctx.Export("gatewayHostname", infra.Hostname)
+	ctx.Export("cloudProvider", pulumi.String(cfg.Platform))
 }
 
 func resolveInfrastructure(

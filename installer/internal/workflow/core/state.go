@@ -48,14 +48,13 @@ type ModelOption struct {
 type BootstrapState struct {
 	Config  config.Config
 	Catalog catalog.Catalog
-	// GatewayHostname is populated by the gateway-provider stage (from env
-	// or TUI) and reused downstream by stages that need to point HTTPRoutes
-	// at the shared gateway (app-shaide).
+	// GatewayHostname is populated from the gateway-provider template config
+	// and reused downstream by stages that need to point HTTPRoutes at the
+	// shared gateway (app-shaide).
 	GatewayHostname string
-	// CloudPlatform is the value picked at the gateway-provider stage's
-	// platform Select ("gcp" / "aws" / "azure" / "on-prem"). Downstream
-	// stages (app-serving, app-shaide) read this to derive their own
-	// cloudProvider config without prompting again.
+	// CloudPlatform is detected from the cluster and can be confirmed or
+	// overridden through the gateway-provider template. Downstream stages use
+	// it to derive their own cloudProvider config without prompting again.
 	CloudPlatform string
 }
 

@@ -1,19 +1,20 @@
-package stacks
+package workflow
 
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"time"
 
-	"github.com/axem-solutions/ai_platform/installer/internal/workflow/core"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/rest"
 )
+
+type logf func(format string, args ...any)
 
 // chartResource identifies a single Kubernetes resource managed by a Helm chart.
 // The GVR is used with the dynamic client (handles CRDs and core types uniformly).
@@ -38,7 +39,35 @@ const (
 	helmManagedByValue             = "Helm"
 )
 
-// ensureChartOwnership implements the installer's four-rule resource policy
+func ensureIstioChartOwnership(
+	ctx context.Context,
+	restConfig *rest.Config,
+	namespace string,
+	logf logf,
+) error {
+	if restConfig == nil {
+		return fmt.Errorf("Kubernetes REST config is required")
+	}
+	if logf == nil {
+		logf = func(string, ...any) {}
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+
+	logf("ensuring ownership of Istio chart resources in %s", namespace)
+
+	if err := ensureChartOwnership(ctx, restConfig, logf, "istio-base", namespace, istioBaseChartResources(namespace)); err != nil {
+		return fmt.Errorf("take ownership of istio-base resources: %w", err)
+	}
+	if err := ensureChartOwnership(ctx, restConfig, logf, "istiod", namespace, istiodChartResources(namespace)); err != nil {
+		return fmt.Errorf("take ownership of istiod resources: %w", err)
+	}
+
+	return nil
+}
+
+// ensureChartOwnership implements the gateway-provider's four-rule resource policy
 // for a Helm chart's known resources:
 //  1. Rule 1 (own): if a resource is missing OR already annotated for this
 //     release, do nothing - helm install will create or update it.
@@ -51,20 +80,19 @@ const (
 //
 // Idempotent: re-running over already-owned resources is a no-op.
 func ensureChartOwnership(
-	rt *core.Runtime,
+	ctx context.Context,
+	restConfig *rest.Config,
+	logf logf,
 	releaseName, releaseNamespace string,
 	resources []chartResource,
 ) error {
-	dyn, err := dynamic.NewForConfig(rt.Cluster.RESTConfig)
+	dyn, err := dynamic.NewForConfig(restConfig)
 	if err != nil {
 		return fmt.Errorf("build dynamic client: %w", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-
 	for _, r := range resources {
-		if err := ownOrDestroy(ctx, rt, dyn, releaseName, releaseNamespace, r); err != nil {
+		if err := ownOrDestroy(ctx, logf, dyn, releaseName, releaseNamespace, r); err != nil {
 			return fmt.Errorf("ownership policy failed for %s %s/%s: %w",
 				r.gvr.Resource, namespaceOrCluster(r.namespace), r.name, err)
 		}
@@ -75,7 +103,7 @@ func ensureChartOwnership(
 // ownOrDestroy walks the 4-rule policy for a single resource.
 func ownOrDestroy(
 	ctx context.Context,
-	rt *core.Runtime,
+	logf logf,
 	dyn dynamic.Interface,
 	releaseName, releaseNamespace string,
 	r chartResource,
@@ -84,20 +112,21 @@ func ownOrDestroy(
 
 	existing, err := client.Get(ctx, r.name, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
-		// Rule 1 (no resource = installer will create) - nothing to do.
+		// Rule 1 (no resource = the chart will create it) - nothing to do.
 		return nil
 	}
 	if err != nil {
 		return fmt.Errorf("get: %w", err)
 	}
 
-	// Already owned by our release? Skip.
+	// Already owned by our release? Skip. forceDestroy applies only to a
+	// conflicting owner; deleting resources owned by this release on every
+	// update would also delete all custom resources behind Istio's CRDs.
 	annotations := existing.GetAnnotations()
 	if annotations[helmReleaseNameAnnotation] == releaseName &&
 		annotations[helmReleaseNamespaceAnnotation] == releaseNamespace &&
-		existing.GetLabels()[helmManagedByLabel] == helmManagedByValue &&
-		!r.forceDestroy {
-		rt.Detailf("  %s %s: already owned by release %s, skipping",
+		existing.GetLabels()[helmManagedByLabel] == helmManagedByValue {
+		logf("  %s %s: already owned by release %s, skipping",
 			r.gvr.Resource, r.name, releaseName)
 		return nil
 	}
@@ -106,25 +135,25 @@ func ownOrDestroy(
 	// resources we know Pulumi v4 won't adopt from metadata (CRDs).
 	if !r.forceDestroy {
 		if patchErr := patchHelmOwnership(ctx, client, r.name, releaseName, releaseNamespace); patchErr == nil {
-			rt.Detailf("  %s %s: ownership taken by release %s",
+			logf("  %s %s: ownership taken by release %s",
 				r.gvr.Resource, r.name, releaseName)
 			return nil
 		} else {
-			rt.Detailf("  %s %s: take-ownership patch failed (%v); falling back to destroy",
+			logf("  %s %s: take-ownership patch failed (%v); falling back to destroy",
 				r.gvr.Resource, r.name, patchErr)
 		}
 	}
 
-	// Rule 3: destroy and let installer recreate. For CRDs this also
+	// Rule 3: destroy and let the chart recreate it. For CRDs this also
 	// deletes any CR instances of that type (Kubernetes garbage collection).
 	if deleteErr := client.Delete(ctx, r.name, metav1.DeleteOptions{}); deleteErr != nil && !apierrors.IsNotFound(deleteErr) {
 		// Rule 4: surface the error - the install will fail without intervention.
 		return fmt.Errorf("delete failed: %w", deleteErr)
 	}
 	if r.forceDestroy {
-		rt.Detailf("  %s %s: destroyed (forced; chart will recreate)", r.gvr.Resource, r.name)
+		logf("  %s %s: destroyed (forced; chart will recreate)", r.gvr.Resource, r.name)
 	} else {
-		rt.Detailf("  %s %s: destroyed (chart will recreate)", r.gvr.Resource, r.name)
+		logf("  %s %s: destroyed (chart will recreate)", r.gvr.Resource, r.name)
 	}
 	return nil
 }
@@ -240,7 +269,7 @@ func istiodChartResources(istioNamespace string) []chartResource {
 		{gvr: schema.GroupVersionResource{Group: "admissionregistration.k8s.io", Version: "v1", Resource: "mutatingwebhookconfigurations"},
 			name: "istio-sidecar-injector", forceDestroy: true},
 		{gvr: schema.GroupVersionResource{Group: "admissionregistration.k8s.io", Version: "v1", Resource: "validatingwebhookconfigurations"},
-			name: "istio-validator-istio-system", forceDestroy: true},
+			name: "istio-validator-" + istioNamespace, forceDestroy: true},
 	}
 }
 
@@ -251,7 +280,3 @@ func istioCRD(name string) chartResource {
 		forceDestroy: true,
 	}
 }
-
-// Sentinel error used by the ownership module so callers can distinguish "no
-// existing install detected" from "real failure" if they want to.
-var errNoExistingChart = errors.New("no existing chart installation detected")

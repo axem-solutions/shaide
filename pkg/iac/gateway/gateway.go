@@ -7,6 +7,7 @@ import (
 	"github.com/axem-solutions/ai_platform/pkg/iac/gateway/internal/components/istio"
 	"github.com/axem-solutions/ai_platform/pkg/iac/gateway/internal/components/sharedgateway"
 	"github.com/axem-solutions/ai_platform/pkg/iac/gateway/internal/config"
+	"github.com/axem-solutions/ai_platform/pkg/iac/gateway/internal/workflow"
 	iackube "github.com/axem-solutions/ai_platform/pkg/iac/kubernetes"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
@@ -15,6 +16,9 @@ func DeployGatewayProvider(ctx *pulumi.Context, projectDir string) error {
 	cfg, err := config.Load(ctx, projectDir)
 	if err != nil {
 		return fmt.Errorf("load gateway provider config: %w", err)
+	}
+	if err := workflow.Prepare(ctx, cfg); err != nil {
+		return fmt.Errorf("prepare gateway provider: %w", err)
 	}
 
 	// Create an explicit Kubernetes provider targeting the configured cluster.

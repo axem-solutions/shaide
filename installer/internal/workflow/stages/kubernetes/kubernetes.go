@@ -12,6 +12,7 @@ import (
 	"github.com/axem-solutions/ai_platform/installer/internal/oras/inspect"
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/core"
 	"github.com/axem-solutions/ai_platform/pkg/kube/connection"
+	"github.com/axem-solutions/ai_platform/pkg/kube/platform"
 )
 
 const cudaImageName = "llm-d/llm-d-cuda"
@@ -49,16 +50,16 @@ func Stage() core.Stage {
 // is built — means discovery already knows whether it is talking to a cloud or
 // an on-prem cluster, which is what lets it pick the Harbor bootstrap path.
 //
-// The value is a default, not a verdict: the gateway-provider stage still
-// offers its platform Select, pre-filled with what we found here.
+// The value is a default, not a verdict: the gateway-provider template still
+// offers its platform selection, pre-filled with what we found here.
 func detectClusterPlatform(rt *core.Runtime) error {
-	platform, err := kube.DetectPlatform(context.Background(), rt.Cluster.Client)
+	detectedPlatform, err := platform.Detect(context.Background(), rt.Cluster.Client)
 	if err != nil {
 		return err
 	}
 
-	rt.Bootstrap.CloudPlatform = platform
-	rt.Detailf("detected cluster platform: %q", platform)
+	rt.Bootstrap.CloudPlatform = string(detectedPlatform)
+	rt.Detailf("detected cluster platform: %q", detectedPlatform)
 
 	return nil
 }

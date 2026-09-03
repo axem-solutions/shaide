@@ -9,6 +9,7 @@ import (
 	"github.com/axem-solutions/ai_platform/installer/internal/iac"
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/core"
 	"github.com/axem-solutions/ai_platform/pkg/iac/serving"
+	"github.com/axem-solutions/ai_platform/pkg/kube/platform"
 	"github.com/pulumi/pulumi/sdk/v3/go/auto"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -48,7 +49,7 @@ func DeployAppServing(rt *core.Runtime) error {
 	// "cloud" (cluster-default StorageClass), so collapse the four-value platform
 	// pick accordingly.
 	servingCloudProvider := "cloud"
-	if rt.Bootstrap.CloudPlatform == cloudProviderOnPrem {
+	if rt.Bootstrap.CloudPlatform == string(platform.OnPrem) {
 		servingCloudProvider = "on-prem"
 	}
 	deployConfig[pulumiConfigKey(projectAppServing, "cloudProvider")] = auto.ConfigValue{
