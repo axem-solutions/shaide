@@ -17,6 +17,7 @@ import (
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/stages/pulumi"
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/stages/pulumi/stacks"
 	pkgkube "github.com/axem-solutions/ai_platform/pkg/kube"
+	"github.com/axem-solutions/ai_platform/pkg/kube/platform"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 )
@@ -74,13 +75,13 @@ func InstallMode(rt *core.Runtime) bool {
 // InstallCloud gates steps that only apply to a managed cloud cluster, where
 // nodes can pull from public registries.
 func InstallCloud(rt *core.Runtime) bool {
-	return InstallMode(rt) && kube.IsCloud(rt.Bootstrap.CloudPlatform)
+	return InstallMode(rt) && platform.Platform(rt.Bootstrap.CloudPlatform).IsCloud()
 }
 
 // InstallOnPrem gates steps that only apply to an air-gapped on-prem cluster,
 // where images have to be side-loaded onto the nodes.
 func InstallOnPrem(rt *core.Runtime) bool {
-	return InstallMode(rt) && !kube.IsCloud(rt.Bootstrap.CloudPlatform)
+	return InstallMode(rt) && !platform.Platform(rt.Bootstrap.CloudPlatform).IsCloud()
 }
 
 func CheckResources(rt *core.Runtime) error {

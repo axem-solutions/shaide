@@ -7,8 +7,8 @@ import (
 
 func main() {
 	pulumi.Run(func(ctx *pulumi.Context) error {
-		// The Pulumi CLI runs this program from the project directory, so local
-		// Kustomize paths are resolved relative to that directory.
-		return gateway.DeployGatewayProvider(ctx, ".")
+		// Pulumi.yaml lives in deployments while the bundled CRDs live at the
+		// gateway-provider project root.
+		return gateway.DeployGatewayProvider(ctx, "..")
 	})
 }

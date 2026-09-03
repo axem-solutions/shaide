@@ -119,16 +119,16 @@ func loadKubernetes(conf *pulumiconfig.Config, cfg *Config) {
 }
 
 func loadGateway(conf *pulumiconfig.Config, cfg *Config) {
-	cfg.Gateway.Hostname = conf.Get("gatewayHostname")
-	cfg.Gateway.ClassName = conf.Get("gatewayClassName")
-	cfg.Gateway.Namespace = conf.Get("gatewayNamespace")
-	cfg.Gateway.InfraStackRef = conf.Get("infraStackRef")
+	cfg.Gateway.Hostname = strings.TrimSpace(conf.Get("gatewayHostname"))
+	cfg.Gateway.ClassName = strings.TrimSpace(conf.Get("gatewayClassName"))
+	cfg.Gateway.Namespace = strings.TrimSpace(conf.Get("gatewayNamespace"))
+	cfg.Gateway.InfraStackRef = strings.TrimSpace(conf.Get("infraStackRef"))
 
-	cfg.Gateway.ALB.Name = conf.Get("albName")
-	cfg.Gateway.ALB.SubnetID = conf.Get("albSubnetId")
+	cfg.Gateway.ALB.Name = strings.TrimSpace(conf.Get("albName"))
+	cfg.Gateway.ALB.SubnetID = strings.TrimSpace(conf.Get("albSubnetId"))
 
-	cfg.Gateway.StaticIP.Name = conf.Get("gatewayStaticIPName")
-	cfg.Gateway.StaticIP.IP = conf.Get("gatewayStaticIP")
+	cfg.Gateway.StaticIP.Name = strings.TrimSpace(conf.Get("gatewayStaticIPName"))
+	cfg.Gateway.StaticIP.IP = strings.TrimSpace(conf.Get("gatewayStaticIP"))
 }
 
 func loadCRDs(conf *pulumiconfig.Config, cfg *Config) {
@@ -143,27 +143,37 @@ func loadCRDs(conf *pulumiconfig.Config, cfg *Config) {
 }
 
 func loadTLS(conf *pulumiconfig.Config, cfg *Config) {
-	cfg.TLS.CertName = conf.Get("gatewayCertName")
-	cfg.TLS.CertAnnotation = conf.Get("tlsCertAnnotation")
-	cfg.TLS.CertManagerIssuer = conf.Get("certManagerIssuer")
-	cfg.TLS.SecretName = conf.Get("tlsSecretName")
+	cfg.TLS.CertName = strings.TrimSpace(conf.Get("gatewayCertName"))
+	cfg.TLS.CertAnnotation = strings.TrimSpace(conf.Get("tlsCertAnnotation"))
+	cfg.TLS.CertManagerIssuer = strings.TrimSpace(conf.Get("certManagerIssuer"))
+	cfg.TLS.SecretName = strings.TrimSpace(conf.Get("tlsSecretName"))
 	cfg.TLS.BootstrapSecret = conf.GetBool("bootstrapTlsSecret")
 }
 
 func loadIstio(conf *pulumiconfig.Config, cfg *Config) {
 	// Istio was historically the default Gateway implementation. An explicit
 	// non-Istio provider skips only the Istio control-plane installation.
-	provider := conf.Get("provider")
+	provider := strings.TrimSpace(conf.Get("provider"))
 	cfg.Istio.Enabled = provider == "" || provider == "istio"
 
 	if cfg.Istio.Enabled {
-		cfg.Istio.Namespace = conf.Get("namespace")
-		cfg.Istio.Hub = conf.Get("istioHub")
-		cfg.Istio.Tag = conf.Get("istioTag")
+		cfg.Istio.Namespace = strings.TrimSpace(conf.Get("namespace"))
+		cfg.Istio.Hub = strings.TrimSpace(conf.Get("istioHub"))
+		cfg.Istio.Tag = strings.TrimSpace(conf.Get("istioTag"))
 	}
 }
 
 func applyDefaults(cfg *Config) error {
+	platformDefaults := defaultsForPlatform(cfg.Platform)
+
+	if cfg.Gateway.ClassName == "" {
+		cfg.Gateway.ClassName = platformDefaults.gatewayClassName
+	}
+
+	if cfg.TLS.CertAnnotation == "" {
+		cfg.TLS.CertAnnotation = platformDefaults.tlsCertAnnotation
+	}
+
 	if cfg.Istio.Namespace == "" {
 		cfg.Istio.Namespace = DefaultIstioNamespace
 	}
@@ -264,6 +274,14 @@ func (cfg Config) Validate() error {
 
 	if cfg.Gateway.Namespace == "" {
 		return fmt.Errorf("gateway namespace cannot be empty")
+	}
+
+	if cfg.Gateway.Hostname == "" && cfg.Gateway.InfraStackRef == "" {
+		return fmt.Errorf("gateway hostname or infrastructure stack reference is required")
+	}
+
+	if cfg.Gateway.Hostname != "" && cfg.Gateway.InfraStackRef != "" {
+		return fmt.Errorf("gateway hostname and infrastructure stack reference are mutually exclusive")
 	}
 
 	if cfg.CRDs.GIEPath == "" {

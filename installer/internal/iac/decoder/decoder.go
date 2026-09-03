@@ -13,6 +13,7 @@ type ConfigKeySpec struct {
 	Options     []string `yaml:"options"`
 	Secret      bool     `yaml:"secret"`
 	Prompt      bool     `yaml:"prompt"`
+	Required    bool     `yaml:"required"`
 }
 
 type ConfigKey struct {

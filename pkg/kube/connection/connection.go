@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"time"
 
-	pulumik8s "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes"
-	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -28,23 +26,7 @@ type Connection struct {
 	Context        string
 }
 
-func NewProvider(ctx *pulumi.Context, connection Connection) (*pulumik8s.Provider, error) {
-	args := &pulumik8s.ProviderArgs{}
-
-	if connection.KubeconfigPath != "" {
-		args.Kubeconfig = pulumi.StringPtr(connection.KubeconfigPath)
-	}
-
-	if connection.Context != "" {
-		args.Context = pulumi.StringPtr(connection.Context)
-	}
-
-	return pulumik8s.NewProvider(ctx, "k8s", args)
-}
-
-func BuildRestConfig(
-	connection Connection,
-) (*rest.Config, error) {
+func BuildRestConfig(connection Connection) (*rest.Config, error) {
 	// Starting from the real default loading rules (not a bare zero-value
 	// struct) matters when KubeconfigPath is empty: the zero value has no
 	// search path at all and fails outright, where the default rules fall
