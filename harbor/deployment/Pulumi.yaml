@@ -26,17 +26,6 @@ template:
       default: ""
 
     # -------------------------------------------------------------------------
-    # Storage
-    # -------------------------------------------------------------------------
-
-
-    harbor:nodeHostname:
-      description: |
-        Kubernetes node where Harbor hostPath storage is located. Required when storageMode is hostpath.
-      default: ""
-      prompt: true
-
-    # -------------------------------------------------------------------------
     # Secrets
     # Credentials required to administer Harbor and authenticate workloads.
     # -------------------------------------------------------------------------
