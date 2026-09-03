@@ -59,9 +59,11 @@ func Stage() core.Stage {
 				When: InstallMode,
 			},
 			{
-				Name:    "check Harbor pull secret",
-				Run:     checkHarborPullSecret, // fills rt.Discovery.Auth
-				When:    InstallMode,
+				Name: "check Harbor pull secret",
+				// Harbor deployment can rotate the robot password during an
+				// update. Always reload the resulting pull secret so subsequent
+				// artifact uploads do not use credentials discovered before Pulumi.
+				Run:     checkHarborPullSecret, // refreshes rt.Discovery.Auth
 				Recover: recoverCheckResources,
 			},
 		},
