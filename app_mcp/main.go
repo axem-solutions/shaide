@@ -13,7 +13,7 @@ import (
 	"app_mcp/internal/components/networkpolicy"
 	"app_mcp/internal/components/rbac"
 	appconfig "app_mcp/internal/config"
-	pkg "pkg/platform"
+	iackube "github.com/axem-solutions/ai_platform/pkg/iac/kubernetes"
 
 	"github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
@@ -35,7 +35,7 @@ func main() {
 		providerOpt := pulumi.Provider(k8sProvider)
 
 		// --- Namespace ---
-		ns, err := pkg.CreateNamespace(ctx, appConfig.Namespace, providerOpt)
+		ns, err := iackube.CreateNamespace(ctx, appConfig.Namespace, providerOpt)
 		if err != nil {
 			return err
 		}
