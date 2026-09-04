@@ -115,6 +115,7 @@ type Config struct {
 	ShaidePVSize             string // optional — shaide-server PV/PVC size (default: 5Gi)
 	RustfsPVSize             string // optional — rustfs PV/PVC size (default: 5Gi)
 	QdrantPVSize             string // optional — qdrant PV/PVC size (default: 5Gi)
+	KnowledgeCenterEnabled   bool   // optional — presence of the Knowledge Center feature; injected into control-panel as KNOWLEDGE_CENTER_ENABLED; default: false
 
 	LBAnnotations             map[string]string
 	ServiceAccountAnnotations map[string]string
@@ -162,6 +163,7 @@ func Load(ctx *pulumi.Context) Config {
 		ShaidePVSize:              getWithDefault(cfg, "shaidePVSize", "5Gi"),
 		RustfsPVSize:              getWithDefault(cfg, "rustfsPVSize", "5Gi"),
 		QdrantPVSize:              getWithDefault(cfg, "qdrantPVSize", "5Gi"),
+		KnowledgeCenterEnabled:    cfg.GetBool("knowledgeCenterEnabled"),
 		LBAnnotations:             lbAnnotations,
 		ServiceAccountAnnotations: saAnnotations,
 		ServiceAccountName:        cfg.Require(("shaideServiceAccountName")),

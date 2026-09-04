@@ -85,7 +85,9 @@ Loads and types all Pulumi stack config into a single `Config` struct.
   `cloudprovider.Provider`.
 - `controlpanel/deploy.go`: Deploys the control panel as a Deployment (single replica,
   no persistence) with a `ClusterIP` Service on port `3000`. Receives `SESSION_SECRET`
-  from the shared `shaide-secrets` Secret. It has no direct knowledge of installed
+  from the shared `shaide-secrets` Secret, and `KNOWLEDGE_CENTER_ENABLED`
+  (`"true"`/`"false"`, from `knowledgeCenterEnabled`; default: false) indicating whether
+  the Knowledge Center feature is present. It has no direct knowledge of installed
   models — it consumes shaide-server's own model API. See
   [Installed Model Discovery](#installed-model-discovery) below.
 - `webapp/deploy.go`: Deploys the end-user facing web application as a Deployment

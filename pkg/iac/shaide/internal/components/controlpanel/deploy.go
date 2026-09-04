@@ -4,6 +4,8 @@
 package controlpanel
 
 import (
+	"strconv"
+
 	appconfig "github.com/axem-solutions/ai_platform/pkg/iac/shaide/internal/config"
 	"github.com/axem-solutions/ai_platform/pkg/iac/shaide/internal/runtime"
 	appsv1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/apps/v1"
@@ -72,6 +74,10 @@ func Deploy(ctx *pulumi.Context, deps *runtime.DeploymentContext, cfg appconfig.
 											Key:  pulumi.String("SESSION_SECRET"),
 										},
 									},
+								},
+								&corev1.EnvVarArgs{
+									Name:  pulumi.String("KNOWLEDGE_CENTER_ENABLED"),
+									Value: pulumi.String(strconv.FormatBool(cfg.KnowledgeCenterEnabled)),
 								},
 							},
 							Ports: corev1.ContainerPortArray{
