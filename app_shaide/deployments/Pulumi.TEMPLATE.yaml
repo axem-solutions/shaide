@@ -103,6 +103,9 @@
 #   rustfsConsoleEnabled
 #                     — boolean; exposes the RustFS console on port 9001 in addition to the
 #                        S3 API on port 9000; default: false
+#   knowledgeCenterEnabled
+#                     — boolean; presence of the Knowledge Center feature; injected into
+#                        control-panel as the KNOWLEDGE_CENTER_ENABLED env var; default: false
 #
 # To create a new stack:
 #   cd app_shaide/deployments
@@ -168,6 +171,7 @@ config:
   # app-shaide:rustSpantrace: "0"
   # app-shaide:trial: "FALSE"
   # app-shaide:rustfsConsoleEnabled: false
+  # app-shaide:knowledgeCenterEnabled: false
   app-shaide:rustfsNotifyWebhookEnableShaide: "on"
   app-shaide:rustfsNotifyWebhookEndpointShaide: "http://shaide-server/v1/object-storage/event"
   app-shaide:rustfsNotifyWebhookQueueDirShaide: "/data/deploy/logs/notify"
