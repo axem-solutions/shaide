@@ -16,7 +16,7 @@ installed by a single command, all the way down to air-gapped clusters.
 [![Go](https://img.shields.io/badge/go-1.26%2B-00ADD8?logo=go&logoColor=white)](https://go.dev)
 [![Kubernetes](https://img.shields.io/badge/kubernetes-1.30%2B-326CE5?logo=kubernetes&logoColor=white)](https://kubernetes.io)
 
-**[Quickstart](#quickstart)** · **[Architecture](#architecture)** · **[Documentation](https://axem-solutions.github.io/shaide/)** · **[Contributing](CONTRIBUTING.md)** · **[Join the Community](https://discord.gg/n7nUneE2Ga)**
+**[Quickstart](#quickstart)** · **[Architecture](#architecture)** · **[Documentation](https://axem-solutions.github.io/shaide/)** · **[Contributing](CONTRIBUTING.md)** · **[Join the Community](https://discord.gg/UewWHHZzBN)**
 
 </div>
 
