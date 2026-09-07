@@ -274,6 +274,26 @@ func (r *Repository) pushBlobChunked(ctx context.Context, desc ocispec.Descripto
 	return nil
 }
 
+// resumeBlobUpload asks the registry where a recorded upload left off. An
+// error means the upload cannot be continued and the caller must start a new
+// one.
+func (r *Repository) resumeBlobUpload(ctx context.Context, state *uploadState) (chunk, error) {
+	if state.Location == "" {
+		return chunk{}, fmt.Errorf("upload state has no location")
+	}
+
+	offset, location, err := r.getBlobUpload(ctx, state.Location)
+	if err != nil {
+		return chunk{}, err
+	}
+
+	if location == "" {
+		return chunk{}, fmt.Errorf("registry returned no upload location")
+	}
+
+	return chunk{Location: location, Offset: offset}, nil
+}
+
 func (r *Repository) startOrResumeBlobUpload(ctx context.Context, desc ocispec.Descriptor) (chunk, error) {
 	state, err := r.loadUploadState(desc)
 	if err != nil {
@@ -283,22 +303,30 @@ func (r *Repository) startOrResumeBlobUpload(ctx context.Context, desc ocispec.D
 	if state != nil {
 		r.logf("oras chunk push: found upload state %s", state)
 
-		offset, location, err := r.getBlobUpload(ctx, state.Location)
-		if err != nil {
-			if err := r.deleteUploadState(desc); err != nil {
-				return chunk{}, fmt.Errorf("%w: delete stale upload state: %w", localerrdef.ErrUploadStateFailure, err)
+		resumeChunk, resumeErr := r.resumeBlobUpload(ctx, state)
+		if resumeErr == nil {
+			if err := r.saveUploadState(desc, resumeChunk.Offset, resumeChunk.Location); err != nil {
+				return chunk{}, fmt.Errorf("%w: save resumed upload state: %w", localerrdef.ErrUploadStateFailure, err)
 			}
-			r.logf("oras chunk push: deleting stale upload state digest=%s error=%v", desc.Digest, err)
+			r.logf("oras chunk push: resumed upload digest=%s offset=%d size=%d", desc.Digest, resumeChunk.Offset, desc.Size)
+
+			return resumeChunk, nil
 		}
 
-		resumeChunk := chunk{Location: location, Offset: offset}
+		// The registry no longer knows this upload: sessions expire between
+		// runs. The only way forward is a fresh upload, so the record is
+		// dropped and the POST below starts over.
+		//
+		// Falling through to the fresh POST is the point. Continuing with the
+		// zero values from the failed status check produced a chunk with no
+		// location, which then failed every PATCH with "unsupported protocol
+		// scheme" and, because that empty location was saved back, poisoned the
+		// state file so every later run repeated it.
+		r.logf("oras chunk push: discarding stale upload state digest=%s error=%v", desc.Digest, resumeErr)
 
-		if err := r.saveUploadState(desc, resumeChunk.Offset, resumeChunk.Location); err != nil {
-			return chunk{}, fmt.Errorf("%w: save resumed upload state: %w", localerrdef.ErrUploadStateFailure, err)
+		if err := r.deleteUploadState(desc); err != nil {
+			return chunk{}, fmt.Errorf("%w: delete stale upload state: %w", localerrdef.ErrUploadStateFailure, err)
 		}
-		r.logf("oras chunk push: resumed upload digest=%s offset=%d size=%d", desc.Digest, resumeChunk.Offset, desc.Size)
-
-		return resumeChunk, nil
 	}
 
 	location, err := r.postBlobUpload(ctx)
