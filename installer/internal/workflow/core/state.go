@@ -6,6 +6,7 @@ import (
 	harborapi "github.com/axem-solutions/ai_platform/installer/internal/harbor/api"
 	"github.com/axem-solutions/ai_platform/installer/internal/harbor/auth"
 	"github.com/axem-solutions/ai_platform/pkg/kube"
+	"github.com/axem-solutions/ai_platform/pkg/kube/platform"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
@@ -23,6 +24,10 @@ type ClusterState struct {
 	Client          kubernetes.Interface
 	RESTConfig      *rest.Config
 	ConfigPath      string
+
+	// Architecture is what the cluster's nodes run. Images are mirrored for
+	// this platform only, so a multi-architecture source is not copied in full.
+	Architecture platform.Architecture
 }
 
 type DiscoveryState struct {
