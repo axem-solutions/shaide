@@ -120,6 +120,114 @@ func spoolChunkToTempFile(content io.ReadSeeker, offset int64, size int64) (*chu
 	return &chunkContent{size: size, open: open}, cleanup, nil
 }
 
+// chunkPrefetcher spools the next chunk while the current one is being pushed.
+//
+// Mirroring a remote image reads every chunk from the source registry into a
+// temp file before sending it to Harbor. Done inline those two transfers never
+// overlap, so a blob costs its download time plus its upload time: a 6.5 GB
+// layer measured 47.5s per 128 MiB chunk, roughly half of it spent not talking
+// to Harbor at all.
+//
+// Reads of the source stay serialized despite the goroutine: fetch always
+// drains a pending prefetch before touching the source itself, so exactly one
+// reader is active at any time. The cost is one extra chunk on disk.
+type chunkPrefetcher struct {
+	content   io.ReadSeeker
+	spool     bool
+	blobSize  int64
+	chunkSize int64
+
+	pending <-chan prefetchResult
+}
+
+type prefetchResult struct {
+	offset  int64
+	size    int64
+	content *chunkContent
+	cleanup func()
+	err     error
+}
+
+func newChunkPrefetcher(content io.ReadSeeker, blobSize int64, opts ChunkedUploadOptions) *chunkPrefetcher {
+	return &chunkPrefetcher{
+		content:   content,
+		spool:     opts.SpoolChunks,
+		blobSize:  blobSize,
+		chunkSize: opts.ChunkSize,
+	}
+}
+
+// fetch returns the content for one chunk, using the prefetched copy when it
+// covers exactly the requested range. A retry or a recovered offset moves the
+// range, and the prefetch is then discarded rather than reused.
+func (p *chunkPrefetcher) fetch(offset int64, size int64) (*chunkContent, func(), error) {
+	if pending, ok := p.take(); ok {
+		if pending.err == nil && pending.offset == offset && pending.size == size {
+			p.start(offset + size)
+			return pending.content, pending.cleanup, nil
+		}
+
+		if pending.cleanup != nil {
+			pending.cleanup()
+		}
+	}
+
+	content, cleanup, err := prepareChunkContent(p.content, offset, size, p.spool)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	p.start(offset + size)
+
+	return content, cleanup, nil
+}
+
+// take blocks on an in-flight prefetch so the source has a single reader.
+func (p *chunkPrefetcher) take() (prefetchResult, bool) {
+	if p.pending == nil {
+		return prefetchResult{}, false
+	}
+
+	result := <-p.pending
+	p.pending = nil
+
+	return result, true
+}
+
+func (p *chunkPrefetcher) start(offset int64) {
+	// Only spooled chunks are worth reading ahead: a direct chunk is a section
+	// reader over an already-local file and costs nothing to open.
+	if !p.spool || p.chunkSize <= 0 || offset >= p.blobSize {
+		return
+	}
+
+	size := p.chunkSize
+	if remaining := p.blobSize - offset; remaining < size {
+		size = remaining
+	}
+
+	results := make(chan prefetchResult, 1)
+	p.pending = results
+
+	go func() {
+		content, cleanup, err := spoolChunkToTempFile(p.content, offset, size)
+		results <- prefetchResult{
+			offset:  offset,
+			size:    size,
+			content: content,
+			cleanup: cleanup,
+			err:     err,
+		}
+	}()
+}
+
+// close discards an unused prefetch so its temp file does not outlive the push.
+func (p *chunkPrefetcher) close() {
+	if pending, ok := p.take(); ok && pending.cleanup != nil {
+		pending.cleanup()
+	}
+}
+
 func (r *Repository) pushBlobChunked(ctx context.Context, desc ocispec.Descriptor, content io.ReadSeeker) error {
 	ctx = auth.AppendRepositoryScope(ctx, r.Repo.Reference, auth.ActionPull, auth.ActionPush)
 
@@ -141,10 +249,13 @@ func (r *Repository) pushBlobChunked(ctx context.Context, desc ocispec.Descripto
 	}
 	setReportedOffset(current.Offset)
 
+	prefetcher := newChunkPrefetcher(content, desc.Size, r.opts)
+	defer prefetcher.close()
+
 	for current.Offset < desc.Size {
 		current = nextChunk(current.Location, current.Offset, desc.Size, r.opts.ChunkSize)
 
-		if err := r.uploadChunkWithRetry(ctx, &current, desc, content, func() { setReportedOffset(0) }); err != nil {
+		if err := r.uploadChunkWithRetry(ctx, &current, desc, prefetcher, func() { setReportedOffset(0) }); err != nil {
 			return err
 		}
 
@@ -205,7 +316,7 @@ func (r *Repository) startOrResumeBlobUpload(ctx context.Context, desc ocispec.D
 	return newChunk, nil
 }
 
-func (r *Repository) uploadChunkWithRetry(ctx context.Context, current *chunk, desc ocispec.Descriptor, content io.ReadSeeker, onRestart func()) error {
+func (r *Repository) uploadChunkWithRetry(ctx context.Context, current *chunk, desc ocispec.Descriptor, prefetcher *chunkPrefetcher, onRestart func()) error {
 	var lastErr error
 
 	for attempt := 1; attempt <= r.opts.MaxChunkAttempts; attempt++ {
@@ -219,7 +330,7 @@ func (r *Repository) uploadChunkWithRetry(ctx context.Context, current *chunk, d
 			return fmt.Errorf("invalid remaining chunk range offset=%d end=%d", current.Offset, current.End)
 		}
 
-		chunkBody, cleanup, err := prepareChunkContent(content, attemptOffset, attemptSize, r.opts.SpoolChunks)
+		chunkBody, cleanup, err := prefetcher.fetch(attemptOffset, attemptSize)
 		if err != nil {
 			lastErr = err
 

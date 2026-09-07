@@ -3,7 +3,9 @@ package client
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strings"
+	"time"
 
 	"github.com/axem-solutions/ai_platform/installer/internal/config/catalog"
 	"github.com/axem-solutions/ai_platform/installer/internal/oras/repository"
@@ -20,6 +22,14 @@ const (
 	QuayRegistry        = "quay.io"
 	RegistryK8sRegistry = "registry.k8s.io"
 )
+
+// responseHeaderTimeout bounds the wait for response headers once a request
+// body has been sent. Harbor is reached through a port-forward, and when that
+// tunnel dies mid-transfer the socket stays open with nothing behind it: an
+// unbounded wait turned a dropped connection into a 17-minute stall before the
+// chunk retry could even begin. The clock starts after the body is written, so
+// this does not cap the time spent uploading a chunk.
+const responseHeaderTimeout = 2 * time.Minute
 
 type Client struct {
 	registry string
@@ -49,7 +59,7 @@ func newAuthClient(opts ClientOptions) *auth.Client {
 	credentials := registryCredentials(opts)
 
 	return &auth.Client{
-		Client: retry.DefaultClient,
+		Client: retryClient(),
 		Cache:  auth.NewCache(),
 		// Credential is called by ORAS when a registry request requires authentication.
 		// registry is the request host[:port]. Return EmptyCredential when no matching
@@ -62,6 +72,20 @@ func newAuthClient(opts ClientOptions) *auth.Client {
 			return authCredential(credential), nil
 		},
 	}
+}
+
+// retryClient is oras' retrying client over a transport that will not wait
+// forever for a response.
+func retryClient() *http.Client {
+	transport, ok := http.DefaultTransport.(*http.Transport)
+	if !ok {
+		return retry.DefaultClient
+	}
+
+	base := transport.Clone()
+	base.ResponseHeaderTimeout = responseHeaderTimeout
+
+	return &http.Client{Transport: retry.NewTransport(base)}
 }
 
 func registryCredentials(opts ClientOptions) map[string]Credential {

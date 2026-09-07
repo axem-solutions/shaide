@@ -347,6 +347,7 @@ func startPortForward(rt *core.Runtime) error {
 			LocalPort:  rt.Bootstrap.Config.Harbor.LocalPort,
 			RemotePort: rt.Discovery.Target.TargetPort,
 			PodName:    rt.Discovery.Target.PodName,
+			Logf:       rt.Detailf,
 		},
 	)
 	if err != nil {

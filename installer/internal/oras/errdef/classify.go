@@ -3,7 +3,10 @@ package errdef
 import (
 	"context"
 	"errors"
+	"io"
+	"net"
 	"net/http"
+	"syscall"
 
 	"github.com/axem-solutions/ai_platform/installer/internal/httpapi"
 	oraserrdef "oras.land/oras-go/v2/errdef"
@@ -52,7 +55,41 @@ func ClassifyError(err error) ErrorKind {
 	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, context.Canceled):
 		return httpapi.ErrNetwork
 	}
+
+	// A transport-level failure carries no registry response to inspect, so it
+	// reaches here as a bare *url.Error, EOF or a refused dial. Without this it
+	// classified as unknown and the artifact stage treated a dropped
+	// connection as fatal, discarding upload state that could have resumed the
+	// blob. httpapi.ClassifyError has always made this distinction; the oras
+	// path needs it too.
+	if isNetworkError(err) {
+		return httpapi.ErrNetwork
+	}
+
 	return httpapi.ErrUnknown
+}
+
+// isNetworkError reports whether err is a connection that failed or went away
+// rather than a registry that answered.
+func isNetworkError(err error) bool {
+	switch {
+	case errors.Is(err, io.EOF), errors.Is(err, io.ErrUnexpectedEOF):
+		// A port-forward dying mid-request surfaces as an EOF on the PATCH.
+		return true
+	case errors.Is(err, syscall.ECONNREFUSED),
+		errors.Is(err, syscall.ECONNRESET),
+		errors.Is(err, syscall.EPIPE),
+		errors.Is(err, syscall.ETIMEDOUT):
+		return true
+	}
+
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		return true
+	}
+
+	var opErr *net.OpError
+	return errors.As(err, &opErr)
 }
 
 func classifyRegistryErrors(registryErrors errcode.Errors) ErrorKind {
