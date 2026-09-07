@@ -99,6 +99,12 @@ func authCredential(credential Credential) auth.Credential {
 	}
 }
 
+// Registry is the push target host[:port]. Callers compare a failing host
+// against it to tell a Harbor rejection from an upstream registry's.
+func (c *Client) Registry() string {
+	return c.registry
+}
+
 func (c *Client) NewTargetRepository(project string, repositoryName string, opts repository.ChunkedUploadOptions) (*repository.Repository, error) {
 	ref := fmt.Sprintf("%s/%s/%s", c.registry, project, repositoryName)
 

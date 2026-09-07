@@ -27,11 +27,11 @@ func (u *Uploader) UploadModels(ctx context.Context, hubdir string, models []cat
 
 		artifact, err := u.prepareModelArtifact(ctx, hubdir, model)
 		if err != nil {
-			return uploadError("prepare model artifact", model.HarborName, err)
+			return u.uploadError("prepare model artifact", model.HarborName, err)
 		}
 
 		if _, err := u.push(ctx, artifact); err != nil {
-			return uploadError("push model artifact", model.HarborName, err)
+			return u.uploadError("push model artifact", model.HarborName, err)
 		}
 	}
 

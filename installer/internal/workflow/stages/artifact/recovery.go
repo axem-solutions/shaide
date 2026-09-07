@@ -134,11 +134,21 @@ func recoverArtifactUpload(rt *core.Runtime, runErr error) (core.RecoveryAction,
 		return core.RecoveryFail, nil
 	}
 
-	cause := oras.UserMessage(orasErr.Kind)
-	errMsg := fmt.Sprintf("Upload failed for %s.\n %s", orasErr.Target, cause)
+	errMsg := fmt.Sprintf("Upload failed for %s.\n %s", orasErr.Target, orasErr.UserMessage())
 
 	switch orasErr.Kind {
 	case httpapi.ErrAuth:
+		// Every image the installer mirrors is expected to be publicly
+		// pullable, so a source registry refusing the pull is an upstream
+		// visibility problem. There is no credential to enter here, and the
+		// Harbor prompt would only send the operator after the wrong one.
+		if orasErr.Scope == oras.ScopeSource {
+			return recoverRetryableModelUpload(rt, fmt.Sprintf(
+				"%s\n Make %s publicly readable, then retry.",
+				errMsg,
+				orasErr.Target,
+			))
+		}
 		return recoverModelUploadAuth(rt, errMsg)
 	case httpapi.ErrNetwork, httpapi.ErrRateLimited:
 		return recoverRetryableModelUpload(rt, errMsg)
