@@ -244,11 +244,29 @@ func targetRef(project string, name string, tag string) string {
 	return fmt.Sprintf("%s/%s:%s", project, name, tag)
 }
 
-func uploadError(op string, target string, err error) error {
+func (u *Uploader) uploadError(op string, target string, err error) error {
+	registry := errdef.RegistryHost(err)
+
 	return &errdef.Error{
-		Kind:   errdef.ClassifyError(err),
-		Op:     op,
-		Target: target,
-		Err:    err,
+		Kind:     errdef.ClassifyError(err),
+		Op:       op,
+		Target:   target,
+		Registry: registry,
+		Scope:    u.scope(registry),
+		Err:      err,
+	}
+}
+
+// scope attributes a failure to the registry that returned it. Anything that is
+// not the push target is upstream: the uploader pulls from several source
+// registries but only ever pushes to Harbor.
+func (u *Uploader) scope(registry string) errdef.Scope {
+	switch registry {
+	case "":
+		return errdef.ScopeLocal
+	case u.client.Registry():
+		return errdef.ScopeTarget
+	default:
+		return errdef.ScopeSource
 	}
 }

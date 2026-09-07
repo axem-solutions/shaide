@@ -18,11 +18,11 @@ func (u *Uploader) UploadImages(ctx context.Context, imageDir string, images []c
 
 		artifact, err := u.prepareImageArtifact(ctx, imageDir, image)
 		if err != nil {
-			return uploadError("prepare image artifact", image.Name, err)
+			return u.uploadError("prepare image artifact", image.Name, err)
 		}
 
 		if _, err := u.push(ctx, artifact); err != nil {
-			return uploadError("push image artifact", image.Name, err)
+			return u.uploadError("push image artifact", image.Name, err)
 		}
 	}
 

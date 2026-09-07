@@ -48,9 +48,15 @@ func Stage() core.Stage {
 			// Both paths converge here: the Harbor project selects its storage
 			// behaviour from the configured platform, so one deploy step
 			// serves on-prem and cloud alike.
+			// Only on a fresh install. CheckResources sets Update mode when it
+			// finds a reachable Harbor, and the installer holds no Pulumi state
+			// for a Harbor it did not deploy — so an ungated run would try to
+			// create the Helm release and fail with "cannot re-use a name that
+			// is still in use".
 			{
 				Name:    "deploy Harbor",
 				Run:     stacks.DeployHarbor,
+				When:    InstallMode,
 				Recover: pulumi.RecoverHarbor,
 			},
 			{
