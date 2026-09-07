@@ -37,6 +37,10 @@ func Stage() core.Stage {
 				Name: "detect cluster platform",
 				Run:  detectClusterPlatform,
 			},
+			{
+				Name: "detect cluster architecture",
+				Run:  detectClusterArchitecture,
+			},
 			// {
 			// 	Name: "check Nvidia driver compatibility",
 			// 	Run:  checkDriverCompatibility,
@@ -62,6 +66,59 @@ func detectClusterPlatform(rt *core.Runtime) error {
 	rt.Detailf("detected cluster platform: %q", detectedPlatform)
 
 	return nil
+}
+
+// supportedArchitectures lists what shaide can currently be installed onto.
+// Whether an architecture works is a product question, not a property of the
+// cluster, so the list lives here rather than in the detection helper. Adding
+// arm64 once its images and charts are ready is a one-line change.
+var supportedArchitectures = []platform.Architecture{
+	{OS: "linux", Arch: "amd64"},
+}
+
+// detectClusterArchitecture resolves what the target cluster runs, then refuses
+// anything shaide cannot install onto.
+//
+// Later stages mirror images for this platform alone. Without it the installer
+// would copy every architecture in a multi-architecture image, roughly doubling
+// what is pulled and stored for a cluster that can schedule only one of them.
+func detectClusterArchitecture(rt *core.Runtime) error {
+	architecture, err := platform.DetectArchitecture(context.Background(), rt.Cluster.Client)
+	if err != nil {
+		return err
+	}
+
+	if !isSupportedArchitecture(architecture) {
+		return fmt.Errorf(
+			"cluster architecture %s is not supported yet; shaide currently supports %s",
+			architecture,
+			joinSupportedArchitectures(),
+		)
+	}
+
+	rt.Cluster.Architecture = architecture
+	rt.Detailf("detected cluster architecture: %q", architecture)
+
+	return nil
+}
+
+func isSupportedArchitecture(architecture platform.Architecture) bool {
+	for _, supported := range supportedArchitectures {
+		if architecture == supported {
+			return true
+		}
+	}
+
+	return false
+}
+
+func joinSupportedArchitectures() string {
+	names := make([]string, 0, len(supportedArchitectures))
+	for _, supported := range supportedArchitectures {
+		names = append(names, supported.String())
+	}
+
+	return strings.Join(names, ", ")
 }
 
 func checkDriverCompatibility(rt *core.Runtime) error {
