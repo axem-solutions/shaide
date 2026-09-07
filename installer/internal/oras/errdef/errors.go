@@ -93,6 +93,17 @@ func RegistryHost(err error) string {
 		}
 	}
 
+	// A transport failure never reaches a registry response, but the request
+	// URL survives on the *url.Error. Without this a dropped connection is
+	// unattributed and reads as a Harbor problem even when the source registry
+	// was the side that went away.
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) {
+		if parsed, parseErr := url.Parse(urlErr.URL); parseErr == nil {
+			return parsed.Host
+		}
+	}
+
 	return ""
 }
 
