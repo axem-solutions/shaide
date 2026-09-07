@@ -16,6 +16,7 @@ import (
 	"github.com/axem-solutions/ai_platform/installer/internal/progress"
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/core"
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/stages/discovery"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
 func Stage() core.Stage {
@@ -251,6 +252,7 @@ func artifactUploader(rt *core.Runtime) (*oras.Uploader, error) {
 
 	return oras.NewUploader(oras.UploaderOptions{
 		Client:           clientOptions,
+		Platform:         targetPlatform(rt),
 		ChunkSize:        128 << 20,
 		StateDir:         rt.Bootstrap.Config.Paths.UploadState,
 		ArtifactCacheDir: rt.Bootstrap.Config.Paths.ArtifactCache,
@@ -273,6 +275,17 @@ func artifactUploader(rt *core.Runtime) (*oras.Uploader, error) {
 			})
 		},
 	})
+}
+
+// targetPlatform limits mirroring to what the cluster runs. The zero value
+// copies every variant, which is what happens if detection never ran.
+func targetPlatform(rt *core.Runtime) ocispec.Platform {
+	architecture := rt.Cluster.Architecture
+
+	return ocispec.Platform{
+		OS:           architecture.OS,
+		Architecture: architecture.Arch,
+	}
 }
 
 func artifactClientOptions(rt *core.Runtime) (orasapi.ClientOptions, error) {
