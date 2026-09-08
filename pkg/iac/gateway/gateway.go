@@ -9,8 +9,16 @@ import (
 	"github.com/axem-solutions/ai_platform/pkg/iac/gateway/internal/config"
 	"github.com/axem-solutions/ai_platform/pkg/iac/gateway/internal/workflow"
 	iackube "github.com/axem-solutions/ai_platform/pkg/iac/kubernetes"
+	"github.com/axem-solutions/ai_platform/pkg/stack"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
+
+// DeployGatewayProvider deploys the gateway provider using the resolved Pulumi
+// stack configuration. It is the entry point for running the program directly
+// with the Pulumi CLI; the installer goes through Stack.Deploy instead.
+func DeployGatewayProvider(ctx *pulumi.Context, projectDir string) error {
+	return deployGatewayProvider(ctx, config.New(projectDir, stack.Options{}))
+}
 
 func deployGatewayProvider(ctx *pulumi.Context, stackConfig config.Config) error {
 	cfg, err := stackConfig.Load(ctx)
