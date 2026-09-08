@@ -26,7 +26,7 @@ func DeployNodeTrust(
 	ctx *pulumi.Context,
 	k8sProvider *kubernetes.Provider,
 	release *helmv3.Release,
-	cfg config.Config,
+	cfg config.Values,
 ) error {
 	return deployNodeTrustResources(
 		ctx,
@@ -40,7 +40,7 @@ func deployNodeTrustResources(
 	ctx *pulumi.Context,
 	k8sProvider *kubernetes.Provider,
 	release *helmv3.Release,
-	cfg config.Config,
+	cfg config.Values,
 ) error {
 	providerOpt := pulumi.Provider(k8sProvider)
 

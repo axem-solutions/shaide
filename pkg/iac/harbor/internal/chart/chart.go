@@ -17,7 +17,7 @@ func Deploy(
 	ctx *pulumi.Context,
 	provider *kubernetes.Provider,
 	namespace *corev1.Namespace,
-	cfg config.Config,
+	cfg config.Values,
 	storageDependencies []pulumi.Resource,
 ) (*helmv3.Release, error) {
 	deps := make(
