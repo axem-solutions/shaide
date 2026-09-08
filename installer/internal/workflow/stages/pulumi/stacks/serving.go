@@ -27,6 +27,21 @@ const (
 	servingModeRecreate = "Recreate — destroy the stack, deleting model volumes"
 )
 
+// ServesModels reports whether anything is selected to serve on the cluster.
+//
+// An empty selection is a valid deployment, not a misconfiguration: a cluster
+// with no GPU nodes that reaches third-party providers only needs the rest of
+// the platform and no serving stack. The stack itself refuses to configure
+// without at least one model ("models must be non-empty"), and that failure is
+// unrecoverable, so the whole install used to stop here rather than skipping a
+// stack it had nothing to put in.
+//
+// The model manifest stands in for the model selection UI: it lists the models
+// the operator would have picked, so its being empty is the selection.
+func ServesModels(rt *core.Runtime) bool {
+	return len(rt.Bootstrap.Catalog.Models) > 0
+}
+
 func DeployAppServing(rt *core.Runtime) error {
 	workDir := filepath.Join(rt.Bootstrap.Config.Paths.ProjectsDir, projectAppServing)
 	stateDir := rt.Bootstrap.Config.Paths.PulumiState
