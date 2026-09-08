@@ -35,7 +35,7 @@ type infrastructure struct {
 // seed cert-manager's target Secret to break the first-boot ACME deadlock.
 func Deploy(
 	ctx *pulumi.Context,
-	cfg config.Config,
+	cfg config.Values,
 	provider *kubernetes.Provider,
 	crdDeps []pulumi.Resource,
 ) error {
@@ -92,13 +92,13 @@ func Deploy(
 	return nil
 }
 
-func isConfigured(cfg config.Config) bool {
+func isConfigured(cfg config.Values) bool {
 	// Neither an infrastructure stack nor a direct hostname was supplied, so
 	// preserve the documented behavior of skipping shared-Gateway creation.
 	return cfg.Gateway.InfraStackRef != "" || cfg.Gateway.Hostname != ""
 }
 
-func exportOutputs(ctx *pulumi.Context, cfg config.Config, infra infrastructure) {
+func exportOutputs(ctx *pulumi.Context, cfg config.Values, infra infrastructure) {
 	ctx.Export("gatewayName", pulumi.String(gatewayName))
 	ctx.Export("gatewayNamespace", pulumi.String(cfg.Gateway.Namespace))
 	ctx.Export("gatewayHostname", infra.Hostname)
@@ -107,7 +107,7 @@ func exportOutputs(ctx *pulumi.Context, cfg config.Config, infra infrastructure)
 
 func resolveInfrastructure(
 	ctx *pulumi.Context,
-	cfg config.Config,
+	cfg config.Values,
 ) (infrastructure, error) {
 	if cfg.Gateway.InfraStackRef != "" {
 		return infrastructureFromStack(ctx, cfg.Gateway.InfraStackRef)
@@ -138,7 +138,7 @@ func infrastructureFromStack(
 	}, nil
 }
 
-func infrastructureFromConfig(cfg config.Config) infrastructure {
+func infrastructureFromConfig(cfg config.Values) infrastructure {
 	// Direct config is used by on-prem stacks and installer bundles that do not
 	// have a separate infrastructure stack. Optional certificate, IP, and ALB
 	// subnet values intentionally remain empty when they do not apply.
@@ -153,7 +153,7 @@ func infrastructureFromConfig(cfg config.Config) infrastructure {
 
 func addBootstrapTLS(
 	ctx *pulumi.Context,
-	cfg config.Config,
+	cfg config.Values,
 	namespace *corev1.Namespace,
 	provider *kubernetes.Provider,
 	deps []pulumi.Resource,
@@ -170,7 +170,7 @@ func addBootstrapTLS(
 	return append(deps, secret), nil
 }
 
-func needsBootstrapTLS(cfg config.Config) bool {
+func needsBootstrapTLS(cfg config.Values) bool {
 	return usesAzureAGC(cfg) &&
 		cfg.TLS.CertManagerIssuer != "" &&
 		cfg.TLS.BootstrapSecret
@@ -178,7 +178,7 @@ func needsBootstrapTLS(cfg config.Config) bool {
 
 func createBootstrapTLSSecret(
 	ctx *pulumi.Context,
-	cfg config.Config,
+	cfg config.Values,
 	namespace *corev1.Namespace,
 	provider *kubernetes.Provider,
 ) (*corev1.Secret, error) {
@@ -211,7 +211,7 @@ func createBootstrapTLSSecret(
 
 func addApplicationLoadBalancer(
 	ctx *pulumi.Context,
-	cfg config.Config,
+	cfg config.Values,
 	infra infrastructure,
 	namespace *corev1.Namespace,
 	provider *kubernetes.Provider,
@@ -231,7 +231,7 @@ func addApplicationLoadBalancer(
 
 func createApplicationLoadBalancer(
 	ctx *pulumi.Context,
-	cfg config.Config,
+	cfg config.Values,
 	infra infrastructure,
 	namespace *corev1.Namespace,
 	provider *kubernetes.Provider,
@@ -259,7 +259,7 @@ func createApplicationLoadBalancer(
 
 func deployGateway(
 	ctx *pulumi.Context,
-	cfg config.Config,
+	cfg config.Values,
 	infra infrastructure,
 	namespace *corev1.Namespace,
 	provider *kubernetes.Provider,
@@ -302,7 +302,7 @@ func deployGateway(
 	return err
 }
 
-func buildListeners(cfg config.Config, values pulumi.ArrayOutput) pulumi.Output {
+func buildListeners(cfg config.Values, values pulumi.ArrayOutput) pulumi.Output {
 	return values.ApplyT(func(args []interface{}) []map[string]interface{} {
 		hostname := args[0].(string)
 		certName := args[1].(string)
@@ -396,7 +396,7 @@ func allowRoutesFromAllNamespaces() map[string]interface{} {
 }
 
 func buildAnnotations(
-	cfg config.Config,
+	cfg config.Values,
 	values pulumi.ArrayOutput,
 ) pulumi.StringMapOutput {
 	return values.ApplyT(func(args []interface{}) map[string]string {
@@ -424,7 +424,7 @@ func buildAnnotations(
 	}).(pulumi.StringMapOutput)
 }
 
-func buildAddresses(cfg config.Config, values pulumi.ArrayOutput) pulumi.Output {
+func buildAddresses(cfg config.Values, values pulumi.ArrayOutput) pulumi.Output {
 	// GKE binds a compute.Address by name. Azure Istio binds the literal public
 	// IP, while Azure AGC owns its frontend and must not receive spec.addresses.
 	return values.ApplyT(func(args []interface{}) []map[string]interface{} {
@@ -455,7 +455,7 @@ func buildAddresses(cfg config.Config, values pulumi.ArrayOutput) pulumi.Output 
 }
 
 func buildGatewaySpec(
-	cfg config.Config,
+	cfg config.Values,
 	listeners pulumi.Output,
 	addresses pulumi.Output,
 ) map[string]interface{} {
@@ -472,11 +472,11 @@ func buildGatewaySpec(
 	return spec
 }
 
-func usesAzureAGC(cfg config.Config) bool {
+func usesAzureAGC(cfg config.Values) bool {
 	return cfg.Platform == platform.Azure && cfg.Gateway.ALB.Name != ""
 }
 
-func usesAzureIstio(cfg config.Config) bool {
+func usesAzureIstio(cfg config.Values) bool {
 	return cfg.Platform == platform.Azure && cfg.Gateway.ALB.Name == ""
 }
 

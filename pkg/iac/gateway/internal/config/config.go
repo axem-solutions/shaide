@@ -9,8 +9,11 @@ import (
 	kubernetes "github.com/axem-solutions/ai_platform/pkg/kube/connection"
 	"github.com/axem-solutions/ai_platform/pkg/kube/platform"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
-	pulumiconfig "github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
 )
+
+// ProviderIstio is the Gateway implementation this project installs a control
+// plane for. Any other value skips the Istio installation.
+const ProviderIstio = "istio"
 
 const (
 	DefaultIstioNamespace = "istio-system"
@@ -24,7 +27,7 @@ const (
 	DefaultGIECRDsPath        = "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=v1.4.0"
 )
 
-type Config struct {
+type Values struct {
 	Platform   platform.Platform
 	Kubernetes kubernetes.Connection
 
@@ -82,88 +85,30 @@ type Config struct {
 	}
 }
 
-func Load(ctx *pulumi.Context, projectDir string) (Config, error) {
-	conf := pulumiconfig.New(ctx, "gateway-provider")
-
-	var cfg Config
-
-	loadPlatform(conf, &cfg)
-	loadKubernetes(conf, &cfg)
-	loadGateway(conf, &cfg)
-	loadIstio(conf, &cfg)
-	loadCRDs(conf, &cfg)
-	loadTLS(conf, &cfg)
-
-	if err := applyDefaults(&cfg); err != nil {
-		return Config{}, fmt.Errorf("apply defaults: %w", err)
+// Load reads the stack configuration through the entry setters declared in the
+// definition, then applies the defaults that depend on other values.
+func (c Config) Load(ctx *pulumi.Context) (Values, error) {
+	values, err := c.definition.Load(ctx)
+	if err != nil {
+		return Values{}, fmt.Errorf("load stack config: %w", err)
 	}
 
-	resolvePaths(&cfg, projectDir)
-
-	if err := cfg.Validate(); err != nil {
-		return Config{}, fmt.Errorf("validate gateway-provider config: %w", err)
+	if err := applyDefaults(&values); err != nil {
+		return Values{}, fmt.Errorf("apply defaults: %w", err)
 	}
 
-	return cfg, nil
-}
+	// Resolve after defaults so a packaged relative path and a configured one
+	// are anchored the same way.
+	resolvePaths(&values, c.ProjectDir())
 
-func loadPlatform(conf *pulumiconfig.Config, cfg *Config) {
-	// Keep the established Pulumi key used by existing stack files and the
-	// installer. Platform is the typed representation of cloudProvider.
-	cfg.Platform = platform.Platform(conf.Get("cloudProvider"))
-}
-
-func loadKubernetes(conf *pulumiconfig.Config, cfg *Config) {
-	cfg.Kubernetes.KubeconfigPath = conf.Get("kubeconfig")
-	cfg.Kubernetes.Context = conf.Get("context")
-}
-
-func loadGateway(conf *pulumiconfig.Config, cfg *Config) {
-	cfg.Gateway.Hostname = strings.TrimSpace(conf.Get("gatewayHostname"))
-	cfg.Gateway.ClassName = strings.TrimSpace(conf.Get("gatewayClassName"))
-	cfg.Gateway.Namespace = strings.TrimSpace(conf.Get("gatewayNamespace"))
-	cfg.Gateway.InfraStackRef = strings.TrimSpace(conf.Get("infraStackRef"))
-
-	cfg.Gateway.ALB.Name = strings.TrimSpace(conf.Get("albName"))
-	cfg.Gateway.ALB.SubnetID = strings.TrimSpace(conf.Get("albSubnetId"))
-
-	cfg.Gateway.StaticIP.Name = strings.TrimSpace(conf.Get("gatewayStaticIPName"))
-	cfg.Gateway.StaticIP.IP = strings.TrimSpace(conf.Get("gatewayStaticIP"))
-}
-
-func loadCRDs(conf *pulumiconfig.Config, cfg *Config) {
-	raw := conf.Get("installGatewayApiCrds")
-	if raw != "" {
-		cfg.CRDs.InstallGatewayAPI = conf.GetBool("installGatewayApiCrds")
-		cfg.CRDs.installConfigured = true
+	if err := values.Validate(); err != nil {
+		return Values{}, fmt.Errorf("validate gateway-provider config: %w", err)
 	}
 
-	cfg.CRDs.GatewayAPIPath = conf.Get("gatewayApiCrdsPath")
-	cfg.CRDs.GIEPath = conf.Get("gieCrdsPath")
+	return values, nil
 }
 
-func loadTLS(conf *pulumiconfig.Config, cfg *Config) {
-	cfg.TLS.CertName = strings.TrimSpace(conf.Get("gatewayCertName"))
-	cfg.TLS.CertAnnotation = strings.TrimSpace(conf.Get("tlsCertAnnotation"))
-	cfg.TLS.CertManagerIssuer = strings.TrimSpace(conf.Get("certManagerIssuer"))
-	cfg.TLS.SecretName = strings.TrimSpace(conf.Get("tlsSecretName"))
-	cfg.TLS.BootstrapSecret = conf.GetBool("bootstrapTlsSecret")
-}
-
-func loadIstio(conf *pulumiconfig.Config, cfg *Config) {
-	// Istio was historically the default Gateway implementation. An explicit
-	// non-Istio provider skips only the Istio control-plane installation.
-	provider := strings.TrimSpace(conf.Get("provider"))
-	cfg.Istio.Enabled = provider == "" || provider == "istio"
-
-	if cfg.Istio.Enabled {
-		cfg.Istio.Namespace = strings.TrimSpace(conf.Get("namespace"))
-		cfg.Istio.Hub = strings.TrimSpace(conf.Get("istioHub"))
-		cfg.Istio.Tag = strings.TrimSpace(conf.Get("istioTag"))
-	}
-}
-
-func applyDefaults(cfg *Config) error {
+func applyDefaults(cfg *Values) error {
 	platformDefaults := defaultsForPlatform(cfg.Platform)
 
 	if cfg.Gateway.ClassName == "" {
@@ -218,7 +163,7 @@ func defaultInstallGatewayAPICRDs(p platform.Platform) bool {
 	return p != platform.Azure
 }
 
-func resolvePaths(cfg *Config, projectDir string) {
+func resolvePaths(cfg *Values, projectDir string) {
 	cfg.CRDs.GatewayAPIPath = resolveProjectPath(
 		projectDir,
 		cfg.CRDs.GatewayAPIPath,
@@ -263,7 +208,7 @@ func resolveProjectPath(projectDir, path string) string {
 	return filepath.Clean(absPath)
 }
 
-func (cfg Config) Validate() error {
+func (cfg Values) Validate() error {
 	if err := cfg.Platform.Validate(); err != nil {
 		return err
 	}

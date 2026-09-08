@@ -12,8 +12,8 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
-func DeployGatewayProvider(ctx *pulumi.Context, projectDir string) error {
-	cfg, err := config.Load(ctx, projectDir)
+func deployGatewayProvider(ctx *pulumi.Context, stackConfig config.Config) error {
+	cfg, err := stackConfig.Load(ctx)
 	if err != nil {
 		return fmt.Errorf("load gateway provider config: %w", err)
 	}
