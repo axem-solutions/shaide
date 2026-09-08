@@ -6,7 +6,7 @@
 # Compile the Go installer in a dedicated stage so the Go toolchain, source
 # code, and build caches are not included in the final runtime image.
 # -----------------------------------------------------------------------------
-FROM golang:1.26.3-alpine AS builder
+FROM golang:1.26.6-alpine AS builder
 
 WORKDIR /build/installer
 
