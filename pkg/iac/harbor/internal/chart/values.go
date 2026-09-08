@@ -6,7 +6,7 @@ import (
 	"github.com/axem-solutions/ai_platform/pkg/iac/harbor/internal/config"
 )
 
-func BuildValues(cfg config.Config) pulumi.Map {
+func BuildValues(cfg config.Values) pulumi.Map {
 	values := pulumi.Map{
 		"expose": pulumi.Map{
 			"type": pulumi.String("clusterIP"),
@@ -45,7 +45,7 @@ func BuildValues(cfg config.Config) pulumi.Map {
 	return values
 }
 
-func buildClusterIPValues(cfg config.Config) pulumi.Map {
+func buildClusterIPValues(cfg config.Values) pulumi.Map {
 	values := pulumi.Map{
 		"name": pulumi.String(ServiceName),
 

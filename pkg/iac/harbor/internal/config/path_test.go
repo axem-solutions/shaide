@@ -3,6 +3,8 @@ package config
 import (
 	"path/filepath"
 	"testing"
+
+	"github.com/axem-solutions/ai_platform/pkg/stack"
 )
 
 func TestResolveChartPath(t *testing.T) {
@@ -70,18 +72,19 @@ func TestDefaultChartPathIsRelative(t *testing.T) {
 }
 
 func TestDefaultChartPathIsAnchoredAfterDefaults(t *testing.T) {
-	cfg := Config{}
-	cfg.Storage.Mode = StorageModeHostPath
+	configuration := New("", stack.Options{})
+	values := Values{}
+	values.Storage.Mode = StorageModeHostPath
 
-	if err := applyDefaults(&cfg); err != nil {
+	if err := configuration.applyDefaults(&values); err != nil {
 		t.Fatalf("applyDefaults() error = %v", err)
 	}
 
 	projectDir := "/var/shaide-installer/projects/harbor"
-	cfg.Harbor.ChartPath = resolveProjectPath(projectDir, cfg.Harbor.ChartPath)
+	values.Harbor.ChartPath = resolveProjectPath(projectDir, values.Harbor.ChartPath)
 
 	want := filepath.Join(projectDir, "charts/harbor-1.18.2.tgz")
-	if cfg.Harbor.ChartPath != want {
-		t.Errorf("default chart path = %q, want %q", cfg.Harbor.ChartPath, want)
+	if values.Harbor.ChartPath != want {
+		t.Errorf("default chart path = %q, want %q", values.Harbor.ChartPath, want)
 	}
 }

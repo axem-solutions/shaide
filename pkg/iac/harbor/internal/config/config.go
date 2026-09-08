@@ -15,7 +15,7 @@ const (
 	DefaultChartPath = "./charts/harbor-1.18.2.tgz"
 )
 
-type Config struct {
+type Values struct {
 	Platform   platform.Platform
 	Kubernetes kubernetes.Connection
 
@@ -43,99 +43,34 @@ type Config struct {
 	}
 }
 
-func Load(ctx *pulumi.Context, projectDir string) (Config, error) {
-	conf := pulumiconfig.New(ctx, "harbor")
-
-	var cfg Config
-
-	loadPlatform(conf, &cfg)
-
-	if err := loadHarbor(conf, &cfg, projectDir); err != nil {
-		return Config{}, err
+func (c Config) Load(ctx *pulumi.Context) (Values, error) {
+	values, err := c.definition.Load(ctx)
+	if err != nil {
+		return Values{}, fmt.Errorf("load stack config: %w", err)
 	}
 
-	loadKubernetes(conf, &cfg)
-	loadStorage(conf, &cfg)
-	loadNetwork(conf, &cfg)
-	loadMirror(conf, &cfg)
-
-	if err := applyDefaults(&cfg); err != nil {
-		return Config{}, fmt.Errorf("apply defaults: %w", err)
-	}
-
-	// Resolve after defaults are applied so the default chart path is anchored
-	// just like an explicitly configured relative path.
-	cfg.Harbor.ChartPath = resolveProjectPath(projectDir, cfg.Harbor.ChartPath)
-
-	if err := cfg.Validate(); err != nil {
-		return Config{}, fmt.Errorf("validate Harbor config: %w", err)
-	}
-
-	return cfg, nil
-}
-
-func loadPlatform(root *pulumiconfig.Config, cfg *Config) {
-	cfg.Platform = platform.Platform(root.Get("platform"))
-}
-
-func loadKubernetes(root *pulumiconfig.Config, cfg *Config) {
-	cfg.Kubernetes.KubeconfigPath = root.Get("kubeconfig")
-	cfg.Kubernetes.Context = root.Get("context")
-}
-
-func loadHarbor(harbor *pulumiconfig.Config, cfg *Config, projectDir string) error {
-	projects := []string{
+	values.Harbor.Projects = []string{
 		"ai-models",
 		"shaide",
 		"services",
 	}
 
-	cfg.Harbor.AdminPassword = harbor.RequireSecret("adminPassword")
-	cfg.Harbor.Namespace = harbor.Get("namespace")
-	cfg.Harbor.ChartPath = harbor.Get("chartPath")
-	cfg.Harbor.Projects = projects
-
-	loadRobot(harbor, cfg)
-
-	return nil
-}
-
-func loadRobot(harbor *pulumiconfig.Config, cfg *Config) {
-	if harbor.Get("robotPassword") == "" {
-		return
+	if err := c.applyDefaults(&values); err != nil {
+		return Values{}, fmt.Errorf("apply defaults: %w", err)
 	}
 
-	cfg.Harbor.Robot.Configured = true
-	cfg.Harbor.Robot.Password = harbor.RequireSecret("robotPassword")
+	// Resolve after defaults are applied so the default chart path is anchored
+	// just like an explicitly configured relative path.
+	values.Harbor.ChartPath = resolveProjectPath(c.ProjectDir(), values.Harbor.ChartPath)
+
+	if err := c.Validate(values); err != nil {
+		return Values{}, fmt.Errorf("validate Harbor config: %w", err)
+	}
+
+	return values, nil
 }
 
-func loadStorage(harbor *pulumiconfig.Config, cfg *Config) {
-	cfg.Storage.Mode = StorageMode(harbor.Get("storageMode"))
-	cfg.Storage.StorageClass = harbor.Get("storageClass")
-	cfg.Storage.HostPathBase = harbor.Get("hostPathBase")
-	cfg.Storage.NodeHostname = harbor.Get("nodeHostname")
-}
-
-func loadNetwork(harbor *pulumiconfig.Config, cfg *Config) {
-	cfg.Network.RegistryHostname = harbor.Get("registryHostname")
-	cfg.Network.StaticClusterIP = harbor.Get("staticClusterIP")
-	cfg.Network.NodeTrustEnabled = harbor.GetBool("nodeTrustEnabled")
-	cfg.Network.HTTPSFastFailEnabled = harbor.GetBool("httpsFastFailEnabled")
-}
-
-func loadMirror(harbor *pulumiconfig.Config, cfg *Config) {
-	cfg.Mirror.Enabled = harbor.GetBool("mirrorEnabled")
-	cfg.Mirror.PublicImages = harbor.Get("publicImages")
-
-	cfg.Mirror.GHCR.Org = harbor.Get("ghcrOrg")
-	cfg.Mirror.GHCR.User = harbor.Get("ghcrUser")
-	cfg.Mirror.GHCR.Token = harbor.GetSecret("ghcrToken")
-	cfg.Mirror.GHCR.SyncMode = SyncMode(harbor.Get("ghcrSyncMode"))
-	cfg.Mirror.GHCR.MinVersions = harbor.Get("ghcrMinVersions")
-	cfg.Mirror.GHCR.PinnedImages = harbor.Get("ghcrPinnedImages")
-}
-
-func (cfg Config) Validate() error {
+func (c Config) Validate(cfg Values) error {
 	if err := cfg.Platform.Validate(); err != nil {
 		return err
 	}
@@ -159,7 +94,7 @@ func (cfg Config) Validate() error {
 	return nil
 }
 
-func applyDefaults(cfg *Config) error {
+func (c Config) applyDefaults(cfg *Values) error {
 	if cfg.Storage.Mode == "" {
 		mode, err := defaultStorageMode(cfg.Platform)
 		if err != nil {

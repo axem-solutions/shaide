@@ -21,7 +21,7 @@ type Result struct {
 	Password pulumi.StringOutput
 }
 
-func Ensure(ctx *pulumi.Context, release *helmv3.Release, cfg config.Config) (Result, error) {
+func Ensure(ctx *pulumi.Context, release *helmv3.Release, cfg config.Values) (Result, error) {
 	robotPassword, err := ensureResources(
 		ctx,
 		release,
@@ -37,7 +37,7 @@ func Ensure(ctx *pulumi.Context, release *helmv3.Release, cfg config.Config) (Re
 	}, nil
 }
 
-func ensureResources(ctx *pulumi.Context, release *helmv3.Release, cfg config.Config) (pulumi.StringOutput, error) {
+func ensureResources(ctx *pulumi.Context, release *helmv3.Release, cfg config.Values) (pulumi.StringOutput, error) {
 	// ResourceNames is a genuinely computed Helm output, so this callback
 	// runs only once the Helm release has actually been applied.
 	//
