@@ -16,6 +16,7 @@ func Stage() core.Stage {
 			},
 			{
 				Name:    "Deploy App-Serving ",
+				When:    stacks.ServesModels,
 				Run:     stacks.DeployAppServing,
 				Recover: RecoverAppServing,
 			},
