@@ -120,8 +120,19 @@ func newDefinition(opts stack.Options) stackconfig.Config[Values] {
 				},
 			},
 			{
-				// Empty selects the platform default gateway class.
+				// Which Gateway implementation the cluster runs. The platform
+				// narrows it but does not decide it: Azure clusters split
+				// between Application Gateway for Containers and Istio, so the
+				// platform default is offered as the answer rather than
+				// applied silently.
 				Key: KeyGatewayClassName,
+				Source: stackconfig.Source{
+					Default: defaultsForPlatform(opts.Platform).gatewayClassName,
+				},
+				Prompt: &stackconfig.Prompt{
+					Kind:  stackconfig.PromptInput,
+					Title: "Gateway class name",
+				},
 				Setter: func(cfg *Values, root *pulumiconfig.Config) {
 					cfg.Gateway.ClassName = root.Get(KeyGatewayClassName.String())
 				},

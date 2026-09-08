@@ -72,6 +72,7 @@ func TestPromptsAreLimitedToPerClusterValues(t *testing.T) {
 			want: []string{
 				"Azure Application Gateway for Containers name",
 				"Azure subnet resource ID for Application Gateway for Containers",
+				"Gateway class name",
 				"Gateway hostname",
 				"cert-manager ClusterIssuer for Gateway TLS (empty serves HTTP only)",
 			},
@@ -81,6 +82,7 @@ func TestPromptsAreLimitedToPerClusterValues(t *testing.T) {
 			// questions must not appear anywhere else.
 			platform: platform.GCP,
 			want: []string{
+				"Gateway class name",
 				"Gateway hostname",
 				"cert-manager ClusterIssuer for Gateway TLS (empty serves HTTP only)",
 			},
@@ -88,6 +90,7 @@ func TestPromptsAreLimitedToPerClusterValues(t *testing.T) {
 		{
 			platform: platform.OnPrem,
 			want: []string{
+				"Gateway class name",
 				"Gateway hostname",
 				"cert-manager ClusterIssuer for Gateway TLS (empty serves HTTP only)",
 			},
@@ -147,7 +150,6 @@ func TestUnsetEntriesAreNotWritten(t *testing.T) {
 	values, _ := resolveFor(t, platform.Azure)
 
 	for _, key := range []string{
-		"gateway-provider:gatewayClassName",
 		"gateway-provider:gatewayStaticIPName",
 		"gateway-provider:gatewayStaticIP",
 		"gateway-provider:gatewayCertName",
@@ -157,6 +159,38 @@ func TestUnsetEntriesAreNotWritten(t *testing.T) {
 		if _, ok := values[key]; ok {
 			t.Errorf("%s was written; it should be left for the program default or a hand-set value", key)
 		}
+	}
+}
+
+// The platform default is offered as the prompt's answer, not applied behind
+// the operator's back: Azure clusters split between Application Gateway for
+// Containers and Istio, so the default is right for only some of them.
+func TestGatewayClassDefaultsToThePlatformValue(t *testing.T) {
+	tests := map[platform.Platform]string{
+		platform.Azure:  "azure-alb-external",
+		platform.GCP:    "gke-l7-regional-external-managed",
+		platform.AWS:    "alb",
+		platform.OnPrem: "istio",
+	}
+
+	for provider, want := range tests {
+		t.Run(string(provider), func(t *testing.T) {
+			values, asked := resolveFor(t, provider)
+
+			if got := values["gateway-provider:gatewayClassName"]; got != want {
+				t.Errorf("gatewayClassName = %q, want the %s default %q", got, provider, want)
+			}
+
+			var prompted bool
+			for _, title := range asked {
+				if title == "Gateway class name" {
+					prompted = true
+				}
+			}
+			if !prompted {
+				t.Error("the gateway class was applied without asking")
+			}
+		})
 	}
 }
 
