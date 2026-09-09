@@ -13,7 +13,7 @@ type dashboard struct {
 	json string
 }
 
-func Deploy(ctx *pulumi.Context, cfg appconfig.Config, opts ...pulumi.ResourceOption) error {
+func Deploy(ctx *pulumi.Context, cfg appconfig.Values, opts ...pulumi.ResourceOption) error {
 	items := []dashboard{
 		{"app-shaide-logs", appShaideDashboard},
 		{"app-serving-logs", appServingDashboard},
