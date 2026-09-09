@@ -15,14 +15,14 @@
 package rbac
 
 import (
-	appconfig "app_mcp/internal/config"
+	appconfig "github.com/axem-solutions/ai_platform/pkg/iac/mcp/internal/config"
 
 	metav1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/meta/v1"
 	rbacv1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/rbac/v1"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
-func Deploy(ctx *pulumi.Context, cfg appconfig.Config, providerOpt, nsOpt pulumi.ResourceOption) error {
+func Deploy(ctx *pulumi.Context, cfg appconfig.Values, providerOpt, nsOpt pulumi.ResourceOption) error {
 	readerRole, err := rbacv1.NewRole(ctx, "mcp-pod-reader", &rbacv1.RoleArgs{
 		Metadata: &metav1.ObjectMetaArgs{
 			Name:      pulumi.String("mcp-pod-reader"),

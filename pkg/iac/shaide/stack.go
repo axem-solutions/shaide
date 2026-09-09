@@ -61,3 +61,12 @@ func (s *Stack) Deploy(ctx *pulumi.Context) error {
 }
 
 var _ stackpkg.Stack = (*Stack)(nil)
+
+// Namespace and ServiceAccountName are the app-shaide values other stacks must
+// agree with. The MCP RBAC Role is bound to this ServiceAccount in this
+// namespace, and a mismatch surfaces as a 403 on the Kubernetes watch rather
+// than as a deployment failure.
+const (
+	Namespace          = appconfig.DefaultNamespace
+	ServiceAccountName = appconfig.DefaultServiceAccount
+)

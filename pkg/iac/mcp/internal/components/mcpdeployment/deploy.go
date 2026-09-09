@@ -18,9 +18,9 @@
 package mcpdeployment
 
 import (
-	"app_mcp/internal/components/caconfigmap"
-	appconfig "app_mcp/internal/config"
 	"fmt"
+	"github.com/axem-solutions/ai_platform/pkg/iac/mcp/internal/components/caconfigmap"
+	appconfig "github.com/axem-solutions/ai_platform/pkg/iac/mcp/internal/config"
 
 	appsv1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/apps/v1"
 	corev1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/core/v1"
@@ -58,7 +58,7 @@ func resolveInt(dsVal, globalVal int) int {
 
 // Deploy creates the ConfigMap (when CACert is set), Deployment, and Service for a
 // single MCP Server datasource. opts are forwarded to all resources.
-func Deploy(ctx *pulumi.Context, ds appconfig.Datasource, cfg appconfig.Config, opts ...pulumi.ResourceOption) error {
+func Deploy(ctx *pulumi.Context, ds appconfig.Datasource, cfg appconfig.Values, opts ...pulumi.ResourceOption) error {
 	name := "mcp-" + ds.Name
 
 	port := ds.Port
@@ -244,7 +244,7 @@ func buildVolumes(caConfigMapName string) corev1.VolumeArray {
 // SSL_CERT_FILE). If caConfigMapName is empty, no volume mount or trust env var is added.
 // imagePullPolicy, healthPath, and resource values are already resolved against global defaults
 // by the caller.
-func buildMainContainer(name, image, caTrustEnvVar, caConfigMapName string, port int, imagePullPolicy, healthPath, cpuRequest, memoryRequest, cpuLimit, memoryLimit string, startupProbeFailureThreshold int, disableProbes bool, args []string, env map[string]string, secretEnv []appconfig.SecretEnvVar, cfg appconfig.Config) *corev1.ContainerArgs {
+func buildMainContainer(name, image, caTrustEnvVar, caConfigMapName string, port int, imagePullPolicy, healthPath, cpuRequest, memoryRequest, cpuLimit, memoryLimit string, startupProbeFailureThreshold int, disableProbes bool, args []string, env map[string]string, secretEnv []appconfig.SecretEnvVar, cfg appconfig.Values) *corev1.ContainerArgs {
 	var envVars corev1.EnvVarArray
 	var volumeMounts corev1.VolumeMountArray
 

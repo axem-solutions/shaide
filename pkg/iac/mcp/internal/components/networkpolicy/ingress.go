@@ -6,7 +6,7 @@
 package networkpolicy
 
 import (
-	appconfig "app_mcp/internal/config"
+	appconfig "github.com/axem-solutions/ai_platform/pkg/iac/mcp/internal/config"
 
 	metav1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/meta/v1"
 	networkingv1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/networking/v1"
@@ -17,7 +17,7 @@ import (
 // It selects all pods in the namespace (podSelector: {}) and allows ingress only from
 // the app-shaide namespace — identified by the kubernetes.io/metadata.name label which
 // Kubernetes automatically applies to every namespace.
-func DeployIngress(ctx *pulumi.Context, cfg appconfig.Config, opts ...pulumi.ResourceOption) error {
+func DeployIngress(ctx *pulumi.Context, cfg appconfig.Values, opts ...pulumi.ResourceOption) error {
 	_, err := networkingv1.NewNetworkPolicy(ctx, "allow-shaide-ingress", &networkingv1.NetworkPolicyArgs{
 		Metadata: &metav1.ObjectMetaArgs{
 			Name:      pulumi.String("allow-shaide-ingress"),

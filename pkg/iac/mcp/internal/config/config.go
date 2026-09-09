@@ -1,6 +1,8 @@
 package appconfig
 
 import (
+	"fmt"
+
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	pulumiconfig "github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
 )
@@ -40,7 +42,7 @@ type SecretEnvVar struct {
 }
 
 // Config is the typed view of Pulumi stack config used by this stack.
-type Config struct {
+type Values struct {
 	Namespace                string   // mcp namespace
 	ShaideNamespace          string   // app-shaide namespace — where the Shaide Server ServiceAccount lives
 	ShaideServiceAccountName string   // Shaide Server ServiceAccount name in ShaideNamespace; must match app_shaide stack config
@@ -98,57 +100,59 @@ func getIntOrDefault(cfg *pulumiconfig.Config, key string, fallback int) int {
 	return v
 }
 
-func Load(ctx *pulumi.Context) Config {
-	cfg := pulumiconfig.New(ctx, "")
-
-	var datasources []Datasource
-	cfg.RequireObject("datasources", &datasources)
-
-	var imagePullSecrets []string
-	cfg.GetObject("imagePullSecrets", &imagePullSecrets)
-
-	hasAtlassianOAuthClientSecret := cfg.Get("mcpAtlassianOAuthClientSecret") != ""
-	atlassianOAuthClientSecret := pulumi.String("").ToStringOutput()
-	if hasAtlassianOAuthClientSecret {
-		atlassianOAuthClientSecret = cfg.RequireSecret("mcpAtlassianOAuthClientSecret")
-		addAtlassianSecretEnv(datasources)
+// Load reads the stack configuration through the entry setters declared in the
+// definition, then applies the deployment defaults the definition does not
+// write, so a direct pulumi up behaves like an installer-driven one.
+func (c Config) Load(ctx *pulumi.Context) (Values, error) {
+	values, err := c.definition.Load(ctx)
+	if err != nil {
+		return Values{}, fmt.Errorf("load stack config: %w", err)
 	}
 
-	return Config{
-		Namespace:                cfg.Require("namespace"),
-		ShaideNamespace:          cfg.Require("shaideNamespace"),
-		ShaideServiceAccountName: cfg.Require("shaideServiceAccountName"),
-		Kubeconfig:               cfg.Get("kubeconfig"),
-		CompanyCACert:            cfg.Get("companyCACert"),
-		CompanyCATrustEnvVar:     cfg.Get("companyCATrustEnvVar"),
-		NodeSelectorKey:          getWithDefault(cfg, "nodeSelectorKey", "nodegroup"),
-		NodeSelector:             cfg.Get("nodeSelector"),
-		ImagePullSecrets:         imagePullSecrets,
+	applyDefaults(&values)
 
-		ImagePullPolicy: getWithDefault(cfg, "imagePullPolicy", "Always"),
-		HealthPath:      getWithDefault(cfg, "healthPath", "/health"),
-		CPURequest:      getWithDefault(cfg, "cpuRequest", "100m"),
-		MemoryRequest:   getWithDefault(cfg, "memoryRequest", "128Mi"),
-		CPULimit:        getWithDefault(cfg, "cpuLimit", "500m"),
-		MemoryLimit:     getWithDefault(cfg, "memoryLimit", "512Mi"),
+	return values, nil
+}
 
-		StartupProbePeriod:             getIntOrDefault(cfg, "startupProbePeriod", 5),
-		StartupProbeTimeout:            getIntOrDefault(cfg, "startupProbeTimeout", 3),
-		StartupProbeFailureThreshold:   getIntOrDefault(cfg, "startupProbeFailureThreshold", 30),
-		ReadinessProbeInitialDelay:     getIntOrDefault(cfg, "readinessProbeInitialDelay", 5),
-		ReadinessProbePeriod:           getIntOrDefault(cfg, "readinessProbePeriod", 10),
-		ReadinessProbeTimeout:          getIntOrDefault(cfg, "readinessProbeTimeout", 3),
-		ReadinessProbeFailureThreshold: getIntOrDefault(cfg, "readinessProbeFailureThreshold", 3),
-		LivenessProbeInitialDelay:      getIntOrDefault(cfg, "livenessProbeInitialDelay", 15),
-		LivenessProbePeriod:            getIntOrDefault(cfg, "livenessProbePeriod", 30),
-		LivenessProbeTimeout:           getIntOrDefault(cfg, "livenessProbeTimeout", 5),
-		LivenessProbeFailureThreshold:  getIntOrDefault(cfg, "livenessProbeFailureThreshold", 3),
+func applyDefaults(cfg *Values) {
+	texts := []struct {
+		field *string
+		value string
+	}{
+		{&cfg.NodeSelectorKey, "nodegroup"},
+		{&cfg.ImagePullPolicy, "Always"},
+		{&cfg.HealthPath, "/health"},
+		{&cfg.CPURequest, "100m"},
+		{&cfg.MemoryRequest, "128Mi"},
+		{&cfg.CPULimit, "500m"},
+		{&cfg.MemoryLimit, "512Mi"},
+	}
+	for _, text := range texts {
+		if *text.field == "" {
+			*text.field = text.value
+		}
+	}
 
-		Datasources: datasources,
-		Secrets: AppSecrets{
-			AtlassianOAuthClientSecret:    atlassianOAuthClientSecret,
-			HasAtlassianOAuthClientSecret: hasAtlassianOAuthClientSecret,
-		},
+	numbers := []struct {
+		field *int
+		value int
+	}{
+		{&cfg.StartupProbePeriod, 5},
+		{&cfg.StartupProbeTimeout, 3},
+		{&cfg.StartupProbeFailureThreshold, 30},
+		{&cfg.ReadinessProbeInitialDelay, 5},
+		{&cfg.ReadinessProbePeriod, 10},
+		{&cfg.ReadinessProbeTimeout, 3},
+		{&cfg.ReadinessProbeFailureThreshold, 3},
+		{&cfg.LivenessProbeInitialDelay, 15},
+		{&cfg.LivenessProbePeriod, 30},
+		{&cfg.LivenessProbeTimeout, 5},
+		{&cfg.LivenessProbeFailureThreshold, 3},
+	}
+	for _, number := range numbers {
+		if *number.field == 0 {
+			*number.field = number.value
+		}
 	}
 }
 

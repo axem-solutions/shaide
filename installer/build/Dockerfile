@@ -167,6 +167,10 @@ COPY app_serving/charts/ \
 COPY app_shaide/deployments/Pulumi.yaml \
     /opt/shaide-installer/projects/app-shaide/Pulumi.yaml
 
+# App MCP
+COPY app_mcp/deployments/Pulumi.yaml \
+    /opt/shaide-installer/projects/app-mcp/Pulumi.yaml
+
 # Harbor
 COPY harbor/deployment/Pulumi.yaml \
     /opt/shaide-installer/projects/harbor/Pulumi.yaml
