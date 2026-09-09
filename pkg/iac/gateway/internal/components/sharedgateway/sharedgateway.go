@@ -12,7 +12,7 @@ import (
 
 	"github.com/axem-solutions/ai_platform/pkg/iac/gateway/internal/config"
 	iackube "github.com/axem-solutions/ai_platform/pkg/iac/kubernetes"
-	"github.com/axem-solutions/ai_platform/pkg/kube/platform"
+	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
 	"github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes"
 	apiext "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/apiextensions"
 	corev1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/core/v1"
@@ -428,7 +428,7 @@ func buildAddresses(cfg config.Config, values pulumi.ArrayOutput) pulumi.Output 
 	// GKE binds a compute.Address by name. Azure Istio binds the literal public
 	// IP, while Azure AGC owns its frontend and must not receive spec.addresses.
 	return values.ApplyT(func(args []interface{}) []map[string]interface{} {
-		if cfg.Platform == platform.Azure {
+		if cfg.Platform == cluster.Azure {
 			if usesAzureAGC(cfg) {
 				return nil
 			}
@@ -473,11 +473,11 @@ func buildGatewaySpec(
 }
 
 func usesAzureAGC(cfg config.Config) bool {
-	return cfg.Platform == platform.Azure && cfg.Gateway.ALB.Name != ""
+	return cfg.Platform == cluster.Azure && cfg.Gateway.ALB.Name != ""
 }
 
 func usesAzureIstio(cfg config.Config) bool {
-	return cfg.Platform == platform.Azure && cfg.Gateway.ALB.Name == ""
+	return cfg.Platform == cluster.Azure && cfg.Gateway.ALB.Name == ""
 }
 
 func azureIstioInfrastructure() map[string]interface{} {

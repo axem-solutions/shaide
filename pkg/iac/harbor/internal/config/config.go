@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 
 	kubernetes "github.com/axem-solutions/ai_platform/pkg/kube/connection"
-	"github.com/axem-solutions/ai_platform/pkg/kube/platform"
+	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	pulumiconfig "github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
 )
@@ -16,7 +16,7 @@ const (
 )
 
 type Config struct {
-	Platform   platform.Platform
+	Platform   cluster.Provider
 	Kubernetes kubernetes.Connection
 
 	Storage Storage
@@ -75,7 +75,7 @@ func Load(ctx *pulumi.Context, projectDir string) (Config, error) {
 }
 
 func loadPlatform(root *pulumiconfig.Config, cfg *Config) {
-	cfg.Platform = platform.Platform(root.Get("platform"))
+	cfg.Platform = cluster.Provider(root.Get("platform"))
 }
 
 func loadKubernetes(root *pulumiconfig.Config, cfg *Config) {

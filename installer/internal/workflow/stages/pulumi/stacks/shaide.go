@@ -36,9 +36,9 @@ func DeployAppShaide(rt *core.Runtime) error {
 	// Derive shaide:cloudProvider from the platform picked at the gateway-provider
 	// stage. The shaide program uses this to choose provider-specific resources
 	// (e.g. GKE HealthCheckPolicy is only created when cloudProvider is "gcp").
-	if rt.Bootstrap.CloudPlatform != "" {
+	if rt.Bootstrap.Provider != "" {
 		deployConfig[pulumiConfigKey(projectAppShaide, "cloudProvider")] = auto.ConfigValue{
-			Value: rt.Bootstrap.CloudPlatform,
+			Value: rt.Bootstrap.Provider,
 		}
 	}
 

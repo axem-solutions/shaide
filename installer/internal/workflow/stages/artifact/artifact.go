@@ -252,7 +252,7 @@ func artifactUploader(rt *core.Runtime) (*oras.Uploader, error) {
 
 	return oras.NewUploader(oras.UploaderOptions{
 		Client:           clientOptions,
-		Platform:         targetPlatform(rt),
+		Platform:         getTargetPlatform(rt),
 		ChunkSize:        128 << 20,
 		StateDir:         rt.Bootstrap.Config.Paths.UploadState,
 		ArtifactCacheDir: rt.Bootstrap.Config.Paths.ArtifactCache,
@@ -277,14 +277,13 @@ func artifactUploader(rt *core.Runtime) (*oras.Uploader, error) {
 	})
 }
 
-// targetPlatform limits mirroring to what the cluster runs. The zero value
-// copies every variant, which is what happens if detection never ran.
-func targetPlatform(rt *core.Runtime) ocispec.Platform {
-	architecture := rt.Cluster.Architecture
+// getTargetPlatform gets the platform of the target cluster.
+func getTargetPlatform(rt *core.Runtime) ocispec.Platform {
+	target := rt.Cluster.Platform
 
 	return ocispec.Platform{
-		OS:           architecture.OS,
-		Architecture: architecture.Arch,
+		OS:           target.OS,
+		Architecture: target.Arch,
 	}
 }
 

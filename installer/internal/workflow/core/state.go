@@ -6,7 +6,7 @@ import (
 	harborapi "github.com/axem-solutions/ai_platform/installer/internal/harbor/api"
 	"github.com/axem-solutions/ai_platform/installer/internal/harbor/auth"
 	"github.com/axem-solutions/ai_platform/pkg/kube"
-	"github.com/axem-solutions/ai_platform/pkg/kube/platform"
+	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
@@ -24,10 +24,7 @@ type ClusterState struct {
 	Client          kubernetes.Interface
 	RESTConfig      *rest.Config
 	ConfigPath      string
-
-	// Architecture is what the cluster's nodes run. Images are mirrored for
-	// this platform only, so a multi-architecture source is not copied in full.
-	Architecture platform.Architecture
+	Platform        cluster.Platform
 }
 
 type DiscoveryState struct {
@@ -57,10 +54,9 @@ type BootstrapState struct {
 	// and reused downstream by stages that need to point HTTPRoutes at the
 	// shared gateway (app-shaide).
 	GatewayHostname string
-	// CloudPlatform is detected from the cluster and can be confirmed or
-	// overridden through the gateway-provider template. Downstream stages use
-	// it to derive their own cloudProvider config without prompting again.
-	CloudPlatform string
+	// Provider is detected from the cluster. Downstream stages use
+	// it to derive their own Provider config without prompting again.
+	Provider string
 }
 
 type PulumiState struct {
