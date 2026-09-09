@@ -12,7 +12,7 @@ import (
 // EBS/EFS dynamic provisioning handles storage — no static PVs needed.
 type AWSProvider struct{}
 
-func (p *AWSProvider) ProvisionStorage(_ *pulumi.Context, _ *runtime.DeploymentContext, _ appconfig.Config) ([]pulumi.Resource, error) {
+func (p *AWSProvider) ProvisionStorage(_ *pulumi.Context, _ *runtime.DeploymentContext, _ appconfig.Values) ([]pulumi.Resource, error) {
 	return nil, nil
 }
 

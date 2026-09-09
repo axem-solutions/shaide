@@ -20,7 +20,7 @@ type Provider interface {
 	// PersistentVolumes for on-prem hostPath). The returned resources are
 	// added to StorageDeps so StatefulSets wait for them.
 	// Return nil slice for clouds with dynamic provisioning (no-op).
-	ProvisionStorage(ctx *pulumi.Context, deps *runtime.DeploymentContext, cfg appconfig.Config) ([]pulumi.Resource, error)
+	ProvisionStorage(ctx *pulumi.Context, deps *runtime.DeploymentContext, cfg appconfig.Values) ([]pulumi.Resource, error)
 
 	// PostDeployService is called after the shaide-server Service is created.
 	// Implementations may create cloud-native resources that target the Service.

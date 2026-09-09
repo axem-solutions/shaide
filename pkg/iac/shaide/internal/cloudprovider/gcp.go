@@ -15,7 +15,7 @@ type GCPProvider struct{}
 
 // ProvisionStorage is a no-op for GCP — GKE uses the pd.csi.storage.gke.io
 // dynamic provisioner; PersistentVolumes are created automatically.
-func (p *GCPProvider) ProvisionStorage(_ *pulumi.Context, _ *runtime.DeploymentContext, _ appconfig.Config) ([]pulumi.Resource, error) {
+func (p *GCPProvider) ProvisionStorage(_ *pulumi.Context, _ *runtime.DeploymentContext, _ appconfig.Values) ([]pulumi.Resource, error) {
 	return nil, nil
 }
 

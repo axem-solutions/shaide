@@ -1,6 +1,8 @@
 package appconfig
 
 import (
+	"fmt"
+
 	corev1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/core/v1"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	pulumiconfig "github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
@@ -13,7 +15,7 @@ import (
 // NodeSelectorKey=val, but must still be able to run elsewhere if none is available.
 // Returns just the NodeAffinity sub-block (not the full AffinityArgs wrapper) so callers can
 // compose it alongside PodAntiAffinityFor in a single Affinity value.
-func (c Config) NodeAffinityFor(override string) *corev1.NodeAffinityArgs {
+func (c Values) NodeAffinityFor(override string) *corev1.NodeAffinityArgs {
 	val := override
 	if val == "" {
 		val = c.NodeSelector
@@ -98,7 +100,7 @@ type RustFSEnv struct {
 }
 
 // Config is the typed view of Pulumi stack config used by this stack.
-type Config struct {
+type Values struct {
 	Namespace                string
 	NodeSelectorKey          string // label key used for node selection (default: nodegroup)
 	NodeSelector             string // global fallback — applies to all components when no per-component key is set
@@ -137,86 +139,36 @@ func getWithDefault(cfg *pulumiconfig.Config, key, fallback string) string {
 	return v
 }
 
-func Load(ctx *pulumi.Context) Config {
-	cfg := pulumiconfig.New(ctx, "")
+// Load reads the stack configuration through the entry setters declared in the
+// definition, then applies the defaults that the definition deliberately does
+// not write, so a direct pulumi up behaves like an installer-driven one.
+func (c Config) Load(ctx *pulumi.Context) (Values, error) {
+	values, err := c.definition.Load(ctx)
+	if err != nil {
+		return Values{}, fmt.Errorf("load stack config: %w", err)
+	}
 
-	var lbAnnotations map[string]string
-	cfg.GetObject("lbAnnotations", &lbAnnotations)
+	applyDefaults(&values)
 
-	var saAnnotations map[string]string
-	cfg.GetObject("serviceAccountAnnotations", &saAnnotations)
+	return values, nil
+}
 
-	return Config{
-		Namespace:                 cfg.Require("namespace"),
-		NodeSelectorKey:           getWithDefault(cfg, "nodeSelectorKey", "nodegroup"),
-		NodeSelector:              cfg.Get("nodeSelector"),
-		NodeSelectorShaide:        cfg.Get("nodeSelectorShaide"),
-		NodeSelectorControlPanel:  cfg.Get("nodeSelectorControlPanel"),
-		NodeSelectorWebApp:        cfg.Get("nodeSelectorWebapp"),
-		NodeSelectorRustfs:        cfg.Get("nodeSelectorRustfs"),
-		NodeSelectorQdrant:        cfg.Get("nodeSelectorQdrant"),
-		CloudProvider:             cfg.Require("cloudProvider"),
-		StorageClassName:          cfg.Get("storageClassName"),
-		PVNodeHostname:            cfg.Get("pvNodeHostname"),
-		HarborHostname:            cfg.Get("harborHostname"),
-		Kubeconfig:                cfg.Get("kubeconfig"),
-		ShaidePVSize:              getWithDefault(cfg, "shaidePVSize", "5Gi"),
-		RustfsPVSize:              getWithDefault(cfg, "rustfsPVSize", "5Gi"),
-		QdrantPVSize:              getWithDefault(cfg, "qdrantPVSize", "5Gi"),
-		KnowledgeCenterEnabled:    cfg.GetBool("knowledgeCenterEnabled"),
-		LBAnnotations:             lbAnnotations,
-		ServiceAccountAnnotations: saAnnotations,
-		ServiceAccountName:        cfg.Require(("shaideServiceAccountName")),
-		Registry: Registry{
-			GHCRUser:  getWithDefault(cfg, "ghcrUser", "axem-solutions"),
-			GHCRToken: cfg.RequireSecret("ghcrToken"),
-		},
-		Services: ServiceNames{
-			ControlPanel: cfg.Require("controlPanelService"),
-			WebApp:       cfg.Require("webappService"),
-			Rustfs:       cfg.Require("rustfsService"),
-			Qdrant:       cfg.Require("qdrantService"),
-		},
-		Images: Images{
-			ShaideServer: cfg.Require("shaideServerImage"),
-			ControlPanel: cfg.Require("controlPanelImage"),
-			WebApp:       cfg.Require("webappImage"),
-			Rustfs:       cfg.Require("rustfsImage"),
-			Qdrant:       cfg.Require("qdrantImage"),
-			Busybox:      getWithDefault(cfg, "busyboxImage", "busybox:1.37"),
-		},
-		Routing: Routing{
-			InfraStackRef:    cfg.Get("infraStackRef"),
-			GatewayHostname:  cfg.Get("gatewayHostname"),
-			GatewayName:      getWithDefault(cfg, "gatewayName", "shared-gateway"),
-			GatewayNamespace: getWithDefault(cfg, "gatewayNamespace", "gateway-system"),
-		},
-		ShaideEnv: AppEnv{
-			ShaideServerUiFQDN:       cfg.Require("shaideServerUiFqdn"),
-			ShaideServerUiPort:       cfg.Require("shaideServerUiPort"),
-			DatabaseURL:              cfg.Require("databaseUrl"),
-			S3User:                   cfg.Require("s3User"),
-			S3Port:                   cfg.Require("shaideServerS3Port"),
-			S3FQDN:                   cfg.Require("shaideServerS3Fqdn"),
-			S3UploadProxyRoutePrefix: cfg.Require("s3UploadProxyRoutePrefix"),
-			RustFSWebhookARN:         cfg.Require("rustfsWebhookArn"),
-			VectorDBUrl:              cfg.Require("vectorDBUrl"),
-			MCPNamespace:             cfg.Get("mcpNamespace"),
-			RustLibBacktrace:         cfg.Get("rustLibBacktrace"),
-			RustSpantrace:            cfg.Get("rustSpantrace"),
-			Trial:                    getWithDefault(cfg, "trial", "FALSE"),
-		},
-		RustEnv: RustFSEnv{
-			ConsoleEnabled:        cfg.GetBool("rustfsConsoleEnabled"),
-			WebhookEnableShaide:   cfg.Require("rustfsNotifyWebhookEnableShaide"),
-			WebhookEndpointShaide: cfg.Require("rustfsNotifyWebhookEndpointShaide"),
-			WebhookQueueDirShaide: cfg.Require("rustfsNotifyWebhookQueueDirShaide"),
-		},
-		Secrets: AppSecrets{
-			AdminAuthKey:  cfg.RequireSecret("adminAuthKey"),
-			S3Password:    cfg.RequireSecret("s3Password"),
-			JWTSecret:     cfg.RequireSecret("jwtSecret"),
-			SessionSecret: cfg.RequireSecret("sessionSecret"),
-		},
+func applyDefaults(cfg *Values) {
+	if cfg.NodeSelectorKey == "" {
+		cfg.NodeSelectorKey = DefaultNodeSelectorKey
+	}
+
+	if cfg.Images.Busybox == "" {
+		cfg.Images.Busybox = DefaultBusyboxImage
+	}
+
+	for _, size := range []*string{
+		&cfg.ShaidePVSize,
+		&cfg.RustfsPVSize,
+		&cfg.QdrantPVSize,
+	} {
+		if *size == "" {
+			*size = DefaultPVSize
+		}
 	}
 }

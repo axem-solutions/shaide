@@ -48,7 +48,7 @@ const hostPathStorageClass = "hostpath"
 // PVs are cluster-scoped, pinned to cfg.PVNodeHostname via nodeAffinity, and
 // pre-bound via claimRef for deterministic PVC assignment.
 // The returned resources are wired into StorageDeps so StatefulSets wait for them.
-func (p *OnPremProvider) ProvisionStorage(ctx *pulumi.Context, deps *runtime.DeploymentContext, cfg appconfig.Config) ([]pulumi.Resource, error) {
+func (p *OnPremProvider) ProvisionStorage(ctx *pulumi.Context, deps *runtime.DeploymentContext, cfg appconfig.Values) ([]pulumi.Resource, error) {
 	if cfg.StorageClassName != hostPathStorageClass {
 		return nil, nil
 	}
