@@ -135,7 +135,7 @@ loki.write "default" {
 }
 `
 
-func Deploy(ctx *pulumi.Context, cfg appconfig.Config, opts ...pulumi.ResourceOption) error {
+func Deploy(ctx *pulumi.Context, cfg appconfig.Values, opts ...pulumi.ResourceOption) error {
 	lokiURL := fmt.Sprintf("http://loki.%s.svc.cluster.local:3100/loki/api/v1/push", cfg.Namespace)
 
 	values := pulumi.Map{

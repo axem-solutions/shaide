@@ -7,7 +7,7 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
-func Deploy(ctx *pulumi.Context, cfg appconfig.Config, opts ...pulumi.ResourceOption) error {
+func Deploy(ctx *pulumi.Context, cfg appconfig.Values, opts ...pulumi.ResourceOption) error {
 	values := pulumi.Map{
 		"server": pulumi.Map{
 			"retention":        pulumi.String("15d"),
@@ -49,7 +49,7 @@ func Deploy(ctx *pulumi.Context, cfg appconfig.Config, opts ...pulumi.ResourceOp
 	return err
 }
 
-func serverPersistence(cfg appconfig.Config) pulumi.Map {
+func serverPersistence(cfg appconfig.Values) pulumi.Map {
 	m := pulumi.Map{
 		"enabled": pulumi.Bool(true),
 		"size":    pulumi.String("10Gi"),
