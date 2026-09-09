@@ -3,7 +3,7 @@ package config
 import (
 	"fmt"
 
-	"github.com/axem-solutions/ai_platform/pkg/kube/platform"
+	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
 )
 
 const DefaultHostPathBase = "/var/lib/hostpath/harbor"
@@ -30,12 +30,12 @@ type Storage struct {
 	NodeHostname string
 }
 
-func defaultStorageMode(p platform.Platform) (StorageMode, error) {
+func defaultStorageMode(p cluster.Provider) (StorageMode, error) {
 	switch p {
-	case platform.OnPrem:
+	case cluster.OnPrem:
 		return StorageModeHostPath, nil
 
-	case platform.GCP, platform.AWS, platform.Azure:
+	case cluster.GCP, cluster.AWS, cluster.Azure:
 		return StorageModeDynamic, nil
 
 	default:

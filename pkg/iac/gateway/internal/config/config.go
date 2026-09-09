@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
 	kubernetes "github.com/axem-solutions/ai_platform/pkg/kube/connection"
-	"github.com/axem-solutions/ai_platform/pkg/kube/platform"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	pulumiconfig "github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
 )
@@ -25,7 +25,7 @@ const (
 )
 
 type Config struct {
-	Platform   platform.Platform
+	Platform   cluster.Provider
 	Kubernetes kubernetes.Connection
 
 	Gateway struct {
@@ -110,7 +110,7 @@ func Load(ctx *pulumi.Context, projectDir string) (Config, error) {
 func loadPlatform(conf *pulumiconfig.Config, cfg *Config) {
 	// Keep the established Pulumi key used by existing stack files and the
 	// installer. Platform is the typed representation of cloudProvider.
-	cfg.Platform = platform.Platform(conf.Get("cloudProvider"))
+	cfg.Platform = cluster.Provider(conf.Get("cloudProvider"))
 }
 
 func loadKubernetes(conf *pulumiconfig.Config, cfg *Config) {
@@ -164,14 +164,14 @@ func loadIstio(conf *pulumiconfig.Config, cfg *Config) {
 }
 
 func applyDefaults(cfg *Config) error {
-	platformDefaults := defaultsForPlatform(cfg.Platform)
+	providerDefaults := defaultsForProvider(cfg.Platform)
 
 	if cfg.Gateway.ClassName == "" {
-		cfg.Gateway.ClassName = platformDefaults.gatewayClassName
+		cfg.Gateway.ClassName = providerDefaults.gatewayClassName
 	}
 
 	if cfg.TLS.CertAnnotation == "" {
-		cfg.TLS.CertAnnotation = platformDefaults.tlsCertAnnotation
+		cfg.TLS.CertAnnotation = providerDefaults.tlsCertAnnotation
 	}
 
 	if cfg.Istio.Namespace == "" {
@@ -214,8 +214,8 @@ func applyDefaults(cfg *Config) error {
 	return nil
 }
 
-func defaultInstallGatewayAPICRDs(p platform.Platform) bool {
-	return p != platform.Azure
+func defaultInstallGatewayAPICRDs(p cluster.Provider) bool {
+	return p != cluster.Azure
 }
 
 func resolvePaths(cfg *Config, projectDir string) {

@@ -33,7 +33,7 @@ func DeployHarbor(rt *core.Runtime) error {
 	}
 
 	stackConfig["harbor:platform"] = auto.ConfigValue{
-		Value: rt.Bootstrap.CloudPlatform,
+		Value: rt.Bootstrap.Provider,
 	}
 	stackConfig["harbor:kubeconfig"] = auto.ConfigValue{
 		Value: rt.Cluster.ConfigPath,

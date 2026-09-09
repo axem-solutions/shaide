@@ -3,7 +3,6 @@ package kubernetes
 import (
 	"context"
 	"fmt"
-	"runtime"
 	"strings"
 
 	"github.com/axem-solutions/ai_platform/installer/internal/config/catalog"
@@ -11,8 +10,8 @@ import (
 	"github.com/axem-solutions/ai_platform/installer/internal/kube"
 	"github.com/axem-solutions/ai_platform/installer/internal/oras/inspect"
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/core"
+	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
 	"github.com/axem-solutions/ai_platform/pkg/kube/connection"
-	"github.com/axem-solutions/ai_platform/pkg/kube/platform"
 )
 
 const cudaImageName = "llm-d/llm-d-cuda"
@@ -34,9 +33,15 @@ func Stage() core.Stage {
 				Run:  buildKubernetesClient,
 			},
 			{
-				Name: "detect cluster platform",
-				Run:  detectClusterPlatform,
+				Name: "detect provider",
+				Run:  detectProvider,
 			},
+			{
+				Name: "detect platform",
+				Run:  detectPlatform,
+			},
+			// Kept disabled, but note the ordering it depends on: it reads
+			// rt.Cluster.Platform, so it must stay after "detect platform".
 			// {
 			// 	Name: "check Nvidia driver compatibility",
 			// 	Run:  checkDriverCompatibility,
@@ -45,26 +50,81 @@ func Stage() core.Stage {
 	}
 }
 
-// detectClusterPlatform resolves the target platform from the cluster itself so
+// detectProvider resolves the target provider from the cluster itself so
 // that later stages can branch on it. Doing this here — right after the client
 // is built — means discovery already knows whether it is talking to a cloud or
 // an on-prem cluster, which is what lets it pick the Harbor bootstrap path.
 //
-// The value is a default, not a verdict: the gateway-provider template still
+// The value is a default: the gateway-provider template still
 // offers its platform selection, pre-filled with what we found here.
-func detectClusterPlatform(rt *core.Runtime) error {
-	detectedPlatform, err := platform.Detect(context.Background(), rt.Cluster.Client)
+func detectProvider(rt *core.Runtime) error {
+	detectedProvider, err := cluster.DetectProvider(context.Background(), rt.Cluster.Client)
 	if err != nil {
 		return err
 	}
 
-	rt.Bootstrap.CloudPlatform = string(detectedPlatform)
-	rt.Detailf("detected cluster platform: %q", detectedPlatform)
+	rt.Bootstrap.Provider = string(detectedProvider)
+	rt.Detailf("detected provider: %q", detectedProvider)
 
 	return nil
 }
 
+// supportedPlatforms lists what shaide can currently be installed onto.
+var supportedPlatforms = []cluster.Platform{
+	{OS: "linux", Arch: "amd64"},
+}
+
+// detectPlatform resolves the platform the target cluster runs, then refuses
+// anything shaide cannot install onto.
+//
+// Later stages mirror images for this platform alone.
+func detectPlatform(rt *core.Runtime) error {
+	detected, err := cluster.DetectPlatform(context.Background(), rt.Cluster.Client)
+	if err != nil {
+		return err
+	}
+
+	if !isSupportedPlatform(detected) {
+		return fmt.Errorf(
+			"cluster platform %s is not supported yet; shaide currently supports %s",
+			detected,
+			joinSupportedPlatforms(),
+		)
+	}
+
+	rt.Cluster.Platform = detected
+	rt.Detailf("detected cluster platform: %q", detected)
+
+	return nil
+}
+
+func isSupportedPlatform(detected cluster.Platform) bool {
+	for _, supported := range supportedPlatforms {
+		if detected == supported {
+			return true
+		}
+	}
+
+	return false
+}
+
+func joinSupportedPlatforms() string {
+	names := make([]string, 0, len(supportedPlatforms))
+	for _, supported := range supportedPlatforms {
+		names = append(names, supported.String())
+	}
+
+	return strings.Join(names, ", ")
+}
+
 func checkDriverCompatibility(rt *core.Runtime) error {
+	// Without this the zero platform reaches inspect.Platform.Equal, which
+	// matches no manifest, and the run fails with "image does not contain
+	// platform /" rather than naming the missing step.
+	if !rt.Cluster.Platform.IsValid() {
+		return fmt.Errorf("cluster platform is not detected yet; %q must run after %q", "check Nvidia driver compatibility", "detect platform")
+	}
+
 	cudaImage, err := findImageByName(rt.Bootstrap.Catalog.ServiceImages, cudaImageName)
 	if err != nil {
 		return fmt.Errorf("find CUDA image: %w", err)
@@ -75,7 +135,20 @@ func checkDriverCompatibility(rt *core.Runtime) error {
 		return fmt.Errorf("read NVIDIA GPU node labels: %w", err)
 	}
 
-	envVars, err := inspect.InspectImage(context.Background(), cudaImage, inspect.Platform{OS: "linux", Architecture: runtime.GOARCH}, driver.ImageEnvironmentVariables()...)
+	// The image is inspected for the platform the GPU nodes run, not the one
+	// the installer was built for. Those differ whenever the installer runs
+	// somewhere other than the cluster it is installing onto, and reading an
+	// amd64 image's CUDA requirements off an arm64 workstation would compare
+	// the wrong variant against the nodes.
+	envVars, err := inspect.InspectImage(
+		context.Background(),
+		cudaImage,
+		inspect.Platform{
+			OS:           rt.Cluster.Platform.OS,
+			Architecture: rt.Cluster.Platform.Arch,
+		},
+		driver.ImageEnvironmentVariables()...,
+	)
 	if err != nil {
 		return fmt.Errorf("inspect CUDA image: %w", err)
 	}

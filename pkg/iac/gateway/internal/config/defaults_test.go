@@ -3,26 +3,26 @@ package config
 import (
 	"testing"
 
-	"github.com/axem-solutions/ai_platform/pkg/kube/platform"
+	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
 )
 
 func TestDefaultsForPlatform(t *testing.T) {
 	tests := []struct {
 		name          string
-		platform      platform.Platform
+		platform      cluster.Provider
 		gatewayClass  string
 		tlsAnnotation string
 	}{
-		{"GCP", platform.GCP, "gke-l7-regional-external-managed", "networking.gke.io/cert-manager-certs"},
-		{"AWS", platform.AWS, "alb", "alb.ingress.kubernetes.io/certificate-arn"},
-		{"Azure", platform.Azure, "azure-alb-external", ""},
-		{"on-prem", platform.OnPrem, "istio", ""},
-		{"unknown", platform.Platform("unknown"), "", ""},
+		{"GCP", cluster.GCP, "gke-l7-regional-external-managed", "networking.gke.io/cert-manager-certs"},
+		{"AWS", cluster.AWS, "alb", "alb.ingress.kubernetes.io/certificate-arn"},
+		{"Azure", cluster.Azure, "azure-alb-external", ""},
+		{"on-prem", cluster.OnPrem, "istio", ""},
+		{"unknown", cluster.Provider("unknown"), "", ""},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := defaultsForPlatform(tt.platform)
+			got := defaultsForProvider(tt.platform)
 			if got.gatewayClassName != tt.gatewayClass {
 				t.Errorf("gatewayClassName = %q, want %q", got.gatewayClassName, tt.gatewayClass)
 			}
@@ -35,7 +35,7 @@ func TestDefaultsForPlatform(t *testing.T) {
 
 func TestApplyDefaultsUsesPlatformGatewayDefaults(t *testing.T) {
 	var cfg Config
-	cfg.Platform = platform.GCP
+	cfg.Platform = cluster.GCP
 
 	if err := applyDefaults(&cfg); err != nil {
 		t.Fatalf("applyDefaults() error = %v", err)
@@ -51,7 +51,7 @@ func TestApplyDefaultsUsesPlatformGatewayDefaults(t *testing.T) {
 
 func TestApplyDefaultsPreservesConfiguredGatewayValues(t *testing.T) {
 	var cfg Config
-	cfg.Platform = platform.GCP
+	cfg.Platform = cluster.GCP
 	cfg.Gateway.ClassName = "custom-class"
 	cfg.TLS.CertAnnotation = "custom.example/certificate"
 
@@ -70,7 +70,7 @@ func TestApplyDefaultsPreservesConfiguredGatewayValues(t *testing.T) {
 func TestValidateRequiresOneGatewaySource(t *testing.T) {
 	validConfig := func() Config {
 		var cfg Config
-		cfg.Platform = platform.Azure
+		cfg.Platform = cluster.Azure
 		cfg.Gateway.ClassName = "azure-alb-external"
 		cfg.Gateway.Namespace = DefaultGatewayNamespace
 		cfg.CRDs.GIEPath = DefaultGIECRDsPath

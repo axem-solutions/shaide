@@ -30,7 +30,7 @@ func DeployGatewayProvider(rt *core.Runtime) error {
 	// but do not prompt for them when the installer drives the deployment.
 	runtimeConfig := auto.ConfigMap{
 		pulumiConfigKey(projectGatewayProvider, "cloudProvider"): {
-			Value: rt.Bootstrap.CloudPlatform,
+			Value: rt.Bootstrap.Provider,
 		},
 		pulumiConfigKey(projectGatewayProvider, "kubeconfig"): {
 			Value: rt.Cluster.ConfigPath,

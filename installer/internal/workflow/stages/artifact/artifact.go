@@ -16,6 +16,7 @@ import (
 	"github.com/axem-solutions/ai_platform/installer/internal/progress"
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/core"
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/stages/discovery"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
 func Stage() core.Stage {
@@ -251,6 +252,7 @@ func artifactUploader(rt *core.Runtime) (*oras.Uploader, error) {
 
 	return oras.NewUploader(oras.UploaderOptions{
 		Client:           clientOptions,
+		Platform:         getTargetPlatform(rt),
 		ChunkSize:        128 << 20,
 		StateDir:         rt.Bootstrap.Config.Paths.UploadState,
 		ArtifactCacheDir: rt.Bootstrap.Config.Paths.ArtifactCache,
@@ -273,6 +275,16 @@ func artifactUploader(rt *core.Runtime) (*oras.Uploader, error) {
 			})
 		},
 	})
+}
+
+// getTargetPlatform gets the platform of the target cluster.
+func getTargetPlatform(rt *core.Runtime) ocispec.Platform {
+	target := rt.Cluster.Platform
+
+	return ocispec.Platform{
+		OS:           target.OS,
+		Architecture: target.Arch,
+	}
 }
 
 func artifactClientOptions(rt *core.Runtime) (orasapi.ClientOptions, error) {

@@ -19,12 +19,19 @@ const (
 	ErrLocalModelCache ErrorKind = "local_model_cache"
 	ErrArtifactBuild   ErrorKind = "artifact_build"
 	ErrUnsupported     ErrorKind = "unsupported"
+	ErrPlatform        ErrorKind = "platform"
 )
 
 var (
 	ErrUploadStateFailure     = errors.New("upload verification failure")
 	ErrLocalModelCacheFailure = errors.New("local model cache failure")
 	ErrArtifactBuildFailure   = errors.New("artifact build failure")
+
+	// ErrPlatformUnavailable reports that the source published no variant for
+	// the platform being mirrored. Distinguishing it from a missing repository
+	// matters: both surface from oras as a not-found, and only one of them is
+	// about the image's contents.
+	ErrPlatformUnavailable = errors.New("image does not provide the target platform")
 )
 
 // Scope says which side of a mirror failed. Every upload both pulls from an
@@ -56,6 +63,9 @@ type Error struct {
 	// did not come from a registry request.
 	Registry string
 	Scope    Scope
+
+	// Platform is the OS/architecture being mirrored, when one was selected.
+	Platform string
 
 	Err error
 }
@@ -116,6 +126,12 @@ func UserMessage(kind ErrorKind) string {
 
 // UserMessage describes the failure in terms of the registry that caused it.
 func (e *Error) UserMessage() string {
+	// A platform mismatch is about what the image contains, not about which
+	// registry answered, so it is described the same way from either side.
+	if e.Kind == ErrPlatform {
+		return platformMessage(e.Platform)
+	}
+
 	if e.Scope == ScopeSource {
 		return sourceMessage(e.Kind, e.RegistryLabel())
 	}
@@ -151,9 +167,21 @@ func targetMessage(kind ErrorKind) string {
 		return "model artifact could not be prepared for upload"
 	case ErrUnsupported:
 		return "Harbor registry does not support this model upload"
+	case ErrPlatform:
+		return platformMessage("")
 	default:
 		return "artifact upload failed"
 	}
+}
+
+// platformMessage names the platform the cluster runs, because the fix is
+// to publish that variant or to install onto a cluster the image supports.
+func platformMessage(platform string) string {
+	if platform == "" {
+		return "the image publishes no variant for the cluster platform"
+	}
+
+	return fmt.Sprintf("the image publishes no %s variant", platform)
 }
 
 // sourceMessage describes a failure pulling the image, before Harbor is
@@ -165,6 +193,8 @@ func sourceMessage(kind ErrorKind, registry string) string {
 		// the image is not published publicly rather than that a credential
 		// is wrong.
 		return fmt.Sprintf("%s refused the pull: the image is not publicly readable", registry)
+	case ErrPlatform:
+		return platformMessage("")
 	case httpapi.ErrNotFound:
 		return fmt.Sprintf("%s has no such repository or tag", registry)
 	case httpapi.ErrRateLimited:
