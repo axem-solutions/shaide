@@ -22,6 +22,11 @@
 !app_shaide/deployments/
 !app_shaide/deployments/Pulumi.yaml
 
+# App MCP project
+!app_mcp/
+!app_mcp/deployments/
+!app_mcp/deployments/Pulumi.yaml
+
 # Harbor project
 !harbor/
 !harbor/deployment/

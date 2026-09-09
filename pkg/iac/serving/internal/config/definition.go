@@ -33,6 +33,11 @@ const legacyKeyCloudProvider = "cloudProvider"
 // sources are deliberately omitted so hand-managed Pulumi stack values remain
 // intact when the installer updates the stack.
 type Sources struct {
+	// Models is the selection to serve. Empty leaves the key unwritten so a
+	// hand-managed stack value survives, which is how the models arrived
+	// before the installer could supply them.
+	Models ModelsInput
+
 	HarborHostname    string
 	HarborUser        string
 	HarborToken       string
@@ -94,9 +99,10 @@ func newDefinition(opts stack.Options, sources Sources) stackconfig.Config[stack
 			},
 			{
 				// Models are structured, deployment-specific configuration. The
-				// installer leaves this key untouched and the Pulumi program checks
-				// that it is present when loading the stack.
-				Key: KeyModels,
+				// installer supplies the selection it was given; an empty one is
+				// not written, so a hand-managed stack value stays intact.
+				Key:    KeyModels,
+				Source: stackconfig.Source{Value: optionalModels(sources.Models)},
 				Setter: func(cfg *stackInput, root *pulumiconfig.Config) {
 					root.RequireObject(KeyModels.String(), &cfg.Models)
 				},
@@ -189,4 +195,15 @@ func loadPlatform(root *pulumiconfig.Config) platform.Platform {
 	default:
 		return ""
 	}
+}
+
+// optionalModels omits an empty selection rather than writing an empty object,
+// which RequireObject would accept and the program would then reject as
+// "models must be non-empty" with no indication of where it came from.
+func optionalModels(models ModelsInput) any {
+	if len(models.Generative) == 0 && len(models.Embedder) == 0 {
+		return nil
+	}
+
+	return models
 }
