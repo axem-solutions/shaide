@@ -7,8 +7,8 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
 	kubernetes "github.com/axem-solutions/ai_platform/pkg/kube/connection"
-	"github.com/axem-solutions/ai_platform/pkg/kube/platform"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
@@ -29,7 +29,7 @@ const (
 )
 
 type Values struct {
-	Platform   platform.Platform
+	Platform   cluster.Provider
 	Kubernetes kubernetes.Connection
 
 	Harbor struct {
@@ -205,7 +205,7 @@ func (c Config) Validate(values Values) error {
 		}
 	}
 
-	if values.Platform == platform.OnPrem && strings.TrimSpace(values.Kubernetes.KubeconfigPath) == "" {
+	if values.Platform == cluster.OnPrem && strings.TrimSpace(values.Kubernetes.KubeconfigPath) == "" {
 		return fmt.Errorf("kubeconfig is required for %q", values.Platform)
 	}
 
@@ -295,7 +295,7 @@ func resolveProjectPath(projectDir, path string) string {
 }
 
 func (values Values) requiresHarbor() bool {
-	if values.Platform == platform.OnPrem {
+	if values.Platform == cluster.OnPrem {
 		return true
 	}
 

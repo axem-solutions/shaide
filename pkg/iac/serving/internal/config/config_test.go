@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/axem-solutions/ai_platform/pkg/kube/platform"
+	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
 	"github.com/axem-solutions/ai_platform/pkg/stack"
 )
 
@@ -35,7 +35,7 @@ func TestResolveResolvesPathsAndModelDefaults(t *testing.T) {
 
 	configuration := New(projectDir, stack.Options{}, Sources{})
 	values := Values{
-		Platform: platform.GCP,
+		Platform: cluster.GCP,
 	}
 	values.Models.Generative = []Model{{
 		Name:    "ExampleModel",
@@ -78,7 +78,7 @@ func TestValidate(t *testing.T) {
 
 	configuration := New("", stack.Options{}, Sources{})
 	valid := Values{
-		Platform: platform.GCP,
+		Platform: cluster.GCP,
 	}
 	valid.LLMd.ChartPath = DefaultLLMdChartPath
 	valid.Models.Generative = []Model{{
@@ -101,11 +101,11 @@ func TestValidate(t *testing.T) {
 	}{
 		{name: "valid cloud config"},
 		{
-			name: "invalid platform",
+			name: "invalid provider",
 			mutate: func(values *Values) {
 				values.Platform = "unsupported"
 			},
-			wantErr: "invalid platform",
+			wantErr: "invalid provider",
 		},
 		{
 			name: "no enabled models",
@@ -131,7 +131,7 @@ func TestValidate(t *testing.T) {
 		{
 			name: "on-prem requires kubeconfig",
 			mutate: func(values *Values) {
-				values.Platform = platform.OnPrem
+				values.Platform = cluster.OnPrem
 				values.Harbor.Hostname = "harbor.internal.lan"
 				values.Harbor.User = "robot$user"
 				values.Harbor.TokenSet = true
@@ -164,7 +164,7 @@ func TestValidate(t *testing.T) {
 
 func TestDefinitionResolvesRuntimeSources(t *testing.T) {
 	configuration := New("/projects/app-serving", stack.Options{
-		Platform:   platform.Azure,
+		Platform:   cluster.Azure,
 		Kubeconfig: "/tmp/kubeconfig",
 		Context:    "aks-context",
 	}, Sources{

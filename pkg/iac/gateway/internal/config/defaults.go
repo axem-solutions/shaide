@@ -1,33 +1,33 @@
 package config
 
-import "github.com/axem-solutions/ai_platform/pkg/kube/platform"
+import "github.com/axem-solutions/ai_platform/pkg/kube/cluster"
 
-type platformDefaults struct {
+type providerDefaults struct {
 	gatewayClassName  string
 	tlsCertAnnotation string
 }
 
-func defaultsForPlatform(provider platform.Platform) platformDefaults {
+func defaultsForProvider(provider cluster.Provider) providerDefaults {
 	switch provider {
-	case platform.GCP:
-		return platformDefaults{
+	case cluster.GCP:
+		return providerDefaults{
 			gatewayClassName:  "gke-l7-regional-external-managed",
 			tlsCertAnnotation: "networking.gke.io/cert-manager-certs",
 		}
-	case platform.AWS:
-		return platformDefaults{
+	case cluster.AWS:
+		return providerDefaults{
 			gatewayClassName:  "alb",
 			tlsCertAnnotation: "alb.ingress.kubernetes.io/certificate-arn",
 		}
-	case platform.Azure:
-		return platformDefaults{
+	case cluster.Azure:
+		return providerDefaults{
 			gatewayClassName: "azure-alb-external",
 		}
-	case platform.OnPrem:
-		return platformDefaults{
+	case cluster.OnPrem:
+		return providerDefaults{
 			gatewayClassName: "istio",
 		}
 	default:
-		return platformDefaults{}
+		return providerDefaults{}
 	}
 }

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/axem-solutions/ai_platform/pkg/kube/platform"
+	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
 	stackpkg "github.com/axem-solutions/ai_platform/pkg/stack"
 )
 
@@ -16,7 +16,7 @@ func TestInstallerOptionsCarryGPUTolerationToStackConfig(t *testing.T) {
 		Effect:   "NoSchedule",
 	}
 	stack := NewStack("/projects/app-serving", stackpkg.Options{
-		Platform:   platform.Azure,
+		Platform:   cluster.Azure,
 		Kubeconfig: "/.kube/config",
 		Context:    "aks-test",
 	}, Options{GPUToleration: &want})

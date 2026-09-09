@@ -10,7 +10,7 @@ import (
 
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/core"
 	"github.com/axem-solutions/ai_platform/pkg/iac/serving"
-	"github.com/axem-solutions/ai_platform/pkg/kube/platform"
+	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
 	stackpkg "github.com/axem-solutions/ai_platform/pkg/stack"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -62,7 +62,7 @@ func DeployAppServing(rt *core.Runtime) error {
 	servingStack := serving.NewStack(
 		workDir,
 		stackpkg.Options{
-			Platform:   platform.Platform(rt.Bootstrap.CloudPlatform),
+			Platform:   cluster.Provider(rt.Bootstrap.Provider),
 			Kubeconfig: rt.Cluster.ConfigPath,
 			Context:    rt.Cluster.SelectedContext,
 		},

@@ -7,7 +7,7 @@ import (
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/core"
 	"github.com/axem-solutions/ai_platform/pkg/iac/mcp"
 	"github.com/axem-solutions/ai_platform/pkg/iac/shaide"
-	"github.com/axem-solutions/ai_platform/pkg/kube/platform"
+	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
 	stackpkg "github.com/axem-solutions/ai_platform/pkg/stack"
 )
 
@@ -23,7 +23,7 @@ func DeployAppMCP(rt *core.Runtime) error {
 	mcpStack := mcp.NewStack(
 		filepath.Join(rt.Bootstrap.Config.Paths.ProjectsDir, projectAppMCP),
 		stackpkg.Options{
-			Platform:   platform.Platform(rt.Bootstrap.CloudPlatform),
+			Platform:   cluster.Provider(rt.Bootstrap.Provider),
 			Kubeconfig: rt.Cluster.ConfigPath,
 			Context:    rt.Cluster.SelectedContext,
 		},

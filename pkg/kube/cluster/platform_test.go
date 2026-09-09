@@ -1,4 +1,4 @@
-package platform
+package cluster
 
 import (
 	"context"
@@ -24,52 +24,52 @@ func node(name string, os string, arch string, unschedulable bool) *corev1.Node 
 	}
 }
 
-func TestDetectArchitectureSingle(t *testing.T) {
+func TestDetectPlatformSingle(t *testing.T) {
 	client := fake.NewSimpleClientset(
 		node("worker-1", "linux", "amd64", false),
 		node("worker-2", "linux", "amd64", false),
 		node("system-1", "linux", "amd64", false),
 	)
 
-	architecture, err := DetectArchitecture(context.Background(), client)
+	platform, err := DetectPlatform(context.Background(), client)
 	if err != nil {
-		t.Fatalf("DetectArchitecture() error = %v", err)
+		t.Fatalf("DetectPlatform() error = %v", err)
 	}
 
-	if got, want := architecture.String(), "linux/amd64"; got != want {
-		t.Errorf("architecture = %q, want %q", got, want)
+	if got, want := platform.String(), "linux/amd64"; got != want {
+		t.Errorf("platform = %q, want %q", got, want)
 	}
 }
 
-// A node cordoned for removal must not contribute an architecture: nothing new
+// A node cordoned for removal must not contribute a platform: nothing new
 // will be scheduled onto it, so mirroring for it would be wasted.
-func TestDetectArchitectureIgnoresUnschedulableNodes(t *testing.T) {
+func TestDetectPlatformIgnoresUnschedulableNodes(t *testing.T) {
 	client := fake.NewSimpleClientset(
 		node("worker-1", "linux", "amd64", false),
 		node("draining", "linux", "arm64", true),
 	)
 
-	architecture, err := DetectArchitecture(context.Background(), client)
+	platform, err := DetectPlatform(context.Background(), client)
 	if err != nil {
-		t.Fatalf("DetectArchitecture() error = %v", err)
+		t.Fatalf("DetectPlatform() error = %v", err)
 	}
 
-	if got, want := architecture.String(), "linux/amd64"; got != want {
-		t.Errorf("architecture = %q, want %q", got, want)
+	if got, want := platform.String(), "linux/amd64"; got != want {
+		t.Errorf("platform = %q, want %q", got, want)
 	}
 }
 
 // Mixed clusters are refused rather than guessed at, and the message has to say
 // what was found so the operator can act on it.
-func TestDetectArchitectureRejectsMixedCluster(t *testing.T) {
+func TestDetectPlatformRejectsMixedCluster(t *testing.T) {
 	client := fake.NewSimpleClientset(
 		node("worker-1", "linux", "amd64", false),
 		node("worker-2", "linux", "arm64", false),
 	)
 
-	_, err := DetectArchitecture(context.Background(), client)
+	_, err := DetectPlatform(context.Background(), client)
 	if err == nil {
-		t.Fatal("DetectArchitecture() succeeded on a mixed cluster")
+		t.Fatal("DetectPlatform() succeeded on a mixed cluster")
 	}
 
 	for _, want := range []string{"linux/amd64", "linux/arm64", "not supported"} {
@@ -79,41 +79,41 @@ func TestDetectArchitectureRejectsMixedCluster(t *testing.T) {
 	}
 }
 
-func TestDetectArchitecturesIsSortedAndDistinct(t *testing.T) {
+func TestDetectPlatformsIsSortedAndDistinct(t *testing.T) {
 	client := fake.NewSimpleClientset(
 		node("a", "linux", "arm64", false),
 		node("b", "linux", "amd64", false),
 		node("c", "linux", "amd64", false),
 	)
 
-	found, err := DetectArchitectures(context.Background(), client)
+	found, err := DetectPlatforms(context.Background(), client)
 	if err != nil {
-		t.Fatalf("DetectArchitectures() error = %v", err)
+		t.Fatalf("DetectPlatforms() error = %v", err)
 	}
 
 	if len(found) != 2 {
-		t.Fatalf("found %d architectures, want 2: %v", len(found), found)
+		t.Fatalf("found %d platforms, want 2: %v", len(found), found)
 	}
 	if found[0].String() != "linux/amd64" || found[1].String() != "linux/arm64" {
-		t.Errorf("architectures = %v, want a sorted [linux/amd64 linux/arm64]", found)
+		t.Errorf("platforms = %v, want a sorted [linux/amd64 linux/arm64]", found)
 	}
 }
 
-func TestDetectArchitectureNoUsableNodes(t *testing.T) {
+func TestDetectPlatformNoUsableNodes(t *testing.T) {
 	tests := []struct {
 		name  string
 		nodes []runtime.Object
 	}{
 		{name: "no nodes"},
 		{name: "all cordoned", nodes: []runtime.Object{node("a", "linux", "amd64", true)}},
-		{name: "architecture unreported", nodes: []runtime.Object{node("a", "", "", false)}},
+		{name: "platform unreported", nodes: []runtime.Object{node("a", "", "", false)}},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			client := fake.NewSimpleClientset(test.nodes...)
-			if _, err := DetectArchitecture(context.Background(), client); err == nil {
-				t.Error("DetectArchitecture() succeeded with no usable node")
+			if _, err := DetectPlatform(context.Background(), client); err == nil {
+				t.Error("DetectPlatform() succeeded with no usable node")
 			}
 		})
 	}

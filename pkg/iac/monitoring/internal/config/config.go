@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
 	kubernetes "github.com/axem-solutions/ai_platform/pkg/kube/connection"
-	"github.com/axem-solutions/ai_platform/pkg/kube/platform"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
@@ -27,7 +27,7 @@ const (
 )
 
 type Values struct {
-	Platform   platform.Platform
+	Platform   cluster.Provider
 	Kubernetes kubernetes.Connection
 
 	Namespace  string
@@ -212,8 +212,8 @@ func (c Config) applyDefaults(cfg *Values) {
 
 // Managed clusters supply their own default provisioner. The hostpath class is
 // installed by the on-prem infrastructure stack only.
-func defaultStorageClass(target platform.Platform) string {
-	if target == platform.OnPrem {
+func defaultStorageClass(target cluster.Provider) string {
+	if target == cluster.OnPrem {
 		return DefaultStorageClass
 	}
 	return ""

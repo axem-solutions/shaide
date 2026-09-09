@@ -1,4 +1,4 @@
-package platform
+package cluster
 
 import (
 	"context"
@@ -9,34 +9,34 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-type Platform string
+type Provider string
 
 const (
-	GCP    Platform = "gcp"
-	AWS    Platform = "aws"
-	Azure  Platform = "azure"
-	OnPrem Platform = "on-prem"
+	GCP    Provider = "gcp"
+	AWS    Provider = "aws"
+	Azure  Provider = "azure"
+	OnPrem Provider = "on-prem"
 )
 
-// providerIDPrefixes maps the scheme of a Node's spec.providerID to a platform.
+// providerIDPrefixes maps the scheme of a Node's spec.providerID to a provider.
 // The field is set by the cloud-controller-manager, so a cluster without one
 // (RKE2, k3s, kubeadm on bare metal) leaves it empty and is treated as on-prem.
 var providerIDPrefixes = []struct {
 	prefix   string
-	platform Platform
+	provider Provider
 }{
 	{"azure://", Azure},
 	{"gce://", GCP},
 	{"aws://", AWS},
 }
 
-func (p Platform) Validate() error {
+func (p Provider) Validate() error {
 	switch p {
 	case OnPrem, GCP, AWS, Azure:
 		return nil
 	default:
 		return fmt.Errorf(
-			"invalid platform %q: expected %q, %q, %q, or %q",
+			"invalid provider %q: expected %q, %q, %q, or %q",
 			p,
 			OnPrem,
 			GCP,
@@ -46,8 +46,8 @@ func (p Platform) Validate() error {
 	}
 }
 
-// IsCloud reports whether the platform is a managed cloud provider.
-func (p Platform) IsCloud() bool {
+// IsCloud reports whether the provider is a managed cloud provider.
+func (p Provider) IsCloud() bool {
 	switch p {
 	case GCP, AWS, Azure:
 		return true
@@ -56,7 +56,7 @@ func (p Platform) IsCloud() bool {
 	}
 }
 
-// Detect infers the target platform from the cluster's nodes.
+// DetectProvider infers the target provider from the cluster's nodes.
 //
 // spec.providerID is populated by the cloud-controller-manager and encodes
 // the cloud provider as a URI scheme:
@@ -70,25 +70,25 @@ func (p Platform) IsCloud() bool {
 //
 // Nodes are listed with a limit of 1 because every node in a cluster is
 // expected to use the same infrastructure provider.
-func Detect(ctx context.Context, client kubernetes.Interface) (Platform, error) {
+func DetectProvider(ctx context.Context, client kubernetes.Interface) (Provider, error) {
 	nodes, err := client.CoreV1().Nodes().List(ctx, metav1.ListOptions{Limit: 1})
 	if err != nil {
-		return "", fmt.Errorf("list nodes for platform detection: %w", err)
+		return "", fmt.Errorf("list nodes for provider detection: %w", err)
 	}
 
 	if len(nodes.Items) == 0 {
-		return "", fmt.Errorf("cluster reports no nodes, cannot detect platform")
+		return "", fmt.Errorf("cluster reports no nodes, cannot detect provider")
 	}
 
-	return platformForProviderID(nodes.Items[0].Spec.ProviderID), nil
+	return providerForProviderID(nodes.Items[0].Spec.ProviderID), nil
 }
 
-func platformForProviderID(providerID string) Platform {
+func providerForProviderID(providerID string) Provider {
 	id := strings.TrimSpace(providerID)
 
 	for _, p := range providerIDPrefixes {
 		if strings.HasPrefix(id, p.prefix) {
-			return p.platform
+			return p.provider
 		}
 	}
 

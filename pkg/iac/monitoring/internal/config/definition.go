@@ -1,7 +1,7 @@
 package config
 
 import (
-	"github.com/axem-solutions/ai_platform/pkg/kube/platform"
+	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
 	"github.com/axem-solutions/ai_platform/pkg/stack"
 	stackconfig "github.com/axem-solutions/ai_platform/pkg/stack/config"
 	pulumiconfig "github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
@@ -85,7 +85,7 @@ func newDefinition(opts stack.Options) stackconfig.Config[Values] {
 					Required: true,
 				},
 				Setter: func(cfg *Values, root *pulumiconfig.Config) {
-					cfg.Platform = platform.Platform(root.Get(KeyPlatform.String()))
+					cfg.Platform = cluster.Provider(root.Get(KeyPlatform.String()))
 				},
 			},
 			{

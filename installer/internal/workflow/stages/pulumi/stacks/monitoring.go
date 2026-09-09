@@ -6,7 +6,7 @@ import (
 
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/core"
 	"github.com/axem-solutions/ai_platform/pkg/iac/monitoring"
-	"github.com/axem-solutions/ai_platform/pkg/kube/platform"
+	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
 	"github.com/axem-solutions/ai_platform/pkg/stack"
 )
 
@@ -14,7 +14,7 @@ func DeployMonitoring(rt *core.Runtime) error {
 	monitoringStack := monitoring.NewStack(
 		filepath.Join(rt.Bootstrap.Config.Paths.ProjectsDir, projectMonitoring),
 		stack.Options{
-			Platform:   platform.Platform(rt.Bootstrap.CloudPlatform),
+			Platform:   cluster.Provider(rt.Bootstrap.Provider),
 			Kubeconfig: rt.Cluster.ConfigPath,
 			Context:    rt.Cluster.SelectedContext,
 		},

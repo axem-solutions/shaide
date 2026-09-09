@@ -174,11 +174,11 @@ func targetMessage(kind ErrorKind) string {
 	}
 }
 
-// platformMessage names the architecture the cluster runs, because the fix is
+// platformMessage names the platform the cluster runs, because the fix is
 // to publish that variant or to install onto a cluster the image supports.
 func platformMessage(platform string) string {
 	if platform == "" {
-		return "the image publishes no variant for the cluster architecture"
+		return "the image publishes no variant for the cluster platform"
 	}
 
 	return fmt.Sprintf("the image publishes no %s variant", platform)

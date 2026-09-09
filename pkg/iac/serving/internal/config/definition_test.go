@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/axem-solutions/ai_platform/pkg/kube/platform"
+	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
 	"github.com/axem-solutions/ai_platform/pkg/stack"
 )
 
@@ -16,7 +16,7 @@ func TestInstallerGPUTolerationIsWrittenToStackConfig(t *testing.T) {
 		Effect:   "NoSchedule",
 	}
 	cfg := New("/projects/app-serving", stack.Options{
-		Platform:   platform.Azure,
+		Platform:   cluster.Azure,
 		Kubeconfig: "/.kube/config",
 		Context:    "aks-test",
 	}, Sources{GPUToleration: &want})
@@ -42,7 +42,7 @@ func TestInstallerGPUTolerationIsWrittenToStackConfig(t *testing.T) {
 
 func TestUnsetGPUTolerationRemainsUnwritten(t *testing.T) {
 	cfg := New("/projects/app-serving", stack.Options{
-		Platform:   platform.Azure,
+		Platform:   cluster.Azure,
 		Kubeconfig: "/.kube/config",
 		Context:    "aks-test",
 	}, Sources{})

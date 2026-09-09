@@ -7,7 +7,7 @@ import (
 
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/core"
 	"github.com/axem-solutions/ai_platform/pkg/iac/gateway"
-	"github.com/axem-solutions/ai_platform/pkg/kube/platform"
+	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
 	"github.com/axem-solutions/ai_platform/pkg/stack"
 )
 
@@ -15,7 +15,7 @@ func DeployGatewayProvider(rt *core.Runtime) error {
 	gatewayStack := gateway.NewStack(
 		filepath.Join(rt.Bootstrap.Config.Paths.ProjectsDir, projectGatewayProvider),
 		stack.Options{
-			Platform:   platform.Platform(rt.Bootstrap.CloudPlatform),
+			Platform:   cluster.Provider(rt.Bootstrap.Provider),
 			Kubeconfig: rt.Cluster.ConfigPath,
 			Context:    rt.Cluster.SelectedContext,
 		},

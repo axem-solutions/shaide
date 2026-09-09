@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/core"
-	"github.com/axem-solutions/ai_platform/pkg/kube/platform"
+	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -29,7 +29,7 @@ const (
 // This runs even when Harbor was discovered rather than installed by this
 // installer, which keeps an existing Harbor deployment usable by app-shaide.
 func ensureHarborNodeAccess(rt *core.Runtime) error {
-	if !platform.Platform(rt.Bootstrap.CloudPlatform).IsCloud() {
+	if !cluster.Provider(rt.Bootstrap.Provider).IsCloud() {
 		return nil
 	}
 

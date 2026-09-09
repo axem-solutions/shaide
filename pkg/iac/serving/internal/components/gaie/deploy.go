@@ -2,7 +2,7 @@ package gaie
 
 import (
 	appConfig "github.com/axem-solutions/ai_platform/pkg/iac/serving/internal/config"
-	"github.com/axem-solutions/ai_platform/pkg/kube/platform"
+	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
 
 	helmv3 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/helm/v3"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
@@ -62,7 +62,7 @@ func Deploy(
 
 	chart := gaieOciChart
 	chartVersion := pulumi.StringPtr(gaieChartVersion)
-	if cfg.Platform == platform.OnPrem {
+	if cfg.Platform == cluster.OnPrem {
 		// Air-gapped: use the locally committed chart; no internet access needed.
 		// Version is inferred from the local chart's Chart.yaml.
 		// Prefer the absolute path resolved by the config layer (works inside

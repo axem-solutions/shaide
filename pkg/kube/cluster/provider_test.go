@@ -1,4 +1,4 @@
-package platform
+package cluster
 
 import (
 	"context"
@@ -9,11 +9,11 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
-func TestPlatformForProviderID(t *testing.T) {
+func TestProviderForProviderID(t *testing.T) {
 	tests := []struct {
 		name       string
 		providerID string
-		want       Platform
+		want       Provider
 	}{
 		{"Azure", "azure:///subscriptions/example", Azure},
 		{"GCP", "gce://project/zone/node", GCP},
@@ -25,47 +25,47 @@ func TestPlatformForProviderID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := platformForProviderID(tt.providerID); got != tt.want {
-				t.Fatalf("platformForProviderID(%q) = %q, want %q", tt.providerID, got, tt.want)
+			if got := providerForProviderID(tt.providerID); got != tt.want {
+				t.Fatalf("providerForProviderID(%q) = %q, want %q", tt.providerID, got, tt.want)
 			}
 		})
 	}
 }
 
-func TestPlatformIsCloud(t *testing.T) {
-	for _, value := range []Platform{Azure, GCP, AWS} {
+func TestProviderIsCloud(t *testing.T) {
+	for _, value := range []Provider{Azure, GCP, AWS} {
 		if !value.IsCloud() {
-			t.Errorf("%q should be a cloud platform", value)
+			t.Errorf("%q should be a cloud provider", value)
 		}
 	}
 
-	for _, value := range []Platform{OnPrem, ""} {
+	for _, value := range []Provider{OnPrem, ""} {
 		if value.IsCloud() {
-			t.Errorf("%q should not be a cloud platform", value)
+			t.Errorf("%q should not be a cloud provider", value)
 		}
 	}
 }
 
-func TestDetect(t *testing.T) {
+func TestDetectProvider(t *testing.T) {
 	t.Run("detects the node provider", func(t *testing.T) {
 		client := fake.NewClientset(&corev1.Node{
 			ObjectMeta: metav1.ObjectMeta{Name: "node-1"},
 			Spec:       corev1.NodeSpec{ProviderID: "azure:///subscriptions/example"},
 		})
 
-		got, err := Detect(context.Background(), client)
+		got, err := DetectProvider(context.Background(), client)
 		if err != nil {
-			t.Fatalf("Detect() error = %v", err)
+			t.Fatalf("DetectProvider() error = %v", err)
 		}
 		if got != Azure {
-			t.Errorf("Detect() = %q, want %q", got, Azure)
+			t.Errorf("DetectProvider() = %q, want %q", got, Azure)
 		}
 	})
 
 	t.Run("requires at least one node", func(t *testing.T) {
 		client := fake.NewClientset()
-		if _, err := Detect(context.Background(), client); err == nil {
-			t.Fatal("Detect() error = nil, want an error")
+		if _, err := DetectProvider(context.Background(), client); err == nil {
+			t.Fatal("DetectProvider() error = nil, want an error")
 		}
 	})
 }
