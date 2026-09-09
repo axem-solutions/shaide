@@ -21,7 +21,7 @@ import (
 // CreateGHCRSecret creates a kubernetes.io/dockerconfigjson pull secret.
 // When cfg.HarborHostname is set the secret authenticates against Harbor
 // (http://<harborHostname>); otherwise it authenticates against ghcr.io.
-func CreateGHCRSecret(ctx *pulumi.Context, cfg appconfig.Config, providerOpt, nsOpt pulumi.ResourceOption) (*corev1.Secret, error) {
+func CreateGHCRSecret(ctx *pulumi.Context, cfg appconfig.Values, providerOpt, nsOpt pulumi.ResourceOption) (*corev1.Secret, error) {
 	registry := "ghcr.io"
 	if cfg.HarborHostname != "" {
 		registry = cfg.HarborHostname

@@ -17,7 +17,7 @@ import (
 )
 
 // CreateAppShaideConfig creates the shared ConfigMap and Secret for the app-shaide stack.
-func CreateAppShaideConfig(ctx *pulumi.Context, cfg appconfig.Config, providerOpt, nsOpt pulumi.ResourceOption) (*corev1.ConfigMap, *corev1.Secret, error) {
+func CreateAppShaideConfig(ctx *pulumi.Context, cfg appconfig.Values, providerOpt, nsOpt pulumi.ResourceOption) (*corev1.ConfigMap, *corev1.Secret, error) {
 	// --- ConfigMap: service discovery and application settings ---
 	// Keys are injected as env vars into shaide-server via envFrom.
 	configData := pulumi.StringMap{

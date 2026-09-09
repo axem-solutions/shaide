@@ -18,6 +18,8 @@ import (
 
 func main() {
 	pulumi.Run(func(ctx *pulumi.Context) error {
-		return shaide.DeployAppShaide(ctx)
+		// Run by the Pulumi CLI, so the working directory is already the
+		// project directory and relative paths resolve against it.
+		return shaide.DeployAppShaide(ctx, ".")
 	})
 }

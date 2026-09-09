@@ -11,7 +11,7 @@ import (
 // No cloud-specific resources are created — standard Kubernetes primitives suffice.
 type GenericProvider struct{}
 
-func (p *GenericProvider) ProvisionStorage(_ *pulumi.Context, _ *runtime.DeploymentContext, _ appconfig.Config) ([]pulumi.Resource, error) {
+func (p *GenericProvider) ProvisionStorage(_ *pulumi.Context, _ *runtime.DeploymentContext, _ appconfig.Values) ([]pulumi.Resource, error) {
 	return nil, nil
 }
 

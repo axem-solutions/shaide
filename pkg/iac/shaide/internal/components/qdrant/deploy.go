@@ -14,7 +14,7 @@ import (
 
 // deployQdrant creates the qdrant StatefulSet and ClusterIP Service.
 // Provides vector database for RAG capabilities.
-func Deploy(ctx *pulumi.Context, deps *runtime.DeploymentContext, cfg appconfig.Config) error {
+func Deploy(ctx *pulumi.Context, deps *runtime.DeploymentContext, cfg appconfig.Values) error {
 	name := cfg.Services.Qdrant
 	image := cfg.Images.Qdrant
 

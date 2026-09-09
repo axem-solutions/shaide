@@ -17,7 +17,7 @@ import (
 // deployControlPanel creates the control-panel Deployment and ClusterIP Service.
 // NOTE: nginx:alpine will respond 200 on / out of the box. shaide-server can reach
 // http://control-panel.app-shaide.svc.cluster.local and get a valid HTTP response.
-func Deploy(ctx *pulumi.Context, deps *runtime.DeploymentContext, cfg appconfig.Config) error {
+func Deploy(ctx *pulumi.Context, deps *runtime.DeploymentContext, cfg appconfig.Values) error {
 	name := cfg.Services.ControlPanel
 	image := cfg.Images.ControlPanel
 

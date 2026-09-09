@@ -10,7 +10,7 @@ import (
 // CreateShaideServiceAccount creates a dedicated ServiceAccount for shaide-server.
 func CreateShaideServiceAccount(
 	ctx *pulumi.Context,
-	cfg appconfig.Config,
+	cfg appconfig.Values,
 	providerOpt, nsOpt pulumi.ResourceOption,
 ) (*corev1.ServiceAccount, error) {
 	var annotations pulumi.StringMap

@@ -20,7 +20,7 @@ const rustfsUID = 10001
 
 // deployRustfs creates the rustfs StatefulSet and ClusterIP Service.
 // Provides S3-compatible object storage for shaide-server.
-func Deploy(ctx *pulumi.Context, deps *runtime.DeploymentContext, cfg appconfig.Config) error {
+func Deploy(ctx *pulumi.Context, deps *runtime.DeploymentContext, cfg appconfig.Values) error {
 	name := cfg.Services.Rustfs
 	image := cfg.Images.Rustfs
 	enableConsole := cfg.RustEnv.ConsoleEnabled

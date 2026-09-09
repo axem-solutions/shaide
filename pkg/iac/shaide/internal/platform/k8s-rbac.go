@@ -21,7 +21,7 @@ import (
 // static model list for shaide to consume.
 func CreateShaideRBAC(
 	ctx *pulumi.Context,
-	cfg appconfig.Config,
+	cfg appconfig.Values,
 	providerOpt pulumi.ResourceOption,
 ) ([]pulumi.Resource, error) {
 	roleName := "shaide-server-topology-reader"

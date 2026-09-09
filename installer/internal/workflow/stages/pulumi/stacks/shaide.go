@@ -4,134 +4,115 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
-	"strings"
 
-	"github.com/axem-solutions/ai_platform/installer/internal/config"
-	"github.com/axem-solutions/ai_platform/installer/internal/iac"
+	"github.com/axem-solutions/ai_platform/installer/internal/config/catalog"
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/core"
 	"github.com/axem-solutions/ai_platform/pkg/iac/shaide"
-	"github.com/pulumi/pulumi/sdk/v3/go/auto"
+	"github.com/axem-solutions/ai_platform/pkg/kube/platform"
+	stackpkg "github.com/axem-solutions/ai_platform/pkg/stack"
+)
+
+// Names the image manifest uses for the components app-shaide deploys. The
+// stack needs a fully qualified reference for each, and the installer is the
+// only party that knows where they were mirrored to.
+const (
+	shaideServerImageName = "axem-solutions/shaide_server"
+	controlPanelImageName = "axem-solutions/control_panel"
+	webappImageName       = "axem-solutions/shaide-webapp"
+	rustfsImageName       = "rustfs/rustfs"
+	qdrantImageName       = "qdrant/qdrant"
+	busyboxImageName      = "busybox"
 )
 
 func DeployAppShaide(rt *core.Runtime) error {
 	workDir := filepath.Join(rt.Bootstrap.Config.Paths.ProjectsDir, projectAppShaide)
-	stateDir := rt.Bootstrap.Config.Paths.PulumiState
 
-	deployConfig := auto.ConfigMap{
-		pulumiConfigKey(projectAppShaide, "kubeconfig"): {
-			Value: rt.Cluster.ConfigPath,
+	options, err := shaideOptions(rt)
+	if err != nil {
+		return err
+	}
+
+	shaideStack := shaide.NewStack(
+		workDir,
+		stackpkg.Options{
+			Platform:   platform.Platform(rt.Bootstrap.CloudPlatform),
+			Kubeconfig: rt.Cluster.ConfigPath,
+			Context:    rt.Cluster.SelectedContext,
 		},
-	}
+		options,
+	)
 
-	// Reuse the gateway hostname captured during the gateway-provider stage so
-	// shaide can route via the shared Gateway without a StackReference to an
-	// external infra stack. Empty value falls back to the bundle stack file
-	// default (e.g. on-prem flow where gateway-provider doesn't set it).
-	if rt.Bootstrap.GatewayHostname != "" {
-		deployConfig[pulumiConfigKey(projectAppShaide, "gatewayHostname")] = auto.ConfigValue{
-			Value: rt.Bootstrap.GatewayHostname,
-		}
-	}
-
-	// Derive shaide:cloudProvider from the platform picked at the gateway-provider
-	// stage. The shaide program uses this to choose provider-specific resources
-	// (e.g. GKE HealthCheckPolicy is only created when cloudProvider is "gcp").
-	if rt.Bootstrap.CloudPlatform != "" {
-		deployConfig[pulumiConfigKey(projectAppShaide, "cloudProvider")] = auto.ConfigValue{
-			Value: rt.Bootstrap.CloudPlatform,
-		}
-	}
-
-	for {
-		value, err := rt.Reporter.Input("Shaide admin password", "", "admin")
-		if err != nil {
-			return err
-		}
-		if value != "" {
-			rt.Pulumi.ShaideAdmiPassword = value
-			break
-		}
-	}
-
-	if rt.Pulumi.ShaideAdmiPassword != "" {
-		deployConfig[pulumiConfigKey(projectAppShaide, "adminAuthKey")] = auto.ConfigValue{
-			Value:  rt.Pulumi.ShaideAdmiPassword,
-			Secret: true,
-		}
-		deployConfig[pulumiConfigKey(projectAppShaide, "s3Password")] = auto.ConfigValue{
-			Value:  rt.Pulumi.ShaideAdmiPassword,
-			Secret: true,
-		}
-	}
-
-	ghcrToken, err := shaidePullCredential(rt, workDir)
+	deployer, err := newStackDeployer(rt, shaideStack, stackDeploymentOptions{})
 	if err != nil {
 		return err
 	}
 
-	deployConfig[pulumiConfigKey(projectAppShaide, "ghcrToken")] = auto.ConfigValue{
-		Value:  ghcrToken,
-		Secret: true,
-	}
-
-	deployer, err := iac.NewDeployer(iac.DeployerOptions{
-		ProjectName: projectAppShaide,
-		StackName:   stackAppShaide,
-		WorkDir:     workDir,
-		StateDir:    stateDir,
-		Logger:      rt.Logger.Writer(),
-		Config:      deployConfig,
-		Destroy:     false,
-		Passphrase:  rt.Bootstrap.Config.Pulumi.ConfigPassphrase,
-	})
-	if err != nil {
+	if _, err := deployer.Deploy(context.Background()); err != nil {
 		return err
 	}
 
-	_, err = deployer.Deploy(context.Background(), shaide.DeployAppShaide)
-	if err != nil {
-		return err
-	}
 	return nil
 }
 
-// shaidePullCredential resolves the password for the shaide image pull secret.
-//
-// The secret authenticates against the registry CreateGHCRSecret targets: the
-// internal Harbor when the stack sets harborHostname, ghcr.io otherwise. The
-// credential must match that registry — a Harbor password sent to ghcr.io is
-// rejected with 403, and because a dockerconfigjson entry makes containerd
-// attempt basic auth rather than an anonymous pull, that breaks even public
-// images.
-//
-// GHCR_TOKEN takes precedence in both cases so a cluster can always be pointed
-// at explicit credentials.
-func shaidePullCredential(rt *core.Runtime, projectDir string) (string, error) {
-	if token := strings.TrimSpace(rt.Bootstrap.Config.Registries.GHCR.Password); token != "" {
-		rt.Detailf("using GHCR_TOKEN env var as shaide image pull credential")
-		return token, nil
-	}
+// shaideOptions resolves the values the installer knows: where the images were
+// mirrored, and the credential that can pull them from there.
+func shaideOptions(rt *core.Runtime) (shaide.Options, error) {
+	registry := harborRegistryHostname(rt)
 
-	stackFile := stackConfigFile(projectDir, stackAppShaide)
-	harborHostname, err := stackConfigString(stackFile, pulumiConfigKey(projectAppShaide, "harborHostname"))
-	if err != nil {
-		return "", err
-	}
-
-	if harborHostname != "" {
-		if rt.Discovery.Auth.Password == "" {
-			return "", fmt.Errorf(
-				"shaide images are served from Harbor (%s) but no Harbor credential is available",
-				harborHostname,
-			)
+	images := map[string]string{}
+	for _, name := range []string{
+		shaideServerImageName,
+		controlPanelImageName,
+		webappImageName,
+		rustfsImageName,
+		qdrantImageName,
+		busyboxImageName,
+	} {
+		reference, err := mirroredImageRef(rt.Bootstrap.Catalog.ServiceImages, registry, name)
+		if err != nil {
+			return shaide.Options{}, err
 		}
-		rt.Detailf("using Harbor robot password as shaide image pull credential")
-		return rt.Discovery.Auth.Password, nil
+		images[name] = reference
 	}
 
-	return "", fmt.Errorf(
-		"shaide images resolve at ghcr.io (%s sets no harborHostname), so a Harbor "+
-			"credential cannot authenticate them: set %s (and %s) before running the installer",
-		filepath.Base(stackFile), config.GHCRTokenEnv, config.GHCRUserEnv,
+	// The pull secret authenticates against the registry the references point
+	// at, so the Harbor robot credential travels with them.
+	return shaide.Options{
+		HarborHostname:  registry,
+		RegistryUser:    rt.Discovery.Auth.Username,
+		RegistryToken:   rt.Discovery.Auth.Password,
+		GatewayHostname: rt.Bootstrap.GatewayHostname,
+
+		ShaideServerImage: images[shaideServerImageName],
+		ControlPanelImage: images[controlPanelImageName],
+		WebappImage:       images[webappImageName],
+		RustfsImage:       images[rustfsImageName],
+		QdrantImage:       images[qdrantImageName],
+		BusyboxImage:      images[busyboxImageName],
+	}, nil
+}
+
+// harborRegistryHostname is the in-cluster address of the registry the images
+// were mirrored into. Pods resolve it through cluster DNS, unlike the
+// port-forward the installer itself uses.
+func harborRegistryHostname(rt *core.Runtime) string {
+	return fmt.Sprintf(
+		"%s.%s.svc.cluster.local",
+		rt.Bootstrap.Config.Harbor.Service,
+		rt.Bootstrap.Config.Harbor.Namespace,
 	)
+}
+
+// mirroredImageRef builds the reference the cluster pulls, from the manifest
+// entry that says where the installer put it.
+func mirroredImageRef(images []catalog.Image, registry, name string) (string, error) {
+	for _, image := range images {
+		if image.Name != name {
+			continue
+		}
+
+		return fmt.Sprintf("%s/%s/%s:%s", registry, image.Project, image.Name, image.Tag), nil
+	}
+
+	return "", fmt.Errorf("image manifest has no entry for %q, which app-shaide needs", name)
 }

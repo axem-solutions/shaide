@@ -15,7 +15,7 @@ type AzureProvider struct{}
 
 // ProvisionStorage is a no-op for Azure — AKS uses the disk.csi.azure.com dynamic
 // provisioner; PersistentVolumes are created automatically.
-func (p *AzureProvider) ProvisionStorage(_ *pulumi.Context, _ *runtime.DeploymentContext, _ appconfig.Config) ([]pulumi.Resource, error) {
+func (p *AzureProvider) ProvisionStorage(_ *pulumi.Context, _ *runtime.DeploymentContext, _ appconfig.Values) ([]pulumi.Resource, error) {
 	return nil, nil
 }
 
