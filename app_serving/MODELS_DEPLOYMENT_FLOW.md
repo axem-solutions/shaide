@@ -107,10 +107,10 @@ and runs it. The working directory for the binary is `app_serving/`.
 
 ### Step 2 — Config Loading (`config.go`)
 
-`appConfig.Load(ctx)` reads the stack config (`Pulumi.<stack>.yaml`) and returns
-a `Config` struct containing one `Model` entry per enabled model.
+The stack config loader reads `Pulumi.<stack>.yaml` and returns a `Values`
+struct containing one `Model` entry per enabled model.
 
-1. Reads `cloudProvider` — must be `cloud` or `on-prem`. Determines which credentials
+1. Reads `platform` — must be `gcp`, `aws`, `azure`, or `on-prem`. Determines which credentials
    are required.
 2. Reads `models.generative` and `models.embedder` lists. Each entry has:
    - `name` — folder name under `deployments/models/<category>/`
@@ -129,8 +129,8 @@ a `Config` struct containing one `Model` entry per enabled model.
    - ModelService release: `ms-<slug>`
    - Gateway name: `infra-<slug>-inference-gateway`
    - HTTPRoute name: `llm-d-<slug>`
-6. Validates credentials per `cloudProvider`:
-   - `cloud`: no additional required credentials (Harbor credentials optional, needed when `modelSource` is set).
+6. Validates credentials per `platform`:
+   - `gcp`, `aws`, or `azure`: no additional required credentials (Harbor credentials optional, needed when `modelSource` is set).
    - `on-prem`: `kubeconfig`, `harborHostname`, `harborUser`, `harborToken` **required**.
 
 ---
@@ -321,7 +321,7 @@ deployments/Pulumi.TEMPLATE.yaml deployments/Pulumi.<stack-name>.yaml`).
 ### Cloud example
 
 ```yaml
-app-serving:cloudProvider: cloud
+app-serving:platform: gcp
 app-serving:models:
   generative:
     - name: <modelName>
@@ -354,7 +354,7 @@ app-serving:harborToken:
 ### On-prem air-gap (RKE2) example
 
 ```yaml
-app-serving:cloudProvider: on-prem
+app-serving:platform: on-prem
 app-serving:models:
   generative:
     - name: <modelName>
@@ -520,7 +520,7 @@ on-prem credentials across multiple stack files.
 
 ```yaml
 # One stack file, two models, shared credentials, per-model nodeSelector
-app-serving:cloudProvider: on-prem
+app-serving:platform: on-prem
 app-serving:models:
   generative:
     - name: <ModelA>

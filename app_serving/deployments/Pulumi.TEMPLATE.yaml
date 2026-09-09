@@ -2,7 +2,7 @@
 # Model paths auto-resolve from deployments/models/<category>/<modelName>/
 #
 # Required config:
-#   cloudProvider — target platform: "cloud" (GCP/AWS/Azure) or "on-prem"
+#   platform      — target platform: "gcp", "aws", "azure", or "on-prem".
 #                   Determines which credentials are required.
 #
 #   models        — lists of models to deploy, split by category (generative, embedder).
@@ -66,7 +66,7 @@
 #
 # To create a new on-prem stack:
 #   pulumi stack init <stack-name>
-#   pulumi config set cloudProvider on-prem
+#   pulumi config set platform on-prem
 #   pulumi config set kubeconfig ~/.kube/rke2-cluster.yaml
 #   pulumi config set harborHostname harbor.internal.lan
 #   pulumi config set harborUser 'robot$k8s-puller'
@@ -74,12 +74,12 @@
 #
 # To create a new cloud stack (with Harbor model registry):
 #   pulumi stack init <stack-name>
-#   pulumi config set cloudProvider cloud
+#   pulumi config set platform gcp
 #   pulumi config set harborHostname harbor.harbor.svc.cluster.local
 #   pulumi config set harborUser 'robot$k8s-puller'
 #   pulumi config set --secret harborToken <robot-secret>
 config:
-  app-serving:cloudProvider: cloud  # or: on-prem
+  app-serving:platform: gcp  # or: aws, azure, on-prem
   app-serving:models:
     generative:
       - name: <modelName>

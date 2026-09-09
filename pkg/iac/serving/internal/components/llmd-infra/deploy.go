@@ -5,9 +5,9 @@ import (
 	"sort"
 	"strings"
 
+	iackube "github.com/axem-solutions/ai_platform/pkg/iac/kubernetes"
 	appConfig "github.com/axem-solutions/ai_platform/pkg/iac/serving/internal/config"
 
-	kubernetes "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes"
 	corev1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/core/v1"
 	helm_v4 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/helm/v4"
 	metav1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/meta/v1"
@@ -67,15 +67,13 @@ func Deploy(ctx *pulumi.Context, model appConfig.Model, lldChartPath string, opt
 		return nil, err
 	}
 
-	// Sub-provider with server-side apply disabled; inherits kubeconfig from the
-	// stack-level provider (set in main.go) when kubeconfig is explicitly configured.
-	serviceProviderArgs := &kubernetes.ProviderArgs{
-		EnableServerSideApply: pulumi.Bool(false),
-	}
-	if model.Kubeconfig != "" {
-		serviceProviderArgs.Kubeconfig = pulumi.StringPtr(model.Kubeconfig)
-	}
-	serviceProvider, err := kubernetes.NewProvider(ctx, "service-provider-"+model.ReleasePostFix(), serviceProviderArgs)
+	// Helm sub-providers use the same kubeconfig and context as the stack-level
+	// provider while retaining their historical server-side apply setting.
+	serverSideApply := false
+	serviceProvider, err := iackube.NewProvider(ctx, model.Kubernetes, iackube.ProviderOptions{
+		Name:                  "service-provider-" + model.ReleasePostFix(),
+		EnableServerSideApply: &serverSideApply,
+	})
 	if err != nil {
 		return nil, err
 	}

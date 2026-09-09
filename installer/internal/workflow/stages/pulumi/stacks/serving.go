@@ -6,12 +6,10 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/axem-solutions/ai_platform/installer/internal/iac"
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/core"
 	"github.com/axem-solutions/ai_platform/pkg/iac/serving"
 	"github.com/axem-solutions/ai_platform/pkg/kube/platform"
-	"github.com/pulumi/pulumi/sdk/v3/go/auto"
-	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
+	stackpkg "github.com/axem-solutions/ai_platform/pkg/stack"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -29,41 +27,10 @@ const (
 
 func DeployAppServing(rt *core.Runtime) error {
 	workDir := filepath.Join(rt.Bootstrap.Config.Paths.ProjectsDir, projectAppServing)
-	stateDir := rt.Bootstrap.Config.Paths.PulumiState
-
-	deployConfig := auto.ConfigMap{
-		pulumiConfigKey(projectAppServing, "kubeconfig"): {
-			Value: rt.Cluster.ConfigPath,
-		},
-	}
-
-	if rt.Discovery.Auth.Password != "" {
-		deployConfig[pulumiConfigKey(projectAppServing, "harborToken")] = auto.ConfigValue{
-			Value:  rt.Discovery.Auth.Password,
-			Secret: true,
-		}
-	}
-
-	// Derive serving:cloudProvider from the platform picked at the gateway-provider
-	// stage. The serving program only distinguishes "on-prem" (hostpath PVs) from
-	// "cloud" (cluster-default StorageClass), so collapse the four-value platform
-	// pick accordingly.
-	servingCloudProvider := "cloud"
-	if rt.Bootstrap.CloudPlatform == string(platform.OnPrem) {
-		servingCloudProvider = "on-prem"
-	}
-	deployConfig[pulumiConfigKey(projectAppServing, "cloudProvider")] = auto.ConfigValue{
-		Value: servingCloudProvider,
-	}
 
 	storageClass, err := promptModelStorageClass(rt)
 	if err != nil {
 		return err
-	}
-	if storageClass != "" {
-		deployConfig[pulumiConfigKey(projectAppServing, "modelStorageClass")] = auto.ConfigValue{
-			Value: storageClass,
-		}
 	}
 
 	// Recreating tears the stack down before deploying it again, which deletes
@@ -81,23 +48,29 @@ func DeployAppServing(rt *core.Runtime) error {
 
 	destroy := mode == servingModeRecreate
 
-	deployer, err := iac.NewDeployer(iac.DeployerOptions{
-		ProjectName: projectAppServing,
-		StackName:   stackAppServing,
-		WorkDir:     workDir,
-		StateDir:    stateDir,
-		Logger:      rt.Logger.Writer(),
-		Config:      deployConfig,
-		Destroy:     destroy,
-		Passphrase:  rt.Bootstrap.Config.Pulumi.ConfigPassphrase,
+	servingStack := serving.NewStack(
+		workDir,
+		stackpkg.Options{
+			Platform:   platform.Platform(rt.Bootstrap.CloudPlatform),
+			Kubeconfig: rt.Cluster.ConfigPath,
+			Context:    rt.Cluster.SelectedContext,
+		},
+		serving.Options{
+			HarborUser:        rt.Discovery.Auth.Username,
+			HarborToken:       rt.Discovery.Auth.Password,
+			ModelStorageClass: storageClass,
+			Logf:              rt.Detailf,
+		},
+	)
+
+	deployer, err := newStackDeployer(rt, servingStack, stackDeploymentOptions{
+		Destroy: destroy,
 	})
 	if err != nil {
 		return err
 	}
 
-	_, err = deployer.Deploy(context.Background(), func(ctx *pulumi.Context) error {
-		return serving.DeployAppServing(ctx, workDir, rt.Detailf)
-	})
+	_, err = deployer.Deploy(context.Background())
 	if err != nil {
 		return err
 	}

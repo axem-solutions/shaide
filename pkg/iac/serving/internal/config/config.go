@@ -7,6 +7,8 @@ import (
 	"regexp"
 	"strings"
 
+	kubernetes "github.com/axem-solutions/ai_platform/pkg/kube/connection"
+	"github.com/axem-solutions/ai_platform/pkg/kube/platform"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
@@ -17,6 +19,9 @@ const (
 	modelFolder      = "models"
 	gaiPrefix        = "gaie-"
 	msPrefix         = "ms-"
+
+	DefaultLLMdChartPath      = "../upstream/llm-d/llm-d-infra/charts/llm-d-infra"
+	DefaultGaieLocalChartPath = "charts/inferencepool"
 )
 
 // ModelSource describes where pre-loaded model weights are stored.
@@ -31,13 +36,12 @@ type ModelSource struct {
 	HostpathDir  string // on-prem only: absolute path on the node; defaults to /var/lib/hostpath/models/<slug>
 }
 
-type Config struct {
+type Values struct {
+	Platform   platform.Platform
+	Kubernetes kubernetes.Connection
+
 	Models []Model
 
-	ShaideDebugProxy bool
-
-	// On-prem / air-gap fields (all optional)
-	Kubeconfig     string              // path to kubeconfig; empty = KUBECONFIG env / ~/.kube/config
 	HarborHostname string              // internal Harbor registry hostname (e.g. harbor.internal.lan)
 	HarborUser     string              // Harbor robot account name (e.g. robot$k8s-puller)
 	HarborToken    pulumi.StringOutput // Harbor robot secret; valid only when HarborTokenSet is true
@@ -58,8 +62,6 @@ type Model struct {
 	GaieValuesPath string
 	MsValuesPath   string
 
-	llmdChartPath string
-
 	// GaieLocalChartPath is the absolute path to the bundled inferencepool
 	// Helm chart. Used on the on-prem path where the chart is loaded from
 	// disk (instead of pulled from OCI). Resolved to an absolute path so
@@ -67,11 +69,11 @@ type Model struct {
 	// is not the project workdir) can find it.
 	GaieLocalChartPath string
 
-	CloudProvider string       // "cloud" or "on-prem"
-	ModelSource   *ModelSource // nil = no PV/PVC managed by Pulumi
+	Platform    platform.Platform
+	ModelSource *ModelSource // nil = no PV/PVC managed by Pulumi
 
-	// On-prem / air-gap fields (copied from stack-level Config; empty on cloud)
-	Kubeconfig     string // path to kubeconfig; empty = KUBECONFIG env / ~/.kube/config
+	// On-prem / air-gap fields (copied from stack-level Values; empty on cloud)
+	Kubernetes     kubernetes.Connection
 	HarborHostname string // internal Harbor hostname; used to derive on-prem ORAS image path
 }
 
@@ -158,7 +160,7 @@ func resolveModelPaths(category, modelName string, dir string, logf Logf) (Model
 	return model, nil
 }
 
-// Load reads the stack config and returns a single Config containing one Model per enabled
+// Load reads the stack config and returns a single Values containing one Model per enabled
 // entry under models.generative / models.embedder. All models on the same stack share
 // cluster-wide settings (kubeconfig, Harbor credentials, nodeSelector). Each model gets its
 // own namespace and release names derived from the slug discovered in its
@@ -166,52 +168,108 @@ func resolveModelPaths(category, modelName string, dir string, logf Logf) (Model
 
 type Logf func(format string, args ...any)
 
-func Load(ctx *pulumi.Context, dir string, logf Logf) (Config, error) {
-	if logf == nil {
-		logf = func(string, ...any) {}
-	}
-	in, err := loadStack(ctx)
+func (c Config) Load(ctx *pulumi.Context) (Values, error) {
+	input, err := c.definition.Load(ctx)
 	if err != nil {
-		return Config{}, err
+		return Values{}, fmt.Errorf("load stack config: %w", err)
 	}
 
-	return buildConfig(in, dir, logf)
+	c.applyDefaults(&input)
+
+	values, err := c.buildValues(input)
+	if err != nil {
+		return Values{}, fmt.Errorf("build app-serving config: %w", err)
+	}
+
+	if err := c.Validate(values); err != nil {
+		return Values{}, fmt.Errorf("validate app-serving config: %w", err)
+	}
+
+	return values, nil
 }
 
-func buildConfig(stack stackInput, dir string, logf Logf) (Config, error) {
+func (c Config) applyDefaults(input *stackInput) {
+	if input.LLMdChartPath == "" {
+		input.LLMdChartPath = DefaultLLMdChartPath
+	}
+}
+
+func (c Config) Validate(cfg Values) error {
+	if err := cfg.Platform.Validate(); err != nil {
+		return err
+	}
+
+	if len(cfg.Models) == 0 {
+		return fmt.Errorf("at least one model must be enabled")
+	}
+
+	if strings.TrimSpace(cfg.LLMdChartPath) == "" {
+		return fmt.Errorf("llm-d chart path cannot be empty")
+	}
+
+	requiresHarbor := cfg.Platform == platform.OnPrem || cfg.hasModelSource()
+	if requiresHarbor {
+		if strings.TrimSpace(cfg.HarborHostname) == "" {
+			return fmt.Errorf("harborHostname is required for on-prem or modelSource deployments")
+		}
+		if strings.TrimSpace(cfg.HarborUser) == "" {
+			return fmt.Errorf("harborUser is required for on-prem or modelSource deployments")
+		}
+		if !cfg.HarborTokenSet {
+			return fmt.Errorf("harborToken is required for on-prem or modelSource deployments")
+		}
+	}
+
+	if cfg.Platform == platform.OnPrem && strings.TrimSpace(cfg.Kubernetes.KubeconfigPath) == "" {
+		return fmt.Errorf("kubeconfig is required for %q", cfg.Platform)
+	}
+
+	return nil
+}
+
+func (cfg Values) hasModelSource() bool {
+	for _, model := range cfg.Models {
+		if model.ModelSource != nil {
+			return true
+		}
+	}
+	return false
+}
+
+func (c Config) buildValues(input stackInput) (Values, error) {
 
 	wd, err := os.Getwd()
 	if err != nil {
-		logf("buildConfig: failed to get working directory: %v", err)
+		c.logf("buildConfig: failed to get working directory: %v", err)
 	} else {
-		logf("buildConfig: current working directory: %s", wd)
+		c.logf("buildConfig: current working directory: %s", wd)
 	}
 
-	totalModels := len(stack.Models.Generative) + len(stack.Models.Embedder)
+	totalModels := len(input.Models.Generative) + len(input.Models.Embedder)
 	if totalModels == 0 {
-		return Config{}, fmt.Errorf("models must be non-empty")
+		return Values{}, fmt.Errorf("models must be non-empty")
 	}
 
 	categories := []struct {
 		kind   string
 		models []modelInput
 	}{
-		{kind: "generative", models: stack.Models.Generative},
-		{kind: "embedder", models: stack.Models.Embedder},
+		{kind: "generative", models: input.Models.Generative},
+		{kind: "embedder", models: input.Models.Embedder},
 	}
 
 	models := make([]Model, 0, totalModels)
 
 	for _, category := range categories {
 		for _, model := range category.models {
-			logf("Model is: %s", model.Name)
+			c.logf("Model is: %s", model.Name)
 			if !model.Enabled {
 				continue
 			}
 
-			resolved, err := resolveModelPaths(category.kind, model.Name, dir, logf)
+			resolved, err := resolveModelPaths(category.kind, model.Name, c.ProjectDir(), c.logf)
 			if err != nil {
-				return Config{}, fmt.Errorf("resolve model paths for %q: %w", model.Name, err)
+				return Values{}, fmt.Errorf("resolve model paths for %q: %w", model.Name, err)
 			}
 
 			if model.NameSpace == "" {
@@ -227,7 +285,7 @@ func buildConfig(stack stackInput, dir string, logf Logf) (Config, error) {
 				// installer prompt) when the model's own storageClass is empty.
 				storageClass := model.ModelSource.StorageClass
 				if storageClass == "" {
-					storageClass = stack.ModelStorageClass
+					storageClass = input.ModelStorageClass
 				}
 				ms = &ModelSource{
 					HarborRef:    model.ModelSource.HarborRef,
@@ -242,7 +300,7 @@ func buildConfig(stack stackInput, dir string, logf Logf) (Config, error) {
 			models = append(models, Model{
 				ModelName:     model.Name,
 				NodeSelector:  model.NodeSelector,
-				GPUToleration: stack.GPUToleration,
+				GPUToleration: input.GPUToleration,
 				ReleaseName:   model.RelaseName,
 				Namespace:     model.NameSpace,
 
@@ -256,30 +314,36 @@ func buildConfig(stack stackInput, dir string, logf Logf) (Config, error) {
 				// whose cwd is not the project workdir, so a relative path
 				// like "./charts/inferencepool" wouldn't resolve. Joining
 				// with `dir` (the project workdir) gives an absolute path.
-				GaieLocalChartPath: filepath.Join(dir, "charts", "inferencepool"),
+				GaieLocalChartPath: resolveProjectPath(c.ProjectDir(), DefaultGaieLocalChartPath),
 
-				CloudProvider:  string(stack.CloudProvider),
+				Platform:       input.Platform,
 				ModelSource:    ms,
-				HarborHostname: stack.HarborHostname,
+				Kubernetes:     input.Kubernetes,
+				HarborHostname: input.HarborHostname,
 			})
 		}
 	}
 
-	var llmdPath string
-	if stack.LLMdChartPath == "" {
-		llmdPath = "./../upstream/llm-d/llm-d-infra/charts/llm-d-infra"
-	} else {
-		llmdPath = filepath.Join(dir, stack.LLMdChartPath)
+	return Values{
+		Platform:       input.Platform,
+		Kubernetes:     input.Kubernetes,
+		Models:         models,
+		HarborHostname: input.HarborHostname,
+		HarborUser:     input.HarborUser,
+		HarborToken:    input.HarborToken,
+		HarborTokenSet: input.HarborTokenSet,
+		LLMdChartPath:  resolveProjectPath(c.ProjectDir(), input.LLMdChartPath),
+	}, nil
+}
+
+func resolveProjectPath(projectDir, path string) string {
+	if path == "" {
+		return ""
 	}
 
-	return Config{
-		Models:         models,
-		Kubeconfig:     stack.Kubeconfig,
-		HarborHostname: stack.HarborHostname,
-		HarborUser:     stack.HarborUser,
-		HarborToken:    stack.HarborToken,
-		HarborTokenSet: stack.HarborTokenSet,
-		LLMdChartPath:  llmdPath,
-	}, nil
+	if !filepath.IsAbs(path) && projectDir != "" {
+		path = filepath.Join(projectDir, path)
+	}
 
+	return filepath.Clean(path)
 }
