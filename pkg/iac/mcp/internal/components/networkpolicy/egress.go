@@ -5,8 +5,8 @@
 package networkpolicy
 
 import (
-	appconfig "app_mcp/internal/config"
 	"fmt"
+	appconfig "github.com/axem-solutions/ai_platform/pkg/iac/mcp/internal/config"
 
 	metav1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/meta/v1"
 	networkingv1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/networking/v1"
@@ -22,7 +22,7 @@ const defaultEgressPort = 443
 // mcp.shaide/datasource-host on the NetworkPolicy for operator reference.
 // Kubernetes NetworkPolicy ipBlock only accepts CIDR — hostnames cannot be used
 // as policy selectors and are stored for documentation purposes only.
-func DeployEgress(ctx *pulumi.Context, ds appconfig.Datasource, cfg appconfig.Config, opts ...pulumi.ResourceOption) error {
+func DeployEgress(ctx *pulumi.Context, ds appconfig.Datasource, cfg appconfig.Values, opts ...pulumi.ResourceOption) error {
 	if ds.EgressCIDR == "" {
 		return nil
 	}

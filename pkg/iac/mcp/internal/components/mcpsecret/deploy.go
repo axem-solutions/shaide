@@ -2,7 +2,7 @@
 package mcpsecret
 
 import (
-	appconfig "app_mcp/internal/config"
+	appconfig "github.com/axem-solutions/ai_platform/pkg/iac/mcp/internal/config"
 
 	corev1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/core/v1"
 	metav1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/meta/v1"
@@ -11,7 +11,7 @@ import (
 
 const Name = "mcp-secrets"
 
-func Deploy(ctx *pulumi.Context, cfg appconfig.Config, opts ...pulumi.ResourceOption) (*corev1.Secret, error) {
+func Deploy(ctx *pulumi.Context, cfg appconfig.Values, opts ...pulumi.ResourceOption) (*corev1.Secret, error) {
 	secretData := pulumi.StringMap{}
 	if cfg.Secrets.HasAtlassianOAuthClientSecret {
 		secretData["ATLASSIAN_OAUTH_CLIENT_SECRET"] = cfg.Secrets.AtlassianOAuthClientSecret
