@@ -13,7 +13,7 @@ type Toleration struct {
 	Effect   string `json:"effect"`
 }
 
-type modelSourceInput struct {
+type ModelSourceInput struct {
 	HarborRef    string `json:"harborRef"`    // Harbor OCI ref, e.g. "harbor.../ai-models/nomic:1.5.0"
 	ModelUri     string `json:"modelUri"`     // path within the PVC, e.g. "hub/org/model-name"
 	StorageSize  string `json:"storageSize"`  // e.g. "5Gi"
@@ -22,22 +22,22 @@ type modelSourceInput struct {
 	HostpathDir  string `json:"hostpathDir"`  // on-prem only: absolute path on the node; defaults to /var/lib/hostpath/models/<slug>
 }
 
-type modelInput struct {
+type ModelInput struct {
 	Name         string            `json:"name"`
 	NodeSelector map[string]string `json:"nodeSelector"`
 	Enabled      bool              `json:"enabled"`
 	RelaseName   string            `json:"releaseName"`
 	NameSpace    string            `json:"nameSpace"`
-	ModelSource  *modelSourceInput `json:"modelSource"`
+	ModelSource  *ModelSourceInput `json:"modelSource"`
 }
 
-type modelsInput struct {
-	Generative []modelInput `json:"generative"`
-	Embedder   []modelInput `json:"embedder"`
+type ModelsInput struct {
+	Generative []ModelInput `json:"generative"`
+	Embedder   []ModelInput `json:"embedder"`
 }
 
 type stackInput struct {
-	Models modelsInput
+	Models ModelsInput
 
 	LLMdChartPath string
 

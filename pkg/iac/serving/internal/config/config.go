@@ -252,7 +252,7 @@ func (c Config) buildValues(input stackInput) (Values, error) {
 
 	categories := []struct {
 		kind   string
-		models []modelInput
+		models []ModelInput
 	}{
 		{kind: "generative", models: input.Models.Generative},
 		{kind: "embedder", models: input.Models.Embedder},

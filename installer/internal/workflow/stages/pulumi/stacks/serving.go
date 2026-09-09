@@ -3,7 +3,10 @@ package stacks
 import (
 	"context"
 	"fmt"
+	"os"
+	"path"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/core"
@@ -56,6 +59,7 @@ func DeployAppServing(rt *core.Runtime) error {
 			Context:    rt.Cluster.SelectedContext,
 		},
 		serving.Options{
+			Models:            selectedModels(rt),
 			HarborUser:        rt.Discovery.Auth.Username,
 			HarborToken:       rt.Discovery.Auth.Password,
 			ModelStorageClass: storageClass,
@@ -131,3 +135,71 @@ func promptModelStorageClass(rt *core.Runtime) (string, error) {
 	}
 	return name, nil
 }
+
+// selectedModels maps the model manifest onto the stack's model list.
+//
+// The manifest already says where each model was mirrored, so the Harbor
+// reference and the URI inside the volume are derived rather than configured.
+// Only a model carrying a serving block is deployed: the rest are published to
+// Harbor for another consumer to pull.
+func selectedModels(rt *core.Runtime) []serving.Model {
+	registry := harborRegistryHostname(rt)
+
+	var models []serving.Model
+	for _, model := range rt.Bootstrap.Catalog.Models {
+		if model.Serving == nil {
+			continue
+		}
+
+		category := modelCategory(rt, model.Serving.Name)
+		if category == "" {
+			rt.Detailf(
+				"model %q has no packaged values directory; skipping it for serving",
+				model.Serving.Name,
+			)
+			continue
+		}
+
+		models = append(models, serving.Model{
+			Name:         model.Serving.Name,
+			Category:     category,
+			NodeSelector: nodeSelector(model.Serving.NodeSelector),
+			HarborRef: fmt.Sprintf(
+				"%s/%s/%s:%s",
+				registry, model.HarborProject, model.HarborName, model.HarborTag,
+			),
+			ModelURI:     path.Join("hub", model.ID),
+			StorageSize:  model.Serving.StorageSize,
+			StorageClass: model.Serving.StorageClass,
+		})
+	}
+
+	return models
+}
+
+// modelCategory finds which packaged category holds the model's values, so the
+// manifest does not have to repeat what the image already knows.
+func modelCategory(rt *core.Runtime, name string) string {
+	workDir := filepath.Join(rt.Bootstrap.Config.Paths.ProjectsDir, projectAppServing)
+
+	for _, category := range []string{serving.CategoryGenerative, serving.CategoryEmbedder} {
+		if _, err := os.Stat(filepath.Join(workDir, "deployments", "models", category, name)); err == nil {
+			return category
+		}
+	}
+
+	return ""
+}
+
+// nodeSelector builds the label match for the pool a model runs on. An empty
+// value schedules it anywhere, which is what a single-pool cluster wants.
+func nodeSelector(value string) map[string]string {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+
+	return map[string]string{defaultNodeSelectorKey: value}
+}
+
+// defaultNodeSelectorKey matches the label key the serving stack applies.
+const defaultNodeSelectorKey = "nodegroup"

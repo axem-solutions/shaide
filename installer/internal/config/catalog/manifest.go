@@ -16,6 +16,29 @@ type Model struct {
 	HarborName    string       `yaml:"harbor_name"`
 	HarborTag     string       `yaml:"harbor_tag"`
 	Dependencies  []Dependency `yaml:"dependencies,omitempty"`
+
+	// Serving describes how to run the model on the cluster. A model without
+	// it is published to Harbor but not deployed, which is what a cluster that
+	// mirrors models for another consumer wants.
+	Serving *Serving `yaml:"serving,omitempty"`
+}
+
+// Serving holds what the model manifest cannot derive: which packaged values
+// directory to deploy, and the two facts that depend on the target cluster.
+type Serving struct {
+	// Name is the directory under deployments/models/<category>/, for example
+	// "GPT-OSS-20B". It also decides the category, since the installer looks
+	// the name up among the packaged model directories.
+	Name string `yaml:"name"`
+
+	// NodeSelector is the nodegroup label value of the pool to run on.
+	NodeSelector string `yaml:"node_selector"`
+
+	// StorageSize is the model volume size, for example "70Gi".
+	StorageSize string `yaml:"storage_size"`
+
+	// StorageClass overrides the cluster default for this model's volume.
+	StorageClass string `yaml:"storage_class,omitempty"`
 }
 
 type Dependency struct {

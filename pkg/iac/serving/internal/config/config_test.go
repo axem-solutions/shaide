@@ -30,8 +30,8 @@ func TestBuildValuesResolvesPathsAndModelDefaults(t *testing.T) {
 	configuration := New(projectDir, stack.Options{}, Sources{}, nil)
 	input := stackInput{
 		Platform: platform.GCP,
-		Models: modelsInput{
-			Generative: []modelInput{{Name: "ExampleModel", Enabled: true}},
+		Models: ModelsInput{
+			Generative: []ModelInput{{Name: "ExampleModel", Enabled: true}},
 		},
 	}
 	configuration.applyDefaults(&input)
