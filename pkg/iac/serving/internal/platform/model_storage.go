@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	appConfig "github.com/axem-solutions/ai_platform/pkg/iac/serving/internal/config"
+	kubeplatform "github.com/axem-solutions/ai_platform/pkg/kube/platform"
 
 	batchv1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/batch/v1"
 	corev1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/core/v1"
@@ -37,7 +38,7 @@ func CreateModelStorage(ctx *pulumi.Context, model appConfig.Model, llmdNamespac
 	// On on-prem with hostpath storage, create a PV bound to the target node before the PVC.
 	// The PV uses a local path under hostpathBase/<slug> on the node specified by HostpathNode.
 	// The directory must exist on the node before pulumi up (managed via ansible hostpath_dirs role).
-	if model.CloudProvider == "on-prem" && model.ModelSource != nil && model.ModelSource.HostpathNode != "" {
+	if model.Platform == kubeplatform.OnPrem && model.ModelSource != nil && model.ModelSource.HostpathNode != "" {
 		pvName := pvcName + "-pv"
 		hostpathDir := model.ModelSource.HostpathDir
 		if hostpathDir == "" {
@@ -86,7 +87,7 @@ func CreateModelStorage(ctx *pulumi.Context, model appConfig.Model, llmdNamespac
 	// On-prem RKE2 clusters use hostpath (kubernetes.io/no-provisioner) — static PVs only.
 	// A matching PV must be pre-created before pulumi up (see infra/on-prem/ansible/inventory-dev/host_vars/).
 	// On cloud (GKE) no class is specified, using the cluster default (standard-rwo or equivalent).
-	if model.CloudProvider == "on-prem" {
+	if model.Platform == kubeplatform.OnPrem {
 		pvcSpec.StorageClassName = pulumi.StringPtr("hostpath")
 	} else if model.ModelSource.StorageClass != "" {
 		pvcSpec.StorageClassName = pulumi.StringPtr(model.ModelSource.StorageClass)
@@ -106,7 +107,7 @@ func CreateModelStorage(ctx *pulumi.Context, model appConfig.Model, llmdNamespac
 	// On air-gapped on-prem the ORAS image is pre-loaded into the "services" Harbor project.
 	// On cloud (GKE has internet) it is pulled directly from ghcr.io.
 	orasImage := "ghcr.io/oras-project/oras:" + orasVersion
-	if model.CloudProvider == "on-prem" {
+	if model.Platform == kubeplatform.OnPrem {
 		orasImage = model.HarborHostname + "/images-infra/oras-project/oras:" + orasVersion
 	}
 

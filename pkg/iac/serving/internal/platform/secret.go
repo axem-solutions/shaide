@@ -23,7 +23,7 @@ func registryHost(ref string) string {
 // CreateHarborPullSecret creates a kubernetes.io/dockerconfigjson pull secret that
 // authenticates against the internal Harbor registry using the robot account credentials.
 // The secret is named "harbor-creds" and must be referenced by chart imagePullSecrets.
-func CreateHarborPullSecret(ctx *pulumi.Context, config *appConfig.Config, model appConfig.Model, llmdNamespace *core_v1.Namespace, opts ...pulumi.ResourceOption) (*core_v1.Secret, error) {
+func CreateHarborPullSecret(ctx *pulumi.Context, config *appConfig.Values, model appConfig.Model, llmdNamespace *core_v1.Namespace, opts ...pulumi.ResourceOption) (*core_v1.Secret, error) {
 	dockerConfigJSON := config.HarborToken.ApplyT(func(token string) (string, error) {
 		creds := map[string]string{
 			"username": config.HarborUser,

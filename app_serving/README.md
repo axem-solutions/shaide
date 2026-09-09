@@ -72,7 +72,7 @@ External ingress and TLS for generative models are handled by the cloud-specific
 The application is configured via Pulumi config values in `deployments/Pulumi.{stack}.yaml`:
 
 ### Required Configuration
-- `cloudProvider`: Target platform — `cloud` (GCP/AWS/Azure) or `on-prem`. Determines which credentials are required and how the Kubernetes provider is configured.
+- `platform`: Target platform — `gcp`, `aws`, `azure`, or `on-prem`. Determines which credentials are required and how the Kubernetes provider is configured.
 - `models`: Model list, split by category. Each entry names a folder under `deployments/models/<category>/` and specifies per-model settings:
   ```yaml
   app-serving:models:
@@ -244,7 +244,7 @@ deployments/models/generative/Test-Alma-V5-Pro/
 2. User adds the model to `models` in `Pulumi.<stack-name>.yaml` under the appropriate category:
 ```yaml
 config:
-  app-serving:cloudProvider: cloud
+  app-serving:platform: gcp
   app-serving:models:
     generative:
       - name: Test-Alma-V5-Pro
