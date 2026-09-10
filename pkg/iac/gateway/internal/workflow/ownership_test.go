@@ -136,3 +136,69 @@ func testUnstructured(apiVersion, kind, namespace, name string) *unstructured.Un
 }
 
 func nilSafeLogf(string, ...any) {}
+
+// TestOwnOrDestroyKeepsPulumiManagedResource covers the case that wiped Istio
+// from a cluster: a resource created by a previous run of this stack carries a
+// Pulumi field manager but no meta.helm.sh annotations, so the ownership sweep
+// force-destroyed it while Pulumi - having refreshed beforehand - reported the
+// stack unchanged and never recreated it.
+func TestOwnOrDestroyKeepsPulumiManagedResource(t *testing.T) {
+	gvr := schema.GroupVersionResource{Group: "apiextensions.k8s.io", Version: "v1", Resource: "customresourcedefinitions"}
+	object := testUnstructured("apiextensions.k8s.io/v1", "CustomResourceDefinition", "", "destinationrules.networking.istio.io")
+	object.SetManagedFields([]metav1.ManagedFieldsEntry{
+		{Manager: "pulumi-resource-kubernetes", Operation: metav1.ManagedFieldsOperationApply},
+	})
+	client := dynamicfake.NewSimpleDynamicClient(runtime.NewScheme(), object)
+
+	err := ownOrDestroy(
+		context.Background(),
+		nilSafeLogf,
+		client,
+		"istio-base",
+		"istio-system",
+		chartResource{
+			gvr:          gvr,
+			name:         "destinationrules.networking.istio.io",
+			forceDestroy: true,
+		},
+	)
+	if err != nil {
+		t.Fatalf("ownOrDestroy() error = %v", err)
+	}
+
+	if _, err := client.Resource(gvr).Get(
+		context.Background(),
+		"destinationrules.networking.istio.io",
+		metav1.GetOptions{},
+	); err != nil {
+		t.Fatalf("Pulumi-managed resource was not kept: %v", err)
+	}
+}
+
+func TestManagedByPulumi(t *testing.T) {
+	tests := []struct {
+		name     string
+		managers []string
+		want     bool
+	}{
+		{name: "no managed fields", managers: nil, want: false},
+		{name: "foreign helm install", managers: []string{"helm", "kubectl-client-side-apply"}, want: false},
+		{name: "pulumi provider", managers: []string{"pulumi-resource-kubernetes"}, want: true},
+		{name: "pulumi alongside controllers", managers: []string{"kube-controller-manager", "pulumi-resource-kubernetes"}, want: true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			object := testUnstructured("v1", "ConfigMap", "istio-system", "istio")
+			entries := make([]metav1.ManagedFieldsEntry, 0, len(test.managers))
+			for _, manager := range test.managers {
+				entries = append(entries, metav1.ManagedFieldsEntry{Manager: manager})
+			}
+			object.SetManagedFields(entries)
+
+			if got := managedByPulumi(object); got != test.want {
+				t.Errorf("managedByPulumi(%v) = %v, want %v", test.managers, got, test.want)
+			}
+		})
+	}
+}
