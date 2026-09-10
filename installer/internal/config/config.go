@@ -3,9 +3,11 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/axem-solutions/ai_platform/installer/internal/config/paths"
+	"github.com/axem-solutions/ai_platform/installer/internal/config/resources"
 )
 
 const (
@@ -17,7 +19,7 @@ const (
 	// this is the escape hatch for keeping it somewhere other than the default
 	// path under the storage mount.
 	ModelManifestPathEnv = "MODEL_MANIFEST_PATH"
-	HFTokenEnv        = "HF_TOKEN"
+	HFTokenEnv           = "HF_TOKEN"
 
 	GHCRUserEnv  = "GHCR_USERNAME"
 	GHCRTokenEnv = "GHCR_TOKEN"
@@ -26,6 +28,13 @@ const (
 	DockerHubTokenEnv = "DOCKERHUB_PASSWORD"
 
 	PulumiConfigPassEnv = "PULUMI_CONFIG_PASSPHRASE"
+
+	// Resource limits bound what a model transfer takes of the machine. They
+	// are percentages of what the process may actually use, so the same
+	// defaults suit a laptop and a build server.
+	CPUPercentEnv      = "RESOURCE_CPU_PERCENT"
+	MemoryPercentEnv   = "RESOURCE_MEMORY_PERCENT"
+	HighPerformanceEnv = "TRANSFER_HIGH_PERFORMANCE"
 )
 
 const (
@@ -53,6 +62,7 @@ const (
 
 type Config struct {
 	Paths       paths.Paths
+	Resources   Resources
 	Harbor      Harbor
 	HuggingFace HuggingFace
 	Registries  Registries
@@ -74,6 +84,15 @@ type Harbor struct {
 
 type HuggingFace struct {
 	Token string
+}
+
+// Resources is the share of the machine a transfer may use.
+type Resources struct {
+	Limits resources.Limits
+
+	// HighPerformance lets Xet scale to the whole host, ignoring Limits. It
+	// belongs on a machine that is doing nothing else.
+	HighPerformance bool
 }
 
 type RegistryCredentials struct {
@@ -112,8 +131,17 @@ func Load() Config {
 
 	hfToken := env(HFTokenEnv)
 
+	resourceLimits := resources.Limits{
+		CPUPercent:    envInt(CPUPercentEnv),
+		MemoryPercent: envInt(MemoryPercentEnv),
+	}
+
 	return Config{
 		Paths: paths,
+		Resources: Resources{
+			Limits:          resourceLimits,
+			HighPerformance: envBool(HighPerformanceEnv),
+		},
 		Harbor: Harbor{
 			Namespace:     defaultHarborNamespace,
 			Service:       defaultHarborServiceName,
@@ -154,4 +182,26 @@ func Load() Config {
 
 func env(key string) string {
 	return strings.TrimSpace(os.Getenv(key))
+}
+
+// envInt reads an optional numeric setting. An unset or unparseable value
+// leaves the default in place rather than failing the run over a tuning knob.
+func envInt(key string) int {
+	value, err := strconv.Atoi(env(key))
+	if err != nil {
+		return 0
+	}
+
+	return value
+}
+
+// envBool treats the usual affirmatives as set, so the variable reads the same
+// whether it is written as 1, true or yes.
+func envBool(key string) bool {
+	switch strings.ToLower(env(key)) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
 }

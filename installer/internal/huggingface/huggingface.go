@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/axem-solutions/ai_platform/installer/internal/config/resources"
 	"github.com/axem-solutions/ai_platform/installer/internal/config/storage"
 	"github.com/axem-solutions/ai_platform/installer/internal/huggingface/api"
 	hfapi "github.com/axem-solutions/ai_platform/installer/internal/huggingface/api"
@@ -44,6 +45,12 @@ type Options struct {
 	StorageCheck storage.Checker
 	Logf         func(format string, args ...any)
 	Progressf    func(progress.Event)
+
+	// Budget bounds what a transfer takes of the machine.
+	Budget resources.Budget
+
+	// HighPerformance lets Xet scale to the whole host, ignoring Budget.
+	HighPerformance bool
 }
 
 type Model struct {
@@ -107,7 +114,7 @@ func NewDownloader(opts Options) (*Downloader, error) {
 	return &Downloader{
 		cache:        cacheManager,
 		client:       api.New(opts.Token, defaultRevision),
-		cli:          cli.New(cliConfig(opts.Token, opts.CacheDir)),
+		cli:          cli.New(cliConfig(opts)),
 		storageCheck: opts.StorageCheck,
 		logf:         opts.Logf,
 		progressf:    opts.Progressf,
@@ -288,13 +295,15 @@ func (d *Downloader) detailf(format string, args ...any) {
 	d.logf(format, args...)
 }
 
-func cliConfig(token string, cacheDir string) cli.Config {
+func cliConfig(opts Options) cli.Config {
 	return cli.Config{
 		Path:            DefaultCLI,
-		CacheDir:        cacheDir,
-		Token:           token,
+		CacheDir:        opts.CacheDir,
+		Token:           opts.Token,
 		XetDirName:      xetDirName,
 		DefaultRevision: defaultRevision,
+		Budget:          opts.Budget,
+		HighPerformance: opts.HighPerformance,
 	}
 }
 

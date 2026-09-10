@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/axem-solutions/ai_platform/installer/internal/config/catalog"
+	"github.com/axem-solutions/ai_platform/installer/internal/config/resources"
 	"github.com/axem-solutions/ai_platform/installer/internal/config/storage"
 	harborapi "github.com/axem-solutions/ai_platform/installer/internal/harbor/api"
 	"github.com/axem-solutions/ai_platform/installer/internal/huggingface"
@@ -165,10 +166,24 @@ func downloadModels(rt *core.Runtime) error {
 		return nil
 	}
 
+	budget, err := resources.Detect(rt.Bootstrap.Config.Resources.Limits)
+	if err != nil {
+		return fmt.Errorf("resolve transfer resource budget: %w", err)
+	}
+
+	if rt.Bootstrap.Config.Resources.HighPerformance {
+		rt.Detailf("transfer budget: high performance, using the whole machine")
+	} else {
+		rt.Detailf("transfer budget: %s", budget)
+	}
+
 	downloader, err := huggingface.NewDownloader(huggingface.Options{
 		Token:    rt.Bootstrap.Config.HuggingFace.Token,
 		CacheDir: rt.Bootstrap.Config.Paths.ModelCache,
 		Logf:     rt.Detailf,
+
+		Budget:          budget,
+		HighPerformance: rt.Bootstrap.Config.Resources.HighPerformance,
 
 		StorageCheck: storage.NewChecker(
 			rt.Bootstrap.Config.Paths.StorageRoot,
