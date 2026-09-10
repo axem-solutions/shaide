@@ -60,7 +60,6 @@ func Deploy(
 			},
 		},
 	}
-	// "./../upstream/llm-d/llm-d-infra/charts/llm-d-infra"
 	chartOpts := opts
 	release, err := helm_v4.NewChart(ctx, releaseName, &helm_v4.ChartArgs{
 		Chart:     pulumi.String(cfg.LLMd.ChartPath),

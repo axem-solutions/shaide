@@ -50,7 +50,7 @@
 #
 # Optional, cluster-wide overrides:
 #   llmdChart         — override path to the llm-d-infra Helm chart, relative to the stack's
-#                        working directory; default: ../upstream/llm-d/llm-d-infra/charts/llm-d-infra
+#                        working directory; default: ./charts/llm-d-infra-v1.4.0.tgz
 #   modelStorageClass — stack-wide default StorageClass applied to a model's PVC when that
 #                        model's own modelSource.storageClass is empty; ignored on-prem.
 #
@@ -113,7 +113,7 @@ config:
   # app-serving:harborToken:
   #   secure: <run `pulumi config set --secret harborToken <robot-secret>`>
   # --- Optional, cluster-wide overrides ---
-  # app-serving:llmdChart: ../upstream/llm-d/llm-d-infra/charts/llm-d-infra
+  # app-serving:llmdChart: ./charts/llm-d-infra-v1.4.0.tgz
   # app-serving:modelStorageClass: <storage-class>
 #
 # Managed by Pulumi.

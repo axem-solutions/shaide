@@ -21,7 +21,10 @@ const (
 	gaiePrefix = "gaie-"
 	msPrefix   = "ms-"
 
-	DefaultLLMdChartPath      = "../upstream/llm-d/llm-d-infra/charts/llm-d-infra"
+	// DefaultLLMdChartPath is relative to the project directory. The chart is
+	// downloaded into it by the installer image's chart-downloader stage; keep
+	// the version in sync with LLMD_INFRA_CHART_VERSION in installer/build/Dockerfile.
+	DefaultLLMdChartPath      = "./charts/llm-d-infra-v1.4.0.tgz"
 	DefaultGaieLocalChartPath = "charts/inferencepool"
 )
 
