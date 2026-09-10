@@ -4,6 +4,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/axem-solutions/ai_platform/installer/internal/logger"
@@ -144,5 +145,29 @@ func TestEmptyNodeSelectorIsOmitted(t *testing.T) {
 
 	if models := selectedModels(rt); models[0].NodeSelector != nil {
 		t.Errorf("NodeSelector = %v, want nil", models[0].NodeSelector)
+	}
+}
+
+// A model with a modelSource is pulled from Harbor by the cluster, so the stack
+// is rejected without the registry address. The installer knows it, and until
+// it passed it the deployment failed at Pulumi runtime with
+// "harborHostname is required for on-prem or modelSource deployments".
+func TestServingOptionsCarryTheRegistryAddress(t *testing.T) {
+	projects := packagedModels(t, map[string]string{"GPT-OSS-20B": "generative"})
+	rt := runtimeWith(t, projects, []catalog.Model{gptOSS()})
+
+	registry := harborRegistryHostname(rt)
+	if registry != "harbor.harbor.svc.cluster.local" {
+		t.Fatalf("registry = %q, want the in-cluster Harbor address", registry)
+	}
+
+	// The same address the model references are built from, so a model can
+	// always be pulled from where the stack is told to look.
+	models := selectedModels(rt)
+	if len(models) != 1 {
+		t.Fatalf("selected %d models, want 1", len(models))
+	}
+	if !strings.HasPrefix(models[0].HarborRef, registry+"/") {
+		t.Errorf("HarborRef %q does not point at %q", models[0].HarborRef, registry)
 	}
 }
