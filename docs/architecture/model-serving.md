@@ -22,7 +22,7 @@ The app layer deploys a complete LLM serving stack including:
 The deployment creates the following components:
 
 1. **LLM-D Infrastructure** (`pkg/iac/serving/internal/components/llmd-infra/deploy.go`): Core llm-d components
-   - Deployed via Helm chart from `../upstream/llm-d/llm-d-infra/charts/llm-d-infra`
+   - Deployed via Helm chart from `./charts/llm-d-infra-v1.4.0.tgz` (downloaded into the installer image)
    - Creates Gateway with Istio ingress configuration
    - Sets up TLS and traffic policies
 
@@ -414,7 +414,7 @@ Mismatches (e.g. `gaie-alma-pro` + `ms-amla-pro`) will produce a clear error at 
 
 The project uses:
 - **Pulumi Kubernetes Provider** v4.25.0
-- **llm-d framework** (local dependency via `../upstream/llm-d/llm-d-infra/`)
+- **llm-d framework** (pinned `llm-d-infra` chart bundled under `charts/`)
 - **llm-d-infra** chart v1.4.0
 - **llm-d-modelservice** chart v0.4.12
 - **Gateway API Inference Extension** chart v1.2.0

@@ -236,3 +236,20 @@ func writeValuesFile(t *testing.T, path string) {
 		t.Fatalf("write test values: %v", err)
 	}
 }
+
+// TestDefaultLLMdChartPathStaysInsideProject guards against a default that
+// escapes the project directory. The chart ships inside the project's charts/
+// folder, so resolveProjectPath must be able to anchor it there; a "../" or
+// absolute default resolves to a path the installer image never populates.
+func TestDefaultLLMdChartPathStaysInsideProject(t *testing.T) {
+	if filepath.IsAbs(DefaultLLMdChartPath) {
+		t.Fatalf("DefaultLLMdChartPath = %q, want a relative path", DefaultLLMdChartPath)
+	}
+
+	projectDir := "/projects/app-serving"
+	resolved := resolveProjectPath(projectDir, DefaultLLMdChartPath)
+	if !strings.HasPrefix(resolved, projectDir+string(filepath.Separator)) {
+		t.Errorf("resolveProjectPath(%q, %q) = %q, want a path inside the project directory",
+			projectDir, DefaultLLMdChartPath, resolved)
+	}
+}

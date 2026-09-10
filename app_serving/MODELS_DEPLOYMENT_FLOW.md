@@ -208,9 +208,9 @@ This secret serves two purposes:
 
 ### Step 8 — llm-d-infra Helm Chart (`llmd-infra/deploy.go`)
 
-**Chart source**: local git submodule at
-`upstream/llm-d/llm-d-infra/charts/llm-d-infra` (initialized on the provisioner
-laptop, which has internet access).
+**Chart source**: the pinned `llm-d-infra` chart tarball bundled with the
+installer image at `<project>/charts/llm-d-infra-v1.4.0.tgz`, downloaded by the
+image's `chart-downloader` stage. Override with `app-serving:llmdChart`.
 
 Deploys:
 - An Istio `Gateway` resource — the cluster entry point for inference traffic for this model.
