@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -119,6 +120,17 @@ func ownOrDestroy(
 		return fmt.Errorf("get: %w", err)
 	}
 
+	// A resource applied by a Pulumi Kubernetes provider is already tracked
+	// in a Pulumi stack's state, so the chart updates it in place and there
+	// is no "already exists" conflict to resolve. Destroying it here would
+	// be invisible to Pulumi: this sweep runs inside the program, after the
+	// refresh recorded the resource as present, so the update reports
+	// "unchanged" and never recreates what was just deleted.
+	if managedByPulumi(existing) {
+		logf("  %s %s: already managed by Pulumi, skipping", r.gvr.Resource, r.name)
+		return nil
+	}
+
 	// Already owned by our release? Skip. forceDestroy applies only to a
 	// conflicting owner; deleting resources owned by this release on every
 	// update would also delete all custom resources behind Istio's CRDs.
@@ -156,6 +168,22 @@ func ownOrDestroy(
 		logf("  %s %s: destroyed (chart will recreate)", r.gvr.Resource, r.name)
 	}
 	return nil
+}
+
+// pulumiFieldManagerPrefix matches the field managers used by the Pulumi
+// Kubernetes providers (for example "pulumi-resource-kubernetes").
+const pulumiFieldManagerPrefix = "pulumi-"
+
+// managedByPulumi reports whether the live object carries a field manager
+// belonging to a Pulumi Kubernetes provider, which means a Pulumi stack - not
+// a foreign Helm install - owns it.
+func managedByPulumi(object metav1.Object) bool {
+	for _, entry := range object.GetManagedFields() {
+		if strings.HasPrefix(entry.Manager, pulumiFieldManagerPrefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // patchHelmOwnership adds the meta.helm.sh annotations + managed-by label.
