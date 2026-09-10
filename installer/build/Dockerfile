@@ -150,8 +150,10 @@ RUN curl -fsSL https://get.pulumi.com \
 # Make the Pulumi and Hugging Face executables available without absolute paths.
 ENV PATH="/root/.pulumi/bin:/opt/huggingface/bin:${PATH}"
 
-# Let Xet maximize network, CPU, and disk concurrency for model transfers.
-ENV HF_XET_HIGH_PERFORMANCE=1
+# Transfer concurrency is set per run from the resource budget, not baked in.
+# An ENV here would win over the caps the installer computes, because it is
+# inherited by the CLI process and the installer only adds to that environment.
+# Set TRANSFER_HIGH_PERFORMANCE=1 to let Xet scale to the whole machine.
 
 # The Go compiler, source code, module cache, and build cache remain in the
 # builder stage and are not included in the final image.

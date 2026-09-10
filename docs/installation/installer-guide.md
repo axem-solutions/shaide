@@ -100,6 +100,36 @@ fields above, and the path inside the volume from `id`. Naming a model the
 installer image does not ship is skipped with a message, rather than deploying
 the wrong runtime.
 
+### Transfer resources
+
+A model transfer is the heaviest thing the installer does, and by default it
+takes half of what the machine offers. That keeps a laptop usable while it runs,
+and lets a larger machine go faster without any tuning.
+
+"Available" means what the process may actually use. Inside a container that is
+the cgroup limit, not the host: `--cpus` sets a CPU-time quota while every host
+CPU stays visible, so sizing the work from the visible count oversubscribes the
+quota and spends the difference being throttled.
+
+```bash
+export RESOURCE_CPU_PERCENT=25      # gentler on a busy workstation
+export RESOURCE_MEMORY_PERCENT=25
+```
+
+```bash
+export TRANSFER_HIGH_PERFORMANCE=1  # dedicated machine, use everything
+```
+
+The budget is logged at the start of the download stage, as
+`transfer budget: 4 of 8 CPUs, 7.7 GB of 15.4 GB memory`.
+
+Bounding the container as well is still worthwhile on a shared machine, since
+the installer cannot limit its own cgroup:
+
+```bash
+docker run --rm -it --cpus=4 --memory=6g ...
+```
+
 ### Supplying it
 
 Either drop it into the storage mount, where the installer looks by default:
@@ -198,6 +228,9 @@ for during the run.
 | `KUBECONFIG` | Kubeconfig path inside the container. Default `/.kube/config` |
 | `MODEL_MANIFEST_PATH` | Model manifest path inside the container. Default `<STORAGE_PATH>/manifests/models.yaml` |
 | `PRIVATE_KEY_PATH` | SSH key inside the container, for Harbor image preload on on-prem |
+| `RESOURCE_CPU_PERCENT` | Share of available CPUs a model transfer may use. Default 50 |
+| `RESOURCE_MEMORY_PERCENT` | Share of available memory a model transfer may use. Default 50 |
+| `TRANSFER_HIGH_PERFORMANCE` | Set to `1` to let transfers scale to the whole machine, ignoring the shares above |
 
 ### 3. Set Run Paths
 

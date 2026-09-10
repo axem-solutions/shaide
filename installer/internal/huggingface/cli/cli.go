@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/axem-solutions/ai_platform/installer/internal/config/resources"
 	hferrors "github.com/axem-solutions/ai_platform/installer/internal/huggingface/errors"
 )
 
@@ -18,6 +19,16 @@ type Config struct {
 	Token           string
 	XetDirName      string
 	DefaultRevision string
+
+	// Budget bounds what the transfer may take of the machine. The zero value
+	// leaves Xet to size itself, which is what it did before this was
+	// configurable.
+	Budget resources.Budget
+
+	// HighPerformance opts into Xet's maximum-throughput mode. It ignores the
+	// budget and scales to the whole host, so it belongs on a machine doing
+	// nothing else.
+	HighPerformance bool
 }
 
 type Runner struct {
@@ -110,12 +121,49 @@ func (r Runner) normalizeDownloadRequest(request DownloadRequest) DownloadReques
 }
 
 func (r Runner) env() []string {
-	return append(os.Environ(),
+	env := append(os.Environ(),
 		"HF_TOKEN="+r.Token,
 		"HF_HOME="+r.CacheDir,
 		"HF_HUB_DISABLE_PROGRESS_BARS=1",
 		"HF_HUB_ENABLE_HF_TRANSFER=0",
 		"HF_XET_CACHE="+filepath.Join(r.CacheDir, r.XetDirName),
-		"HF_XET_HIGH_PERFORMANCE=1",
 	)
+
+	return append(env, r.transferEnv()...)
 }
+
+// transferEnv bounds what Xet takes of the machine.
+//
+// Left alone Xet sizes its worker pools and buffers from the host, and inside a
+// container the host is not what the process may actually use: --cpus sets a
+// time quota while every CPU stays visible, so a pool sized from the CPU count
+// oversubscribes the quota and spends its time being throttled.
+//
+// High performance mode is the documented way to ask for everything, so it
+// suppresses the caps rather than fighting them.
+func (r Runner) transferEnv() []string {
+	if r.HighPerformance {
+		return []string{"HF_XET_HIGH_PERFORMANCE=1"}
+	}
+
+	if r.Budget.CPUs <= 0 {
+		return nil
+	}
+
+	return []string{
+		// Files fetched at once. Each carries its own buffers, so this is the
+		// main lever on how much memory a transfer holds.
+		fmt.Sprintf("HF_XET_DATA_MAX_CONCURRENT_FILE_DOWNLOADS=%d", r.Budget.CPUs),
+
+		// Range requests in flight across those files.
+		fmt.Sprintf("HF_XET_CLIENT_AC_MAX_DOWNLOAD_CONCURRENCY=%d", r.Budget.CPUs*rangeGetsPerCPU),
+
+		// The on-disk chunk cache. Bounded by the memory share because the same
+		// budget stands in for how much of the machine this transfer may take.
+		fmt.Sprintf("HF_XET_CHUNK_CACHE_SIZE_BYTES=%d", r.Budget.Memory),
+	}
+}
+
+// rangeGetsPerCPU keeps enough requests in flight to hide network latency
+// without multiplying the buffers each one needs.
+const rangeGetsPerCPU = 4
