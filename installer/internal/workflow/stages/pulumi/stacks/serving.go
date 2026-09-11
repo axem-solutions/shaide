@@ -60,6 +60,7 @@ func DeployAppServing(rt *core.Runtime) error {
 		},
 		serving.Options{
 			Models:            selectedModels(rt),
+			HarborHostname:    harborRegistryHostname(rt),
 			HarborUser:        rt.Discovery.Auth.Username,
 			HarborToken:       rt.Discovery.Auth.Password,
 			ModelStorageClass: storageClass,
