@@ -11,7 +11,13 @@ import (
 // Deploy creates a ClusterIP Service that selects the decode pod(s) directly on port 8200.
 // This is the only supported in-cluster path for embedding requests; the Gateway/HTTPRoute
 // path does not work for embeddings.
-func Deploy(ctx *pulumi.Context, dep pulumi.Resource, model appConfig.Model, opts ...pulumi.ResourceOption) error {
+func Deploy(
+	ctx *pulumi.Context,
+	dep pulumi.Resource,
+	model appConfig.Model,
+	category string,
+	opts ...pulumi.ResourceOption,
+) error {
 	svcName := model.EmbeddingServiceName()
 	// Helm fullname for the modelservice release: "<releaseName>-llm-d-modelservice".
 	// This matches the llm-d.ai/model label written by the llm-d-modelservice chart onto decode pods.
@@ -26,7 +32,7 @@ func Deploy(ctx *pulumi.Context, dep pulumi.Resource, model appConfig.Model, opt
 			// Service read access — e.g. shaide-server — can discover this
 			// model's endpoint directly via label selector instead of
 			// reconstructing the naming convention.
-			Labels: model.MetaLabels(),
+			Labels: model.MetaLabels(category),
 		},
 		Spec: &corev1.ServiceSpecArgs{
 			Type: pulumi.String("ClusterIP"),

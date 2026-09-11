@@ -23,14 +23,20 @@ func registryHost(ref string) string {
 // CreateHarborPullSecret creates a kubernetes.io/dockerconfigjson pull secret that
 // authenticates against the internal Harbor registry using the robot account credentials.
 // The secret is named "harbor-creds" and must be referenced by chart imagePullSecrets.
-func CreateHarborPullSecret(ctx *pulumi.Context, config *appConfig.Values, model appConfig.Model, llmdNamespace *core_v1.Namespace, opts ...pulumi.ResourceOption) (*core_v1.Secret, error) {
-	dockerConfigJSON := config.HarborToken.ApplyT(func(token string) (string, error) {
+func CreateHarborPullSecret(
+	ctx *pulumi.Context,
+	cfg appConfig.Values,
+	model appConfig.Model,
+	llmdNamespace pulumi.Resource,
+	opts ...pulumi.ResourceOption,
+) (*core_v1.Secret, error) {
+	dockerConfigJSON := cfg.Harbor.Token.ApplyT(func(token string) (string, error) {
 		creds := map[string]string{
-			"username": config.HarborUser,
+			"username": cfg.Harbor.User,
 			"password": token,
 		}
 		auths := map[string]any{
-			config.HarborHostname: creds,
+			cfg.Harbor.Hostname: creds,
 		}
 		// On on-prem, harborHostname is the node-level DNS name used by containerd
 		// (e.g. harbor.internal.lan), while harborRef uses the K8s service DNS name
@@ -39,7 +45,7 @@ func CreateHarborPullSecret(ctx *pulumi.Context, config *appConfig.Values, model
 		// too — otherwise the ORAS pull Job will get a 401 Unauthorized.
 		if model.ModelSource != nil {
 			orasHost := registryHost(model.ModelSource.HarborRef)
-			if orasHost != "" && orasHost != config.HarborHostname {
+			if orasHost != "" && orasHost != cfg.Harbor.Hostname {
 				auths[orasHost] = creds
 			}
 		}

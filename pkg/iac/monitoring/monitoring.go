@@ -38,7 +38,7 @@ func deployMonitoring(ctx *pulumi.Context, configuration appconfig.Config) error
 	providerOpt := pulumi.Provider(k8sProvider)
 
 	// --- Namespace ---
-	ns, err := iackube.CreateNamespace(ctx, cfg.Namespace, providerOpt)
+	ns, err := iackube.CreateNamespace(ctx, cfg.Namespace, iackube.NamespaceOptions{}, providerOpt)
 	if err != nil {
 		return fmt.Errorf("create monitoring namespace: %w", err)
 	}

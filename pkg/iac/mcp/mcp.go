@@ -41,7 +41,7 @@ func deployAppMCP(ctx *pulumi.Context, stackConfig appconfig.Config) error {
 	providerOpt := pulumi.Provider(k8sProvider)
 
 	// --- Namespace ---
-	ns, err := iackube.CreateNamespace(ctx, appConfig.Namespace, providerOpt)
+	ns, err := iackube.CreateNamespace(ctx, appConfig.Namespace, iackube.NamespaceOptions{}, providerOpt)
 	if err != nil {
 		return err
 	}

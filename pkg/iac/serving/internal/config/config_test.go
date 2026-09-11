@@ -11,43 +11,49 @@ import (
 )
 
 func TestApplyDefaults(t *testing.T) {
-	configuration := New("/projects/app-serving", stack.Options{}, Sources{}, nil)
-	input := stackInput{}
+	configuration := New("/projects/app-serving", stack.Options{}, Sources{})
+	values := Values{ModelStorageClass: "managed-csi"}
+	values.Models.Generative = []Model{
+		{Enabled: true, ModelSource: &ModelSource{}},
+	}
 
-	configuration.applyDefaults(&input)
+	configuration.applyDefaults(&values)
 
-	if input.LLMdChartPath != DefaultLLMdChartPath {
-		t.Errorf("llm-d chart path = %q, want %q", input.LLMdChartPath, DefaultLLMdChartPath)
+	if values.LLMd.ChartPath != DefaultLLMdChartPath {
+		t.Errorf("llm-d chart path = %q, want %q", values.LLMd.ChartPath, DefaultLLMdChartPath)
+	}
+	if got := values.Models.Generative[0].ModelSource.StorageClass; got != "managed-csi" {
+		t.Errorf("model storage class = %q, want %q", got, "managed-csi")
 	}
 }
 
-func TestBuildValuesResolvesPathsAndModelDefaults(t *testing.T) {
+func TestResolveResolvesPathsAndModelDefaults(t *testing.T) {
 	projectDir := t.TempDir()
 	modelDir := filepath.Join(projectDir, deploymentFolder, modelFolder, "generative", "ExampleModel")
 	writeValuesFile(t, filepath.Join(modelDir, "gaie-example", "values.yaml"))
 	writeValuesFile(t, filepath.Join(modelDir, "ms-example", "values.yaml"))
 
-	configuration := New(projectDir, stack.Options{}, Sources{}, nil)
-	input := stackInput{
+	configuration := New(projectDir, stack.Options{}, Sources{})
+	values := Values{
 		Platform: platform.GCP,
-		Models: ModelsInput{
-			Generative: []ModelInput{{Name: "ExampleModel", Enabled: true}},
-		},
 	}
-	configuration.applyDefaults(&input)
+	values.Models.Generative = []Model{{
+		Name:    "ExampleModel",
+		Enabled: true,
+	}}
+	configuration.applyDefaults(&values)
 
-	values, err := configuration.buildValues(input)
-	if err != nil {
-		t.Fatalf("buildValues() error = %v", err)
+	if err := configuration.resolve(&values); err != nil {
+		t.Fatalf("resolve() error = %v", err)
 	}
 	if err := configuration.Validate(values); err != nil {
 		t.Fatalf("Validate() error = %v", err)
 	}
 
-	if len(values.Models) != 1 {
-		t.Fatalf("models = %d, want 1", len(values.Models))
+	if len(values.Models.Generative) != 1 {
+		t.Fatalf("generative models = %d, want 1", len(values.Models.Generative))
 	}
-	model := values.Models[0]
+	model := values.Models.Generative[0]
 	if model.Namespace != "llm-d-example" {
 		t.Errorf("namespace = %q, want %q", model.Namespace, "llm-d-example")
 	}
@@ -57,20 +63,36 @@ func TestBuildValuesResolvesPathsAndModelDefaults(t *testing.T) {
 	if model.GaieLocalChartPath != filepath.Join(projectDir, DefaultGaieLocalChartPath) {
 		t.Errorf("GAIE chart path = %q", model.GaieLocalChartPath)
 	}
-
 	wantLLMdPath := filepath.Clean(filepath.Join(projectDir, DefaultLLMdChartPath))
-	if values.LLMdChartPath != wantLLMdPath {
-		t.Errorf("llm-d chart path = %q, want %q", values.LLMdChartPath, wantLLMdPath)
+	if values.LLMd.ChartPath != wantLLMdPath {
+		t.Errorf("llm-d chart path = %q, want %q", values.LLMd.ChartPath, wantLLMdPath)
 	}
 }
 
 func TestValidate(t *testing.T) {
-	configuration := New("", stack.Options{}, Sources{}, nil)
+	projectDir := t.TempDir()
+	gaieValuesPath := filepath.Join(projectDir, "gaie-values.yaml")
+	modelServiceValuesPath := filepath.Join(projectDir, "model-service-values.yaml")
+	writeValuesFile(t, gaieValuesPath)
+	writeValuesFile(t, modelServiceValuesPath)
+
+	configuration := New("", stack.Options{}, Sources{})
 	valid := Values{
-		Platform:      platform.GCP,
-		Models:        []Model{{ModelName: "example"}},
-		LLMdChartPath: DefaultLLMdChartPath,
+		Platform: platform.GCP,
 	}
+	valid.LLMd.ChartPath = DefaultLLMdChartPath
+	valid.Models.Generative = []Model{{
+		Name:        "example",
+		Enabled:     true,
+		Namespace:   "llm-d-example",
+		ReleaseName: "infra-example",
+		ModelPaths: ModelPaths{
+			Slug:               "example",
+			GaieValuesPath:     gaieValuesPath,
+			MsValuesPath:       modelServiceValuesPath,
+			GaieLocalChartPath: "charts/inferencepool",
+		},
+	}}
 
 	tests := []struct {
 		name    string
@@ -88,31 +110,31 @@ func TestValidate(t *testing.T) {
 		{
 			name: "no enabled models",
 			mutate: func(values *Values) {
-				values.Models = nil
+				values.Models.Generative = nil
 			},
 			wantErr: "at least one model must be enabled",
 		},
 		{
 			name: "empty chart path",
 			mutate: func(values *Values) {
-				values.LLMdChartPath = ""
+				values.LLMd.ChartPath = ""
 			},
 			wantErr: "chart path cannot be empty",
 		},
 		{
 			name: "model source requires Harbor",
 			mutate: func(values *Values) {
-				values.Models[0].ModelSource = &ModelSource{}
+				values.Models.Generative[0].ModelSource = &ModelSource{}
 			},
-			wantErr: "harborHostname is required",
+			wantErr: "harbor hostname is required",
 		},
 		{
 			name: "on-prem requires kubeconfig",
 			mutate: func(values *Values) {
 				values.Platform = platform.OnPrem
-				values.HarborHostname = "harbor.internal.lan"
-				values.HarborUser = "robot$user"
-				values.HarborTokenSet = true
+				values.Harbor.Hostname = "harbor.internal.lan"
+				values.Harbor.User = "robot$user"
+				values.Harbor.TokenSet = true
 			},
 			wantErr: "kubeconfig is required",
 		},
@@ -121,7 +143,7 @@ func TestValidate(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			values := valid
-			values.Models = append([]Model(nil), valid.Models...)
+			values.Models.Generative = append([]Model(nil), valid.Models.Generative...)
 			if test.mutate != nil {
 				test.mutate(&values)
 			}
@@ -149,7 +171,7 @@ func TestDefinitionResolvesRuntimeSources(t *testing.T) {
 		HarborUser:        "robot$user",
 		HarborToken:       "secret-token",
 		ModelStorageClass: "managed-csi",
-	}, nil)
+	})
 
 	if configuration.ProjectName() != Namespace {
 		t.Errorf("project name = %q, want %q", configuration.ProjectName(), Namespace)

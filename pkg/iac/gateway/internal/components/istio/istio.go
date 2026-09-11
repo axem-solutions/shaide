@@ -13,7 +13,12 @@ import (
 )
 
 func Deploy(ctx *pulumi.Context, cfg config.Values, provider *kubernetes.Provider) error {
-	namespace, err := iackube.CreateNamespace(ctx, cfg.Istio.Namespace, pulumi.Provider(provider))
+	namespace, err := iackube.CreateNamespace(
+		ctx,
+		cfg.Istio.Namespace,
+		iackube.NamespaceOptions{},
+		pulumi.Provider(provider),
+	)
 	if err != nil {
 		return fmt.Errorf("create Istio namespace: %w", err)
 	}
