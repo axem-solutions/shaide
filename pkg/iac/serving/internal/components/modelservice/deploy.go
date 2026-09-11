@@ -55,10 +55,7 @@ func Deploy(
 		"extraConfig": podConfig,
 	}
 
-	modelServiceValues := pulumi.Map{
-		"decode":  decodeValues,
-		"prefill": prefillValues,
-	}
+	modelServiceValues := values(decodeValues, prefillValues)
 
 	chartDeps := []pulumi.Resource{gaie}
 
@@ -131,6 +128,21 @@ func Deploy(
 	}
 
 	return modelService, nil
+}
+
+func values(decodeValues, prefillValues pulumi.Map) pulumi.Map {
+	return pulumi.Map{
+		"decode":  decodeValues,
+		"prefill": prefillValues,
+		// The legacy routing sidecar image is no longer reliably available from
+		// its upstream registry. Disable it temporarily and let the chart expose
+		// vLLM directly on routing.servicePort.
+		"routing": pulumi.Map{
+			"proxy": pulumi.Map{
+				"enabled": pulumi.Bool(false),
+			},
+		},
+	}
 }
 
 func singleReplicaGPURolloutStrategy(args *pulumi.ResourceTransformationArgs) *pulumi.ResourceTransformationResult {
