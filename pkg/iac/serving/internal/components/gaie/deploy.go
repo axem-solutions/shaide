@@ -19,7 +19,13 @@ const (
 	gaieChartVersion = "v1.2.0"
 )
 
-func Deploy(ctx *pulumi.Context, infraSim pulumi.Resource, model appConfig.Model, opts ...pulumi.ResourceOption) (*helmv3.Release, error) {
+func Deploy(
+	ctx *pulumi.Context,
+	infraSim pulumi.Resource,
+	cfg appConfig.Values,
+	model appConfig.Model,
+	opts ...pulumi.ResourceOption,
+) (*helmv3.Release, error) {
 	gaieReleaseName := model.GaieReleaseName()
 	gaieEppHost := pulumi.Sprintf("%s-epp.%s.svc.cluster.local", gaieReleaseName, model.Namespace)
 
@@ -56,7 +62,7 @@ func Deploy(ctx *pulumi.Context, infraSim pulumi.Resource, model appConfig.Model
 
 	chart := gaieOciChart
 	chartVersion := pulumi.StringPtr(gaieChartVersion)
-	if model.Platform == platform.OnPrem {
+	if cfg.Platform == platform.OnPrem {
 		// Air-gapped: use the locally committed chart; no internet access needed.
 		// Version is inferred from the local chart's Chart.yaml.
 		// Prefer the absolute path resolved by the config layer (works inside

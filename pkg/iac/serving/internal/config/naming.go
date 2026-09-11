@@ -149,20 +149,13 @@ func (m Model) NodeAffinityArgs() *corev1.AffinityArgs {
 	}
 }
 
-func (m Model) Category() string {
-	if m.IsEmbedder {
-		return "embedder"
-	}
-	return "generative"
-}
-
-func (m Model) MetaLabels() pulumi.StringMap {
+func (m Model) MetaLabels(category string) pulumi.StringMap {
 	labels := pulumi.StringMap{
 		"app.kubernetes.io/part-of": pulumi.String("app-serving"),
 		"axem.dev/platform":         pulumi.String("ai-platform"),
-		"axem.dev/model-name":       pulumi.String(m.ModelName),
+		"axem.dev/model-name":       pulumi.String(m.Name),
 		"axem.dev/model-slug":       pulumi.String(m.Slug),
-		"axem.dev/model-category":   pulumi.String(m.Category()),
+		"axem.dev/model-category":   pulumi.String(category),
 	}
 	if ng := m.NodeSelector["nodegroup"]; ng != "" {
 		labels["axem.dev/nodegroup"] = pulumi.String(ng)

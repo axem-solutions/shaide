@@ -64,6 +64,7 @@ func Deploy(
 	namespace, err := iackube.CreateNamespace(
 		ctx,
 		cfg.Gateway.Namespace,
+		iackube.NamespaceOptions{},
 		pulumi.Provider(provider),
 	)
 	if err != nil {

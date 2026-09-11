@@ -46,35 +46,29 @@ type Sources struct {
 
 type Config struct {
 	stack.Config
-	definition stackconfig.Config[stackInput]
-	logf       Logf
+	definition stackconfig.Config[Values]
 }
 
-func New(projectDir string, opts stack.Options, sources Sources, logf Logf) Config {
+func New(projectDir string, opts stack.Options, sources Sources) Config {
 	definition := newDefinition(opts, sources)
-
-	if logf == nil {
-		logf = func(string, ...any) {}
-	}
 
 	return Config{
 		Config:     stack.NewConfig(Namespace, StackName, projectDir, definition),
 		definition: definition,
-		logf:       logf,
 	}
 }
 
-func newDefinition(opts stack.Options, sources Sources) stackconfig.Config[stackInput] {
-	return stackconfig.Config[stackInput]{
+func newDefinition(opts stack.Options, sources Sources) stackconfig.Config[Values] {
+	return stackconfig.Config[Values]{
 		Namespace: Namespace,
-		Entries: []stackconfig.Entry[stackInput]{
+		Entries: []stackconfig.Entry[Values]{
 			{
 				Key: KeyPlatform,
 				Source: stackconfig.Source{
 					Value: string(opts.Platform),
 				},
 				Policy: stackconfig.Policy{Required: true},
-				Setter: func(cfg *stackInput, root *pulumiconfig.Config) {
+				Setter: func(cfg *Values, root *pulumiconfig.Config) {
 					cfg.Platform = loadPlatform(root)
 				},
 			},
@@ -84,7 +78,7 @@ func newDefinition(opts stack.Options, sources Sources) stackconfig.Config[stack
 					Value: opts.Kubeconfig,
 				},
 				Policy: stackconfig.Policy{Required: true},
-				Setter: func(cfg *stackInput, root *pulumiconfig.Config) {
+				Setter: func(cfg *Values, root *pulumiconfig.Config) {
 					cfg.Kubernetes.KubeconfigPath = root.Get(KeyKubeconfig.String())
 				},
 			},
@@ -93,7 +87,7 @@ func newDefinition(opts stack.Options, sources Sources) stackconfig.Config[stack
 				Source: stackconfig.Source{
 					Value: opts.Context,
 				},
-				Setter: func(cfg *stackInput, root *pulumiconfig.Config) {
+				Setter: func(cfg *Values, root *pulumiconfig.Config) {
 					cfg.Kubernetes.Context = root.Get(KeyContext.String())
 				},
 			},
@@ -103,7 +97,7 @@ func newDefinition(opts stack.Options, sources Sources) stackconfig.Config[stack
 				// not written, so a hand-managed stack value stays intact.
 				Key:    KeyModels,
 				Source: stackconfig.Source{Value: optionalModels(sources.Models)},
-				Setter: func(cfg *stackInput, root *pulumiconfig.Config) {
+				Setter: func(cfg *Values, root *pulumiconfig.Config) {
 					root.RequireObject(KeyModels.String(), &cfg.Models)
 				},
 			},
@@ -112,8 +106,8 @@ func newDefinition(opts stack.Options, sources Sources) stackconfig.Config[stack
 				Source: stackconfig.Source{
 					Default: DefaultLLMdChartPath,
 				},
-				Setter: func(cfg *stackInput, root *pulumiconfig.Config) {
-					cfg.LLMdChartPath = root.Get(KeyLLMdChart.String())
+				Setter: func(cfg *Values, root *pulumiconfig.Config) {
+					cfg.LLMd.ChartPath = root.Get(KeyLLMdChart.String())
 				},
 			},
 			{
@@ -121,8 +115,8 @@ func newDefinition(opts stack.Options, sources Sources) stackconfig.Config[stack
 				Source: stackconfig.Source{
 					Value: optionalSource(sources.HarborHostname),
 				},
-				Setter: func(cfg *stackInput, root *pulumiconfig.Config) {
-					cfg.HarborHostname = root.Get(KeyHarborHostname.String())
+				Setter: func(cfg *Values, root *pulumiconfig.Config) {
+					cfg.Harbor.Hostname = root.Get(KeyHarborHostname.String())
 				},
 			},
 			{
@@ -130,8 +124,8 @@ func newDefinition(opts stack.Options, sources Sources) stackconfig.Config[stack
 				Source: stackconfig.Source{
 					Value: optionalSource(sources.HarborUser),
 				},
-				Setter: func(cfg *stackInput, root *pulumiconfig.Config) {
-					cfg.HarborUser = root.Get(KeyHarborUser.String())
+				Setter: func(cfg *Values, root *pulumiconfig.Config) {
+					cfg.Harbor.User = root.Get(KeyHarborUser.String())
 				},
 			},
 			{
@@ -140,21 +134,21 @@ func newDefinition(opts stack.Options, sources Sources) stackconfig.Config[stack
 					Value: optionalSource(sources.HarborToken),
 				},
 				Policy: stackconfig.Policy{Secret: true},
-				Setter: func(cfg *stackInput, root *pulumiconfig.Config) {
+				Setter: func(cfg *Values, root *pulumiconfig.Config) {
 					if token, err := root.TrySecret(KeyHarborToken.String()); err == nil {
-						cfg.HarborToken = token
-						cfg.HarborTokenSet = true
+						cfg.Harbor.Token = token
+						cfg.Harbor.TokenSet = true
 					}
 				},
 			},
 			{
 				Key: KeyGPUToleration,
-				Setter: func(cfg *stackInput, root *pulumiconfig.Config) {
+				Setter: func(cfg *Values, root *pulumiconfig.Config) {
 					// TryObject keeps an omitted toleration nil. GetObject would
 					// create an empty toleration that Kubernetes rejects.
 					var toleration Toleration
 					if err := root.TryObject(KeyGPUToleration.String(), &toleration); err == nil {
-						cfg.GPUToleration = &toleration
+						cfg.Toleration = &toleration
 					}
 				},
 			},
@@ -163,7 +157,7 @@ func newDefinition(opts stack.Options, sources Sources) stackconfig.Config[stack
 				Source: stackconfig.Source{
 					Value: optionalSource(sources.ModelStorageClass),
 				},
-				Setter: func(cfg *stackInput, root *pulumiconfig.Config) {
+				Setter: func(cfg *Values, root *pulumiconfig.Config) {
 					cfg.ModelStorageClass = root.Get(KeyModelStorageClass.String())
 				},
 			},

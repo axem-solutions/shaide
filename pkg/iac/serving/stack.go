@@ -59,7 +59,6 @@ func NewStack(projectDir string, common stackpkg.Options, options ...Options) *S
 			HarborToken:       servingOptions.HarborToken,
 			ModelStorageClass: servingOptions.ModelStorageClass,
 		},
-		servingOptions.Logf,
 	)}
 }
 

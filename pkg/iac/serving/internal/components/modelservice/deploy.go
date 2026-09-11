@@ -15,14 +15,16 @@ import (
 func Deploy(
 	ctx *pulumi.Context,
 	gaie pulumi.Resource,
+	cfg appConfig.Values,
 	model appConfig.Model,
+	category string,
 	modelPVC *corev1.PersistentVolumeClaim,
 	orasJob pulumi.Resource,
 	opts ...pulumi.ResourceOption,
 ) (*helmv4.Chart, error) {
 	// The sub-provider targets the same kubeconfig and context as the stack.
 	serverSideApply := false
-	helmProvider, err := iackube.NewProvider(ctx, model.Kubernetes, iackube.ProviderOptions{
+	helmProvider, err := iackube.NewProvider(ctx, cfg.Kubernetes, iackube.ProviderOptions{
 		Name:                  "modelservice-provider-" + model.ReleasePostFix(),
 		EnableServerSideApply: &serverSideApply,
 	})
@@ -34,7 +36,7 @@ func Deploy(
 		"affinity": model.NodeAffinityMap(),
 	}
 
-	if t := model.GPUToleration; t != nil {
+	if t := cfg.Toleration; t != nil {
 		podConfig["tolerations"] = pulumi.Array{
 			pulumi.Map{
 				"key":      pulumi.String(t.Key),
@@ -61,7 +63,7 @@ func Deploy(
 	chartDeps := []pulumi.Resource{gaie}
 
 	modelArtifacts := pulumi.Map{
-		"labels": model.MetaLabels(),
+		"labels": model.MetaLabels(category),
 	}
 	if model.ModelSource != nil {
 		// Override modelArtifacts.uri to load weights from the pre-populated PVC.

@@ -1,11 +1,5 @@
 package config
 
-import (
-	kubernetes "github.com/axem-solutions/ai_platform/pkg/kube/connection"
-	"github.com/axem-solutions/ai_platform/pkg/kube/platform"
-	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
-)
-
 type Toleration struct {
 	Key      string `json:"key"`
 	Operator string `json:"operator"`
@@ -34,28 +28,4 @@ type ModelInput struct {
 type ModelsInput struct {
 	Generative []ModelInput `json:"generative"`
 	Embedder   []ModelInput `json:"embedder"`
-}
-
-type stackInput struct {
-	Models ModelsInput
-
-	LLMdChartPath string
-
-	HarborHostname string
-	HarborUser     string
-	HarborToken    pulumi.StringOutput
-	HarborTokenSet bool
-
-	Platform   platform.Platform
-	Kubernetes kubernetes.Connection
-
-	GPUToleration *Toleration // optional; injected into model pods via extraConfig
-
-	// ModelStorageClass is the default StorageClass applied to a model's PVC
-	// when the model's own modelSource.storageClass is empty. Useful for
-	// clusters where the cluster-default StorageClass is incompatible with
-	// the target GPU node's machine type (e.g. GKE g4-standard-48 requires
-	// hyperdisk-balanced, not the default pd-ssd). Optional; ignored when
-	// Platform is on-prem (which always uses hostpath).
-	ModelStorageClass string
 }

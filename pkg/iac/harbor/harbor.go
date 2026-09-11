@@ -30,7 +30,12 @@ func deployHarbor(ctx *pulumi.Context, configuration config.Config) error {
 		return fmt.Errorf("create Kubernetes provider: %w", err)
 	}
 
-	namespace, err := iackube.CreateNamespace(ctx, cfg.Harbor.Namespace, pulumi.Provider(provider))
+	namespace, err := iackube.CreateNamespace(
+		ctx,
+		cfg.Harbor.Namespace,
+		iackube.NamespaceOptions{},
+		pulumi.Provider(provider),
+	)
 	if err != nil {
 		return fmt.Errorf("create Harbor namespace: %w", err)
 	}

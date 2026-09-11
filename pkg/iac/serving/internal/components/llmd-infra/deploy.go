@@ -14,7 +14,13 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
-func Deploy(ctx *pulumi.Context, model appConfig.Model, lldChartPath string, opts ...pulumi.ResourceOption) (*helm_v4.Chart, error) {
+func Deploy(
+	ctx *pulumi.Context,
+	cfg appConfig.Values,
+	model appConfig.Model,
+	category string,
+	opts ...pulumi.ResourceOption,
+) (*helm_v4.Chart, error) {
 	releaseName := model.InfraReleaseName()
 
 	gaieReleaseName := model.GaieReleaseName()
@@ -57,7 +63,7 @@ func Deploy(ctx *pulumi.Context, model appConfig.Model, lldChartPath string, opt
 	// "./../upstream/llm-d/llm-d-infra/charts/llm-d-infra"
 	chartOpts := opts
 	release, err := helm_v4.NewChart(ctx, releaseName, &helm_v4.ChartArgs{
-		Chart:     pulumi.String(lldChartPath),
+		Chart:     pulumi.String(cfg.LLMd.ChartPath),
 		Namespace: pulumi.String(model.Namespace),
 		Name:      pulumi.String(releaseName),
 		SkipAwait: pulumi.Bool(false),
@@ -70,7 +76,7 @@ func Deploy(ctx *pulumi.Context, model appConfig.Model, lldChartPath string, opt
 	// Helm sub-providers use the same kubeconfig and context as the stack-level
 	// provider while retaining their historical server-side apply setting.
 	serverSideApply := false
-	serviceProvider, err := iackube.NewProvider(ctx, model.Kubernetes, iackube.ProviderOptions{
+	serviceProvider, err := iackube.NewProvider(ctx, cfg.Kubernetes, iackube.ProviderOptions{
 		Name:                  "service-provider-" + model.ReleasePostFix(),
 		EnableServerSideApply: &serverSideApply,
 	})
@@ -89,7 +95,7 @@ func Deploy(ctx *pulumi.Context, model appConfig.Model, lldChartPath string, opt
 			// e.g. shaide-server — can discover this model's chat-completion
 			// endpoint directly via label selector, without needing to know
 			// the Istio-generated Service naming convention it wraps.
-			Labels: model.MetaLabels(),
+			Labels: model.MetaLabels(category),
 		},
 		Spec: &corev1.ServiceSpecArgs{
 			Type:         pulumi.String("ExternalName"),
