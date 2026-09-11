@@ -52,6 +52,8 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 FROM alpine:3.23 AS chart-downloader
 
 ARG HARBOR_CHART_VERSION=1.18.2
+ARG LLMD_INFRA_CHART_VERSION=v1.4.0
+ARG LLMD_INFRA_CHART_SHA256=ced44359ddfb9a7795aee2a2bf0f1c317f21deb5e1e1dfeca3d677afee6a07d1
 ARG LOKI_CHART_VERSION=14.1.0
 ARG GRAFANA_CHART_VERSION=12.3.2
 ARG ALLOY_CHART_VERSION=1.8.1
@@ -60,11 +62,20 @@ ARG PROMETHEUS_CHART_VERSION=29.21.0
 RUN apk add --no-cache ca-certificates curl \
     && mkdir -p \
         /opt/shaide-installer/projects/harbor/charts \
+        /opt/shaide-installer/projects/upstream/llm-d/llm-d-infra/charts \
         /opt/shaide-installer/projects/monitoring/charts
 
 RUN curl -fsSL --retry 3 \
     -o "/opt/shaide-installer/projects/harbor/charts/harbor-${HARBOR_CHART_VERSION}.tgz" \
     "https://helm.goharbor.io/harbor-${HARBOR_CHART_VERSION}.tgz"
+
+RUN curl -fsSL --retry 3 \
+    -o "/tmp/llm-d-infra-${LLMD_INFRA_CHART_VERSION}.tgz" \
+    "https://github.com/llm-d-incubation/llm-d-infra/releases/download/${LLMD_INFRA_CHART_VERSION}/llm-d-infra-${LLMD_INFRA_CHART_VERSION}.tgz" \
+    && echo "${LLMD_INFRA_CHART_SHA256}  /tmp/llm-d-infra-${LLMD_INFRA_CHART_VERSION}.tgz" | sha256sum -c - \
+    && tar -xzf "/tmp/llm-d-infra-${LLMD_INFRA_CHART_VERSION}.tgz" \
+        -C /opt/shaide-installer/projects/upstream/llm-d/llm-d-infra/charts \
+    && rm "/tmp/llm-d-infra-${LLMD_INFRA_CHART_VERSION}.tgz"
 
 RUN curl -fsSL --retry 3 \
     -o "/opt/shaide-installer/projects/monitoring/charts/loki-${LOKI_CHART_VERSION}.tgz" \
@@ -162,6 +173,9 @@ COPY app_serving/deployments/models/ \
     /opt/shaide-installer/projects/app-serving/deployments/models/
 COPY app_serving/charts/ \
     /opt/shaide-installer/projects/app-serving/charts/
+COPY --from=chart-downloader \
+    /opt/shaide-installer/projects/upstream/llm-d/ \
+    /opt/shaide-installer/projects/upstream/llm-d/
 
 # App Shaide
 COPY app_shaide/deployments/Pulumi.yaml \
