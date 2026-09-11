@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	iackube "github.com/axem-solutions/ai_platform/pkg/iac/kubernetes"
 	appConfig "github.com/axem-solutions/ai_platform/pkg/iac/serving/internal/config"
 	kubernetes "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes"
 	corev1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/core/v1"
@@ -14,25 +15,19 @@ import (
 func Deploy(
 	ctx *pulumi.Context,
 	gaie pulumi.Resource,
+	cfg appConfig.Values,
 	model appConfig.Model,
+	category string,
 	modelPVC *corev1.PersistentVolumeClaim,
 	orasJob pulumi.Resource,
 	opts ...pulumi.ResourceOption,
 ) (*helmv4.Chart, error) {
-	// Sub-provider with server-side apply disabled; inherits kubeconfig from the
-	// stack-level provider when kubeconfig is explicitly configured.
-	helmProviderArgs := &kubernetes.ProviderArgs{
-		EnableServerSideApply: pulumi.Bool(false),
-	}
-	if model.Kubeconfig != "" {
-		helmProviderArgs.Kubeconfig = pulumi.StringPtr(model.Kubeconfig)
-	}
-
-	helmProvider, err := kubernetes.NewProvider(
-		ctx,
-		"modelservice-provider-"+model.ReleasePostFix(),
-		helmProviderArgs,
-	)
+	// The sub-provider targets the same kubeconfig and context as the stack.
+	serverSideApply := false
+	helmProvider, err := iackube.NewProvider(ctx, cfg.Kubernetes, iackube.ProviderOptions{
+		Name:                  "modelservice-provider-" + model.ReleasePostFix(),
+		EnableServerSideApply: &serverSideApply,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -41,7 +36,7 @@ func Deploy(
 		"affinity": model.NodeAffinityMap(),
 	}
 
-	if t := model.GPUToleration; t != nil {
+	if t := cfg.Toleration; t != nil {
 		podConfig["tolerations"] = pulumi.Array{
 			pulumi.Map{
 				"key":      pulumi.String(t.Key),
@@ -68,7 +63,7 @@ func Deploy(
 	chartDeps := []pulumi.Resource{gaie}
 
 	modelArtifacts := pulumi.Map{
-		"labels": model.MetaLabels(),
+		"labels": model.MetaLabels(category),
 	}
 	if model.ModelSource != nil {
 		// Override modelArtifacts.uri to load weights from the pre-populated PVC.

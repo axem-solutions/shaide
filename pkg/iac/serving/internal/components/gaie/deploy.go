@@ -2,6 +2,7 @@ package gaie
 
 import (
 	appConfig "github.com/axem-solutions/ai_platform/pkg/iac/serving/internal/config"
+	"github.com/axem-solutions/ai_platform/pkg/kube/platform"
 
 	helmv3 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/helm/v3"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
@@ -14,11 +15,17 @@ const (
 	// Download once (from app_serving/):
 	//   helm pull oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool \
 	//     --version v1.2.0 --untar --untardir charts/
-	gaieLocalChart = "./charts/inferencepool"
+	gaieLocalChart   = "./charts/inferencepool"
 	gaieChartVersion = "v1.2.0"
 )
 
-func Deploy(ctx *pulumi.Context, infraSim pulumi.Resource, model appConfig.Model, opts ...pulumi.ResourceOption) (*helmv3.Release, error) {
+func Deploy(
+	ctx *pulumi.Context,
+	infraSim pulumi.Resource,
+	cfg appConfig.Values,
+	model appConfig.Model,
+	opts ...pulumi.ResourceOption,
+) (*helmv3.Release, error) {
 	gaieReleaseName := model.GaieReleaseName()
 	gaieEppHost := pulumi.Sprintf("%s-epp.%s.svc.cluster.local", gaieReleaseName, model.Namespace)
 
@@ -55,7 +62,7 @@ func Deploy(ctx *pulumi.Context, infraSim pulumi.Resource, model appConfig.Model
 
 	chart := gaieOciChart
 	chartVersion := pulumi.StringPtr(gaieChartVersion)
-	if model.CloudProvider == "on-prem" {
+	if cfg.Platform == platform.OnPrem {
 		// Air-gapped: use the locally committed chart; no internet access needed.
 		// Version is inferred from the local chart's Chart.yaml.
 		// Prefer the absolute path resolved by the config layer (works inside

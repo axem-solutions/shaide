@@ -12,7 +12,7 @@ import (
 
 // Prepare prepares pre-existing Istio resources for Helm ownership during an
 // update that installs Istio.
-func Prepare(ctx *pulumi.Context, cfg config.Config) error {
+func Prepare(ctx *pulumi.Context, cfg config.Values) error {
 	if ctx.DryRun() || !cfg.Istio.Enabled {
 		return nil
 	}

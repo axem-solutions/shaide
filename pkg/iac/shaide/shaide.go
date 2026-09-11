@@ -1,6 +1,8 @@
 package shaide
 
 import (
+	"fmt"
+
 	iackube "github.com/axem-solutions/ai_platform/pkg/iac/kubernetes"
 	"github.com/axem-solutions/ai_platform/pkg/iac/shaide/internal/cloudprovider"
 	"github.com/axem-solutions/ai_platform/pkg/iac/shaide/internal/components/controlpanel"
@@ -11,12 +13,23 @@ import (
 	appconfig "github.com/axem-solutions/ai_platform/pkg/iac/shaide/internal/config"
 	"github.com/axem-solutions/ai_platform/pkg/iac/shaide/internal/platform"
 	"github.com/axem-solutions/ai_platform/pkg/iac/shaide/internal/runtime"
+	stackpkg "github.com/axem-solutions/ai_platform/pkg/stack"
 	"github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
-func DeployAppShaide(ctx *pulumi.Context) error {
-	appConfig := appconfig.Load(ctx)
+// DeployAppShaide deploys the shaide application using the resolved Pulumi
+// stack configuration. It is the entry point for running the program directly
+// with the Pulumi CLI; the installer goes through Stack.Deploy instead.
+func DeployAppShaide(ctx *pulumi.Context, projectDir string) error {
+	return deployAppShaide(ctx, appconfig.New(projectDir, stackpkg.Options{}, appconfig.Sources{}))
+}
+
+func deployAppShaide(ctx *pulumi.Context, stackConfig appconfig.Config) error {
+	appConfig, err := stackConfig.Load(ctx)
+	if err != nil {
+		return fmt.Errorf("load app-shaide config: %w", err)
+	}
 
 	// --- K8s Provider ---
 	k8sProviderArgs := &kubernetes.ProviderArgs{}
@@ -30,7 +43,7 @@ func DeployAppShaide(ctx *pulumi.Context) error {
 	providerOpt := pulumi.Provider(k8sProvider)
 
 	// --- Namespace ---
-	ns, err := iackube.CreateNamespace(ctx, appConfig.Namespace, providerOpt)
+	ns, err := iackube.CreateNamespace(ctx, appConfig.Namespace, iackube.NamespaceOptions{}, providerOpt)
 	if err != nil {
 		return err
 	}

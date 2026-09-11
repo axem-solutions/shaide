@@ -4,6 +4,7 @@ const (
 	projectGatewayProvider = "gateway-provider"
 	projectAppServing      = "app-serving"
 	projectAppShaide       = "app-shaide"
+	projectAppMCP          = "app-mcp"
 	projectHarbor          = "harbor"
 	projectOnPremHarbor    = "k8s-onprem-airgap-services"
 	projectMonitoring      = "monitoring"

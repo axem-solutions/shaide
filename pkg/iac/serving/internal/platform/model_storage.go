@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	appConfig "github.com/axem-solutions/ai_platform/pkg/iac/serving/internal/config"
+	kubeplatform "github.com/axem-solutions/ai_platform/pkg/kube/platform"
 
 	batchv1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/batch/v1"
 	corev1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/core/v1"
@@ -15,7 +16,23 @@ const hostpathBase = "/var/lib/hostpath/models"
 
 const orasVersion = "v1.3.1"
 
-// CreateModelStorage creates a PVC and a one-time ORAS pull Job that populates
+// PrepareModelStorage creates model storage when the model has a source. Models
+// that use their chart's remote model URI do not need a PVC or pull Job.
+func PrepareModelStorage(
+	ctx *pulumi.Context,
+	cfg appConfig.Values,
+	model appConfig.Model,
+	llmdNamespace pulumi.Resource,
+	opts ...pulumi.ResourceOption,
+) (*corev1.PersistentVolumeClaim, pulumi.Resource, error) {
+	if model.ModelSource == nil {
+		return nil, nil, nil
+	}
+
+	return createModelStorage(ctx, cfg, model, llmdNamespace, opts...)
+}
+
+// createModelStorage creates a PVC and a one-time ORAS pull Job that populates
 // it from Harbor. The Job:
 //   - runs with workingDir /model-cache/hub so ORAS extracts layers into
 //     /model-cache/hub/models--org--name/... matching HF_HUB_CACHE=/model-cache/hub
@@ -29,7 +46,13 @@ const orasVersion = "v1.3.1"
 //
 // On partial failure (no marker written): delete the Job and PVC manually, then
 // re-run pulumi up to start fresh.
-func CreateModelStorage(ctx *pulumi.Context, model appConfig.Model, llmdNamespace *corev1.Namespace, opts ...pulumi.ResourceOption) (*corev1.PersistentVolumeClaim, pulumi.Resource, error) {
+func createModelStorage(
+	ctx *pulumi.Context,
+	cfg appConfig.Values,
+	model appConfig.Model,
+	llmdNamespace pulumi.Resource,
+	opts ...pulumi.ResourceOption,
+) (*corev1.PersistentVolumeClaim, pulumi.Resource, error) {
 	src := model.ModelSource
 	pvcName := model.Slug + "-model"
 	pvcOpts := append([]pulumi.ResourceOption{pulumi.DependsOn([]pulumi.Resource{llmdNamespace})}, opts...)
@@ -37,9 +60,9 @@ func CreateModelStorage(ctx *pulumi.Context, model appConfig.Model, llmdNamespac
 	// On on-prem with hostpath storage, create a PV bound to the target node before the PVC.
 	// The PV uses a local path under hostpathBase/<slug> on the node specified by HostpathNode.
 	// The directory must exist on the node before pulumi up (managed via ansible hostpath_dirs role).
-	if model.CloudProvider == "on-prem" && model.ModelSource != nil && model.ModelSource.HostpathNode != "" {
+	if cfg.Platform == kubeplatform.OnPrem && src.HostpathNode != "" {
 		pvName := pvcName + "-pv"
-		hostpathDir := model.ModelSource.HostpathDir
+		hostpathDir := src.HostpathDir
 		if hostpathDir == "" {
 			hostpathDir = hostpathBase + "/" + model.Slug
 		}
@@ -63,7 +86,7 @@ func CreateModelStorage(ctx *pulumi.Context, model appConfig.Model, llmdNamespac
 									&corev1.NodeSelectorRequirementArgs{
 										Key:      pulumi.String("kubernetes.io/hostname"),
 										Operator: pulumi.String("In"),
-										Values:   pulumi.StringArray{pulumi.String(model.ModelSource.HostpathNode)},
+										Values:   pulumi.StringArray{pulumi.String(src.HostpathNode)},
 									},
 								},
 							},
@@ -86,10 +109,10 @@ func CreateModelStorage(ctx *pulumi.Context, model appConfig.Model, llmdNamespac
 	// On-prem RKE2 clusters use hostpath (kubernetes.io/no-provisioner) — static PVs only.
 	// A matching PV must be pre-created before pulumi up (see infra/on-prem/ansible/inventory-dev/host_vars/).
 	// On cloud (GKE) no class is specified, using the cluster default (standard-rwo or equivalent).
-	if model.CloudProvider == "on-prem" {
+	if cfg.Platform == kubeplatform.OnPrem {
 		pvcSpec.StorageClassName = pulumi.StringPtr("hostpath")
-	} else if model.ModelSource.StorageClass != "" {
-		pvcSpec.StorageClassName = pulumi.StringPtr(model.ModelSource.StorageClass)
+	} else if src.StorageClass != "" {
+		pvcSpec.StorageClassName = pulumi.StringPtr(src.StorageClass)
 	}
 
 	pvc, err := corev1.NewPersistentVolumeClaim(ctx, pvcName, &corev1.PersistentVolumeClaimArgs{
@@ -106,8 +129,8 @@ func CreateModelStorage(ctx *pulumi.Context, model appConfig.Model, llmdNamespac
 	// On air-gapped on-prem the ORAS image is pre-loaded into the "services" Harbor project.
 	// On cloud (GKE has internet) it is pulled directly from ghcr.io.
 	orasImage := "ghcr.io/oras-project/oras:" + orasVersion
-	if model.CloudProvider == "on-prem" {
-		orasImage = model.HarborHostname + "/images-infra/oras-project/oras:" + orasVersion
+	if cfg.Platform == kubeplatform.OnPrem {
+		orasImage = cfg.Harbor.Hostname + "/images-infra/oras-project/oras:" + orasVersion
 	}
 
 	// --plain-http is required: Harbor is deployed with TLS disabled (ClusterIP HTTP).
@@ -152,7 +175,7 @@ func CreateModelStorage(ctx *pulumi.Context, model appConfig.Model, llmdNamespac
 					Affinity: model.NodeAffinityArgs(),
 					// The pull job must land on the same node as the model service pod so the
 					// hostpath PV is accessible. If the GPU node carries a taint, tolerate it.
-					Tolerations: buildTolerations(model),
+					Tolerations: buildTolerations(cfg.Toleration),
 					ImagePullSecrets: corev1.LocalObjectReferenceArray{
 						&corev1.LocalObjectReferenceArgs{
 							Name: pulumi.String("harbor-creds"),
@@ -222,8 +245,7 @@ func CreateModelStorage(ctx *pulumi.Context, model appConfig.Model, llmdNamespac
 	return pvc, job, nil
 }
 
-func buildTolerations(model appConfig.Model) corev1.TolerationArray {
-	t := model.GPUToleration
+func buildTolerations(t *appConfig.Toleration) corev1.TolerationArray {
 	if t == nil || *t == (appConfig.Toleration{}) {
 		return nil
 	}

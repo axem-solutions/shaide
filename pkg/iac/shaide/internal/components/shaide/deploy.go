@@ -23,7 +23,7 @@ import (
 // from the shared Gateway (in gateway-system) to this Service.
 // Otherwise, a LoadBalancer Service is created with annotations from lbAnnotations config.
 // Cloud-specific post-deploy resources are delegated to the provider.
-func Deploy(ctx *pulumi.Context, deps *runtime.DeploymentContext, cfg appconfig.Config, provider cloudprovider.Provider) error {
+func Deploy(ctx *pulumi.Context, deps *runtime.DeploymentContext, cfg appconfig.Values, provider cloudprovider.Provider) error {
 	image := cfg.Images.ShaideServer
 
 	podLabels := deps.MetaLabels("shaide-server", "server")

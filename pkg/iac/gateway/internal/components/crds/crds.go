@@ -12,7 +12,7 @@ import (
 
 func Deploy(
 	ctx *pulumi.Context,
-	cfg config.Config,
+	cfg config.Values,
 	provider *kubernetes.Provider,
 ) ([]pulumi.Resource, error) {
 	var resources []pulumi.Resource

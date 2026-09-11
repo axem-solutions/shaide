@@ -63,10 +63,42 @@ models:
 | `harbor_name` | Repository name inside that project |
 | `harbor_tag` | Tag used to detect and publish the artifact |
 | `dependencies` | Optional extra Hugging Face repos fetched alongside the model |
+| `serving` | Optional. Present to run the model on this cluster; absent to publish it only |
 
 The entry above is published as
 `<registry-host>/ai-models/gpt-oss-20b:1.0.0`, as an OCI artifact of type
 `application/vnd.cnai.model`.
+
+### Serving a model
+
+Publishing a model and running it are separate choices. A model is deployed only
+when its entry carries a `serving` block, so a cluster that mirrors models for
+another consumer simply leaves it out:
+
+```yaml
+models:
+  - id: "openai/gpt-oss-20b"
+    revision: "6cee5e81ee83917806bbde320786a8fb61efebee"
+    harbor_project: "ai-models"
+    harbor_name: "gpt-oss-20b"
+    harbor_tag: "1.0.0"
+    serving:
+      name: "GPT-OSS-20B"
+      node_selector: "generative"
+      storage_size: "70Gi"
+```
+
+| Field | Meaning |
+| --- | --- |
+| `name` | Model directory shipped in the installer image. It also decides whether the model is generative or an embedder |
+| `node_selector` | Value of the `nodegroup` label on the pool to run on. Omit to schedule anywhere |
+| `storage_size` | Size of the volume holding the weights |
+| `storage_class` | Optional. Overrides the cluster default for this model's volume |
+
+Everything else is derived: the registry reference comes from the `harbor_*`
+fields above, and the path inside the volume from `id`. Naming a model the
+installer image does not ship is skipped with a message, rather than deploying
+the wrong runtime.
 
 ### Supplying it
 

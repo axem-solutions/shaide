@@ -5,16 +5,22 @@ import (
 	"sort"
 	"strings"
 
+	iackube "github.com/axem-solutions/ai_platform/pkg/iac/kubernetes"
 	appConfig "github.com/axem-solutions/ai_platform/pkg/iac/serving/internal/config"
 
-	kubernetes "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes"
 	corev1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/core/v1"
 	helm_v4 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/helm/v4"
 	metav1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/meta/v1"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
-func Deploy(ctx *pulumi.Context, model appConfig.Model, lldChartPath string, opts ...pulumi.ResourceOption) (*helm_v4.Chart, error) {
+func Deploy(
+	ctx *pulumi.Context,
+	cfg appConfig.Values,
+	model appConfig.Model,
+	category string,
+	opts ...pulumi.ResourceOption,
+) (*helm_v4.Chart, error) {
 	releaseName := model.InfraReleaseName()
 
 	gaieReleaseName := model.GaieReleaseName()
@@ -57,7 +63,7 @@ func Deploy(ctx *pulumi.Context, model appConfig.Model, lldChartPath string, opt
 	// "./../upstream/llm-d/llm-d-infra/charts/llm-d-infra"
 	chartOpts := opts
 	release, err := helm_v4.NewChart(ctx, releaseName, &helm_v4.ChartArgs{
-		Chart:     pulumi.String(lldChartPath),
+		Chart:     pulumi.String(cfg.LLMd.ChartPath),
 		Namespace: pulumi.String(model.Namespace),
 		Name:      pulumi.String(releaseName),
 		SkipAwait: pulumi.Bool(false),
@@ -67,15 +73,13 @@ func Deploy(ctx *pulumi.Context, model appConfig.Model, lldChartPath string, opt
 		return nil, err
 	}
 
-	// Sub-provider with server-side apply disabled; inherits kubeconfig from the
-	// stack-level provider (set in main.go) when kubeconfig is explicitly configured.
-	serviceProviderArgs := &kubernetes.ProviderArgs{
-		EnableServerSideApply: pulumi.Bool(false),
-	}
-	if model.Kubeconfig != "" {
-		serviceProviderArgs.Kubeconfig = pulumi.StringPtr(model.Kubeconfig)
-	}
-	serviceProvider, err := kubernetes.NewProvider(ctx, "service-provider-"+model.ReleasePostFix(), serviceProviderArgs)
+	// Helm sub-providers use the same kubeconfig and context as the stack-level
+	// provider while retaining their historical server-side apply setting.
+	serverSideApply := false
+	serviceProvider, err := iackube.NewProvider(ctx, cfg.Kubernetes, iackube.ProviderOptions{
+		Name:                  "service-provider-" + model.ReleasePostFix(),
+		EnableServerSideApply: &serverSideApply,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +95,7 @@ func Deploy(ctx *pulumi.Context, model appConfig.Model, lldChartPath string, opt
 			// e.g. shaide-server — can discover this model's chat-completion
 			// endpoint directly via label selector, without needing to know
 			// the Istio-generated Service naming convention it wraps.
-			Labels: model.MetaLabels(),
+			Labels: model.MetaLabels(category),
 		},
 		Spec: &corev1.ServiceSpecArgs{
 			Type:         pulumi.String("ExternalName"),

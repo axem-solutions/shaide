@@ -10,11 +10,17 @@ import (
 	"github.com/axem-solutions/ai_platform/pkg/iac/harbor/internal/setup"
 	"github.com/axem-solutions/ai_platform/pkg/iac/harbor/internal/storage"
 	iackube "github.com/axem-solutions/ai_platform/pkg/iac/kubernetes"
+	"github.com/axem-solutions/ai_platform/pkg/stack"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
+// DeployHarbor deploys Harbor using the resolved Pulumi stack configuration.
 func DeployHarbor(ctx *pulumi.Context, projectDir string) error {
-	cfg, err := config.Load(ctx, projectDir)
+	return deployHarbor(ctx, config.New(projectDir, stack.Options{}))
+}
+
+func deployHarbor(ctx *pulumi.Context, configuration config.Config) error {
+	cfg, err := configuration.Load(ctx)
 	if err != nil {
 		return fmt.Errorf("load Harbor config: %w", err)
 	}
@@ -24,7 +30,12 @@ func DeployHarbor(ctx *pulumi.Context, projectDir string) error {
 		return fmt.Errorf("create Kubernetes provider: %w", err)
 	}
 
-	namespace, err := iackube.CreateNamespace(ctx, cfg.Harbor.Namespace, pulumi.Provider(provider))
+	namespace, err := iackube.CreateNamespace(
+		ctx,
+		cfg.Harbor.Namespace,
+		iackube.NamespaceOptions{},
+		pulumi.Provider(provider),
+	)
 	if err != nil {
 		return fmt.Errorf("create Harbor namespace: %w", err)
 	}

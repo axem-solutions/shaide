@@ -12,7 +12,7 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
-func Deploy(ctx *pulumi.Context, cfg appconfig.Config, opts ...pulumi.ResourceOption) error {
+func Deploy(ctx *pulumi.Context, cfg appconfig.Values, opts ...pulumi.ResourceOption) error {
 	job, err := createBucketJob(ctx, cfg, opts...)
 	if err != nil {
 		return err
@@ -123,7 +123,7 @@ func Deploy(ctx *pulumi.Context, cfg appconfig.Config, opts ...pulumi.ResourceOp
 	return err
 }
 
-func lokiPersistence(cfg appconfig.Config) pulumi.Map {
+func lokiPersistence(cfg appconfig.Values) pulumi.Map {
 	m := pulumi.Map{
 		"enabled": pulumi.Bool(true),
 		"size":    pulumi.String("10Gi"),
@@ -142,7 +142,7 @@ func lokiPersistence(cfg appconfig.Config) pulumi.Map {
 // the bucket already existed. aws-cli's head-bucket/create-bucket are plain
 // S3 API calls any S3-compatible backend (including RustFS) implements the
 // same way, so this is portable across backends, not just AWS.
-func createBucketJob(ctx *pulumi.Context, cfg appconfig.Config, opts ...pulumi.ResourceOption) (*batchv1.Job, error) {
+func createBucketJob(ctx *pulumi.Context, cfg appconfig.Values, opts ...pulumi.ResourceOption) (*batchv1.Job, error) {
 	cmd := fmt.Sprintf(
 		"aws --endpoint-url %s s3api head-bucket --bucket %s || aws --endpoint-url %s s3api create-bucket --bucket %s",
 		cfg.S3.Endpoint, cfg.Loki.S3Bucket, cfg.S3.Endpoint, cfg.Loki.S3Bucket,

@@ -13,7 +13,7 @@ import (
 )
 
 // Deploy creates the webapp Deployment and ClusterIP Service.
-func Deploy(ctx *pulumi.Context, deps *runtime.DeploymentContext, cfg appconfig.Config) error {
+func Deploy(ctx *pulumi.Context, deps *runtime.DeploymentContext, cfg appconfig.Values) error {
 	name := cfg.Services.WebApp
 	image := cfg.Images.WebApp
 

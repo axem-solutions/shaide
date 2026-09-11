@@ -12,8 +12,13 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
-func Deploy(ctx *pulumi.Context, cfg config.Config, provider *kubernetes.Provider) error {
-	namespace, err := iackube.CreateNamespace(ctx, cfg.Istio.Namespace, pulumi.Provider(provider))
+func Deploy(ctx *pulumi.Context, cfg config.Values, provider *kubernetes.Provider) error {
+	namespace, err := iackube.CreateNamespace(
+		ctx,
+		cfg.Istio.Namespace,
+		iackube.NamespaceOptions{},
+		pulumi.Provider(provider),
+	)
 	if err != nil {
 		return fmt.Errorf("create Istio namespace: %w", err)
 	}
@@ -48,7 +53,7 @@ func Deploy(ctx *pulumi.Context, cfg config.Config, provider *kubernetes.Provide
 
 func deployBase(
 	ctx *pulumi.Context,
-	cfg config.Config,
+	cfg config.Values,
 	namespace *corev1.Namespace,
 	provider *kubernetes.Provider,
 ) (*helm.Chart, error) {
@@ -76,7 +81,7 @@ func deployBase(
 
 func deployIstiod(
 	ctx *pulumi.Context,
-	cfg config.Config,
+	cfg config.Values,
 	namespace *corev1.Namespace,
 	provider *kubernetes.Provider,
 	base *helm.Chart,

@@ -34,7 +34,7 @@ func TestDefaultsForPlatform(t *testing.T) {
 }
 
 func TestApplyDefaultsUsesPlatformGatewayDefaults(t *testing.T) {
-	var cfg Config
+	var cfg Values
 	cfg.Platform = platform.GCP
 
 	if err := applyDefaults(&cfg); err != nil {
@@ -50,7 +50,7 @@ func TestApplyDefaultsUsesPlatformGatewayDefaults(t *testing.T) {
 }
 
 func TestApplyDefaultsPreservesConfiguredGatewayValues(t *testing.T) {
-	var cfg Config
+	var cfg Values
 	cfg.Platform = platform.GCP
 	cfg.Gateway.ClassName = "custom-class"
 	cfg.TLS.CertAnnotation = "custom.example/certificate"
@@ -68,8 +68,8 @@ func TestApplyDefaultsPreservesConfiguredGatewayValues(t *testing.T) {
 }
 
 func TestValidateRequiresOneGatewaySource(t *testing.T) {
-	validConfig := func() Config {
-		var cfg Config
+	validConfig := func() Values {
+		var cfg Values
 		cfg.Platform = platform.Azure
 		cfg.Gateway.ClassName = "azure-alb-external"
 		cfg.Gateway.Namespace = DefaultGatewayNamespace
