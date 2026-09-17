@@ -27,3 +27,20 @@ func TestValuesDisableRoutingProxy(t *testing.T) {
 		t.Error("routing.proxy.enabled = true, want false")
 	}
 }
+
+func TestWorkloadValuesUseRecreateStrategy(t *testing.T) {
+	workload := workloadValues(pulumi.Map{})
+
+	strategy, ok := workload["strategy"].(pulumi.Map)
+	if !ok {
+		t.Fatalf("strategy = %T, want pulumi.Map", workload["strategy"])
+	}
+
+	strategyType, ok := strategy["type"].(pulumi.String)
+	if !ok {
+		t.Fatalf("strategy.type = %T, want pulumi.String", strategy["type"])
+	}
+	if string(strategyType) != "Recreate" {
+		t.Fatalf("strategy.type = %q, want Recreate", strategyType)
+	}
+}

@@ -6,7 +6,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/core"
@@ -26,6 +25,15 @@ const clusterDefaultStorageClassLabel = "(cluster default)"
 const (
 	servingModeUpdate   = "Update — keep model volumes"
 	servingModeRecreate = "Recreate — destroy the stack, deleting model volumes"
+
+	// Temporary cluster scheduling policy. Inference workloads are isolated on
+	// the GPU pool; the remaining platform workloads do not receive this
+	// toleration and therefore stay off its NoSchedule-tainted nodes.
+	inferenceNodeSelectorKey   = "nodegroup"
+	inferenceNodeSelectorValue = "generative"
+	inferenceTaintKey          = "nvidia.com/gpu"
+	inferenceTaintValue        = "present"
+	inferenceTaintEffect       = "NoSchedule"
 )
 
 func DeployAppServing(rt *core.Runtime) error {
@@ -64,6 +72,7 @@ func DeployAppServing(rt *core.Runtime) error {
 			HarborUser:        rt.Discovery.Auth.Username,
 			HarborToken:       rt.Discovery.Auth.Password,
 			ModelStorageClass: storageClass,
+			GPUToleration:     inferenceGPUToleration(),
 			Logf:              rt.Detailf,
 		},
 	)
@@ -164,7 +173,7 @@ func selectedModels(rt *core.Runtime) []serving.Model {
 		models = append(models, serving.Model{
 			Name:         model.Serving.Name,
 			Category:     category,
-			NodeSelector: nodeSelector(model.Serving.NodeSelector),
+			NodeSelector: inferenceNodeSelector(),
 			HarborRef: fmt.Sprintf(
 				"%s/%s/%s:%s",
 				registry, model.HarborProject, model.HarborName, model.HarborTag,
@@ -192,15 +201,18 @@ func modelCategory(rt *core.Runtime, name string) string {
 	return ""
 }
 
-// nodeSelector builds the label match for the pool a model runs on. An empty
-// value schedules it anywhere, which is what a single-pool cluster wants.
-func nodeSelector(value string) map[string]string {
-	if strings.TrimSpace(value) == "" {
-		return nil
-	}
-
-	return map[string]string{defaultNodeSelectorKey: value}
+// inferenceNodeSelector applies the temporary installer-wide placement policy.
+// Model-manifest placement becomes configurable again when the scheduler grows
+// support for multiple inference pools.
+func inferenceNodeSelector() map[string]string {
+	return map[string]string{inferenceNodeSelectorKey: inferenceNodeSelectorValue}
 }
 
-// defaultNodeSelectorKey matches the label key the serving stack applies.
-const defaultNodeSelectorKey = "nodegroup"
+func inferenceGPUToleration() *serving.Toleration {
+	return &serving.Toleration{
+		Key:      inferenceTaintKey,
+		Operator: "Equal",
+		Value:    inferenceTaintValue,
+		Effect:   inferenceTaintEffect,
+	}
+}

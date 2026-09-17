@@ -2,11 +2,9 @@ package modelservice
 
 import (
 	"fmt"
-	"strings"
 
 	iackube "github.com/axem-solutions/ai_platform/pkg/iac/kubernetes"
 	appConfig "github.com/axem-solutions/ai_platform/pkg/iac/serving/internal/config"
-	kubernetes "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes"
 	corev1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/core/v1"
 	helmv4 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/helm/v4"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
@@ -47,13 +45,8 @@ func Deploy(
 		}
 	}
 
-	decodeValues := pulumi.Map{
-		"extraConfig": podConfig,
-	}
-
-	prefillValues := pulumi.Map{
-		"extraConfig": podConfig,
-	}
+	decodeValues := workloadValues(podConfig)
+	prefillValues := workloadValues(podConfig)
 
 	modelServiceValues := values(decodeValues, prefillValues)
 
@@ -97,14 +90,6 @@ func Deploy(
 		Delete: "10m",
 	}))
 
-	// Single-replica GPU model pods cannot safely use the Kubernetes default
-	// RollingUpdate strategy, because the old pod holds the GPU while the new pod
-	// waits in Pending. This transformation forces decode/prefill deployments to
-	// terminate the old pod before creating the replacement.
-	chartOpts = append(chartOpts, pulumi.Transformations([]pulumi.ResourceTransformation{
-		singleReplicaGPURolloutStrategy,
-	}))
-
 	modelService, err := helmv4.NewChart(
 		ctx,
 		modelServiceReleaseName,
@@ -130,6 +115,17 @@ func Deploy(
 	return modelService, nil
 }
 
+func workloadValues(podConfig pulumi.Map) pulumi.Map {
+	return pulumi.Map{
+		"extraConfig": podConfig,
+		// A rolling update deadlocks when the old replica holds the only GPU.
+		// The llm-d chart exposes this value directly on its Deployment spec.
+		"strategy": pulumi.Map{
+			"type": pulumi.String("Recreate"),
+		},
+	}
+}
+
 func values(decodeValues, prefillValues pulumi.Map) pulumi.Map {
 	return pulumi.Map{
 		"decode":  decodeValues,
@@ -142,56 +138,5 @@ func values(decodeValues, prefillValues pulumi.Map) pulumi.Map {
 				"enabled": pulumi.Bool(false),
 			},
 		},
-	}
-}
-
-func singleReplicaGPURolloutStrategy(args *pulumi.ResourceTransformationArgs) *pulumi.ResourceTransformationResult {
-	if args.Type != "kubernetes:apps/v1:Deployment" {
-		return nil
-	}
-
-	props, ok := args.Props.(kubernetes.UntypedArgs)
-	if !ok {
-		return nil
-	}
-
-	metadataName := ""
-	if metadata, ok := props["metadata"].(map[string]interface{}); ok {
-		if name, ok := metadata["name"].(string); ok {
-			metadataName = name
-		}
-	}
-
-	resourceName := args.Name
-
-	target := strings.Contains(resourceName, "modelservice-decode") ||
-		strings.Contains(resourceName, "modelservice-prefill") ||
-		strings.HasSuffix(resourceName, "-decode") ||
-		strings.HasSuffix(resourceName, "-prefill") ||
-		strings.Contains(metadataName, "modelservice-decode") ||
-		strings.Contains(metadataName, "modelservice-prefill") ||
-		strings.HasSuffix(metadataName, "-decode") ||
-		strings.HasSuffix(metadataName, "-prefill")
-
-	if !target {
-		return nil
-	}
-
-	spec, ok := props["spec"].(map[string]interface{})
-	if !ok {
-		spec = map[string]interface{}{}
-		props["spec"] = spec
-	}
-
-	// Recreate is the correct rollout strategy for single-replica, single-GPU
-	// vLLM deployments. It prevents a new pod from being created while the old
-	// pod still holds the only available GPU.
-	spec["strategy"] = map[string]interface{}{
-		"type": "Recreate",
-	}
-
-	return &pulumi.ResourceTransformationResult{
-		Props: props,
-		Opts:  args.Opts,
 	}
 }

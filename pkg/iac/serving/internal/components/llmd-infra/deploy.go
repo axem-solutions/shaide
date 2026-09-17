@@ -2,8 +2,6 @@ package llmdinfra
 
 import (
 	"fmt"
-	"sort"
-	"strings"
 
 	iackube "github.com/axem-solutions/ai_platform/pkg/iac/kubernetes"
 	appConfig "github.com/axem-solutions/ai_platform/pkg/iac/serving/internal/config"
@@ -105,51 +103,5 @@ func Deploy(
 		return nil, err
 	}
 
-	// Create ConfigMap for Gateway nodeSelector injection using Istio's GatewayClass defaults.
-	// Uses Istio's GatewayClass-level customization via ConfigMap
-	resourceName := fmt.Sprintf("gateway-defaults-%s", model.Slug)
-	cmOpts := append([]pulumi.ResourceOption{pulumi.DependsOn([]pulumi.Resource{release})}, opts...)
-	_, err = corev1.NewConfigMap(ctx, resourceName, &corev1.ConfigMapArgs{
-		Metadata: &metav1.ObjectMetaArgs{
-			Name:      pulumi.String("gateway-defaults"),
-			Namespace: pulumi.String(model.Namespace),
-			Labels: pulumi.StringMap{
-				"gateway.istio.io/defaults-for-class": pulumi.String("istio"),
-			},
-		},
-		Data: pulumi.StringMap{
-			"deployment": pulumi.String(`
-spec:
-  template:
-    spec:
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-            - matchExpressions:
-` + renderNodeAffinityYaml(model.NodeSelector)),
-		},
-	}, cmOpts...)
-	if err != nil {
-		return nil, err
-	}
-
 	return release, nil
-}
-
-// renderNodeAffinityYaml renders selector as a sorted list of matchExpressions lines, one
-// {key, In, [value]} entry per key, to be embedded under a requiredDuringSchedulingIgnoredDuringExecution
-// nodeSelectorTerms/matchExpressions block. Sorted for a stable, diff-friendly rendering.
-func renderNodeAffinityYaml(selector map[string]string) string {
-	keys := make([]string, 0, len(selector))
-	for k := range selector {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
-	lines := make([]string, 0, len(keys))
-	for _, key := range keys {
-		lines = append(lines, fmt.Sprintf(`              - {key: %s, operator: In, values: [%q]}`, key, selector[key]))
-	}
-	return strings.Join(lines, "\n")
 }
