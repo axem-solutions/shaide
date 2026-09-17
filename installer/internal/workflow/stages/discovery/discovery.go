@@ -65,6 +65,10 @@ func Stage() core.Stage {
 				When: InstallMode,
 			},
 			{
+				Name: "configure Harbor node access",
+				Run:  ensureHarborNodeAccess,
+			},
+			{
 				Name: "check Harbor pull secret",
 				// Harbor deployment can rotate the robot password during an
 				// update. Always reload the resulting pull secret so subsequent
