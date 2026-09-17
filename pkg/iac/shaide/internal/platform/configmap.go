@@ -56,12 +56,7 @@ func CreateAppShaideConfig(ctx *pulumi.Context, cfg appconfig.Values, providerOp
 
 	// --- Secret: credentials for S3 (rustfs) and admin auth ---
 	// These must be set per stack: pulumi config set --secret <key> <value>
-	secretData := pulumi.StringMap{
-		"ADMIN_AUTH_KEY": cfg.Secrets.AdminAuthKey,
-		"S3_PASSWORD":    cfg.Secrets.S3Password,
-		"JWT_SECRET":     cfg.Secrets.JWTSecret,
-		"SESSION_SECRET": cfg.Secrets.SessionSecret,
-	}
+	secretData := appSecretData(cfg)
 
 	shaideSecrets, err := corev1.NewSecret(ctx, "shaide-secrets", &corev1.SecretArgs{
 		Metadata: &metav1.ObjectMetaArgs{
@@ -75,4 +70,17 @@ func CreateAppShaideConfig(ctx *pulumi.Context, cfg appconfig.Values, providerOp
 	}
 
 	return shaideConfig, shaideSecrets, nil
+}
+
+func appSecretData(cfg appconfig.Values) pulumi.StringMap {
+	return pulumi.StringMap{
+		"ADMIN_AUTH_KEY": cfg.Secrets.AdminAuthKey,
+		// Current shaide-server versions read ADMIN_PASSWORD. Keep the legacy
+		// ADMIN_AUTH_KEY alias so older images remain deployable from the same
+		// installer-managed Secret.
+		"ADMIN_PASSWORD": cfg.Secrets.AdminAuthKey,
+		"S3_PASSWORD":    cfg.Secrets.S3Password,
+		"JWT_SECRET":     cfg.Secrets.JWTSecret,
+		"SESSION_SECRET": cfg.Secrets.SessionSecret,
+	}
 }

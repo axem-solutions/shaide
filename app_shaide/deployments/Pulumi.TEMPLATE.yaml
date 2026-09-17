@@ -151,11 +151,11 @@ config:
   app-shaide:ghcrToken:
     secure: <run `pulumi config set --secret ghcrToken <token>`>
   app-shaide:shaideServerImage: "ghcr.io/axem-solutions/shaide_server:<tag>"
-  app-shaide:controlPanelImage: "ghcr.io/axem-solutions/control_panel:<tag>"
-  app-shaide:webappImage: "ghcr.io/axem-solutions/shaide-web:<tag>"
+  app-shaide:controlPanelImage: "ghcr.io/axem-solutions/shaide_control_panel:<tag>"
+  app-shaide:webappImage: "ghcr.io/axem-solutions/shaide-webapp:<tag>"
   app-shaide:rustfsImage: "rustfs/rustfs:<tag>"
   app-shaide:qdrantImage: "qdrant/qdrant:<tag>"
-  # app-shaide:busyboxImage: busybox:1.37
+  app-shaide:busyboxImage: "busybox:<tag>"
 
   # --- Application settings ---
   app-shaide:shaideServerUiFqdn: control-panel
