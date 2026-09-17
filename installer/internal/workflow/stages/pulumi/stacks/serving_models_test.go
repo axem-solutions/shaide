@@ -133,18 +133,28 @@ func TestEmbedderCategoryIsFound(t *testing.T) {
 	}
 }
 
-// No pool named means schedule anywhere, which is what a single-pool cluster
-// wants; an empty map would match no node.
-func TestEmptyNodeSelectorIsOmitted(t *testing.T) {
+// The installer currently has one explicit scheduling class for inference.
+// A manifest value must not move a model onto a general-purpose node until the
+// installer gains a more sophisticated placement policy.
+func TestInferenceNodeSelectorIsInstallerManaged(t *testing.T) {
 	projects := packagedModels(t, map[string]string{"GPT-OSS-20B": "generative"})
 
-	anywhere := gptOSS()
-	anywhere.Serving.NodeSelector = ""
+	model := gptOSS()
+	model.Serving.NodeSelector = "some-other-pool"
 
-	rt := runtimeWith(t, projects, []catalog.Model{anywhere})
+	rt := runtimeWith(t, projects, []catalog.Model{model})
 
-	if models := selectedModels(rt); models[0].NodeSelector != nil {
-		t.Errorf("NodeSelector = %v, want nil", models[0].NodeSelector)
+	if got := selectedModels(rt)[0].NodeSelector; got[inferenceNodeSelectorKey] != inferenceNodeSelectorValue {
+		t.Errorf("NodeSelector = %v, want %s=%s", got, inferenceNodeSelectorKey, inferenceNodeSelectorValue)
+	}
+}
+
+func TestInferenceGPUTolerationMatchesReservedPoolTaint(t *testing.T) {
+	toleration := inferenceGPUToleration()
+
+	if toleration.Key != "nvidia.com/gpu" || toleration.Operator != "Equal" ||
+		toleration.Value != "present" || toleration.Effect != "NoSchedule" {
+		t.Fatalf("inference toleration = %+v, want the reserved GPU pool taint", toleration)
 	}
 }
 

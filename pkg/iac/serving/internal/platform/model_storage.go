@@ -44,8 +44,12 @@ func PrepareModelStorage(
 // The caller must DependsOn the returned Job before starting the ModelService pod
 // to prevent the pod from starting with an empty PVC under HF_HUB_OFFLINE=1.
 //
-// On partial failure (no marker written): delete the Job and PVC manually, then
-// re-run pulumi up to start fresh.
+// Job pod templates are immutable. Pulumi replaces the Job whenever its spec
+// changes and deletes the old Job first because the Kubernetes name is fixed.
+// The marker on the PVC keeps replacement idempotent after a successful pull.
+//
+// On partial pull failure (no marker written): delete the Job and PVC manually,
+// then re-run pulumi up to start fresh.
 func createModelStorage(
 	ctx *pulumi.Context,
 	cfg appConfig.Values,
@@ -156,7 +160,11 @@ func createModelStorage(
 	ttlSeconds := 86400
 
 	jobName := model.Slug + "-model-pull"
-	jobOpts := append([]pulumi.ResourceOption{pulumi.DependsOn([]pulumi.Resource{pvc})}, opts...)
+	jobOpts := append([]pulumi.ResourceOption{
+		pulumi.DependsOn([]pulumi.Resource{pvc}),
+		pulumi.ReplaceOnChanges([]string{"spec"}),
+		pulumi.DeleteBeforeReplace(true),
+	}, opts...)
 	job, err := batchv1.NewJob(ctx, jobName, &batchv1.JobArgs{
 		Metadata: &metav1.ObjectMetaArgs{
 			Name:      pulumi.String(jobName),

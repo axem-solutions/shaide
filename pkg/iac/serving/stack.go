@@ -22,6 +22,16 @@ type Model struct {
 	StorageClass string
 }
 
+// Toleration describes a Kubernetes taint tolerated by every model workload in
+// the stack. The installer supplies this alongside the node selector so model
+// pods and their artifact pull Jobs use the same scheduling policy.
+type Toleration struct {
+	Key      string
+	Operator string
+	Value    string
+	Effect   string
+}
+
 const (
 	CategoryGenerative = "generative"
 	CategoryEmbedder   = "embedder"
@@ -36,6 +46,7 @@ type Options struct {
 	HarborUser        string
 	HarborToken       string
 	ModelStorageClass string
+	GPUToleration     *Toleration
 	Logf              func(format string, args ...any)
 }
 
@@ -58,8 +69,22 @@ func NewStack(projectDir string, common stackpkg.Options, options ...Options) *S
 			HarborUser:        servingOptions.HarborUser,
 			HarborToken:       servingOptions.HarborToken,
 			ModelStorageClass: servingOptions.ModelStorageClass,
+			GPUToleration:     tolerationInput(servingOptions.GPUToleration),
 		},
 	)}
+}
+
+func tolerationInput(value *Toleration) *servingconfig.Toleration {
+	if value == nil {
+		return nil
+	}
+
+	return &servingconfig.Toleration{
+		Key:      value.Key,
+		Operator: value.Operator,
+		Value:    value.Value,
+		Effect:   value.Effect,
+	}
 }
 
 func (s *Stack) Config() stackpkg.Config {

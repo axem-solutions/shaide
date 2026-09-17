@@ -42,6 +42,7 @@ type Sources struct {
 	HarborUser        string
 	HarborToken       string
 	ModelStorageClass string
+	GPUToleration     *Toleration
 }
 
 type Config struct {
@@ -143,6 +144,9 @@ func newDefinition(opts stack.Options, sources Sources) stackconfig.Config[Value
 			},
 			{
 				Key: KeyGPUToleration,
+				Source: stackconfig.Source{
+					Value: optionalToleration(sources.GPUToleration),
+				},
 				Setter: func(cfg *Values, root *pulumiconfig.Config) {
 					// TryObject keeps an omitted toleration nil. GetObject would
 					// create an empty toleration that Kubernetes rejects.
@@ -163,6 +167,13 @@ func newDefinition(opts stack.Options, sources Sources) stackconfig.Config[Value
 			},
 		},
 	}
+}
+
+func optionalToleration(value *Toleration) any {
+	if value == nil || *value == (Toleration{}) {
+		return nil
+	}
+	return value
 }
 
 func optionalSource(value string) any {
