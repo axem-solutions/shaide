@@ -158,6 +158,35 @@ func TestDefinition(t *testing.T) {
 	}
 }
 
+func TestStorageClassDefaults(t *testing.T) {
+	for _, target := range []platform.Platform{platform.Azure, platform.AWS, platform.GCP, platform.OnPrem} {
+		t.Run(string(target), func(t *testing.T) {
+			want := ""
+			if target == platform.OnPrem {
+				want = "hostpath"
+			}
+			definition := newDefinition(stack.Options{Platform: target})
+			for _, entry := range definition.Entries {
+				if entry.Key == KeyLokiStorageClass || entry.Key == KeyPrometheusStorageClass {
+					if entry.Source.Default != want {
+						t.Errorf("%s default = %v, want %q", entry.Key, entry.Source.Default, want)
+					}
+				}
+			}
+			for _, selected := range []string{"", "default", "custom-storage"} {
+				values := Values{Platform: target}
+				values.Loki.StorageClass = selected
+				values.Prometheus.StorageClass = selected
+				configuration := New("", stack.Options{Platform: target})
+				configuration.applyDefaults(&values)
+				if values.Loki.StorageClass != selected || values.Prometheus.StorageClass != selected {
+					t.Errorf("selected storage class %q was overwritten: Loki=%q Prometheus=%q", selected, values.Loki.StorageClass, values.Prometheus.StorageClass)
+				}
+			}
+		})
+	}
+}
+
 func cloneComponents(components map[string]bool) map[string]bool {
 	clone := make(map[string]bool, len(components))
 	for component, enabled := range components {

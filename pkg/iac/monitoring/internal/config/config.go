@@ -208,13 +208,15 @@ func (c Config) applyDefaults(cfg *Values) {
 		cfg.Prometheus.ChartPath = chartPath(ComponentPrometheus, cfg.Prometheus.Version)
 	}
 
-	if cfg.Loki.StorageClass == "" {
-		cfg.Loki.StorageClass = DefaultStorageClass
-	}
+}
 
-	if cfg.Prometheus.StorageClass == "" {
-		cfg.Prometheus.StorageClass = DefaultStorageClass
+// Managed clusters supply their own default provisioner. The hostpath class is
+// installed by the on-prem infrastructure stack only.
+func defaultStorageClass(target platform.Platform) string {
+	if target == platform.OnPrem {
+		return DefaultStorageClass
 	}
+	return ""
 }
 
 func (c Config) resolveChartPaths(cfg *Values) {

@@ -206,11 +206,11 @@ func newDefinition(opts stack.Options) stackconfig.Config[Values] {
 			{
 				Key: KeyLokiStorageClass,
 				Source: stackconfig.Source{
-					Default: DefaultStorageClass,
+					Default: defaultStorageClass(opts.Platform),
 				},
 				Prompt: &stackconfig.Prompt{
 					Kind:  stackconfig.PromptInput,
-					Title: "Loki storage class",
+					Title: "Loki storage class (empty uses cluster default)",
 				},
 				Setter: func(cfg *Values, root *pulumiconfig.Config) {
 					cfg.Loki.StorageClass = root.Get(KeyLokiStorageClass.String())
@@ -278,11 +278,11 @@ func newDefinition(opts stack.Options) stackconfig.Config[Values] {
 			{
 				Key: KeyPrometheusStorageClass,
 				Source: stackconfig.Source{
-					Default: DefaultStorageClass,
+					Default: defaultStorageClass(opts.Platform),
 				},
 				Prompt: &stackconfig.Prompt{
 					Kind:  stackconfig.PromptInput,
-					Title: "Prometheus storage class",
+					Title: "Prometheus storage class (empty uses cluster default)",
 				},
 				Setter: func(cfg *Values, root *pulumiconfig.Config) {
 					cfg.Prometheus.StorageClass = root.Get(KeyPrometheusStorageClass.String())

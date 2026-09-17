@@ -98,6 +98,7 @@ config:
   # monitoring:kubeconfig: ~/.kube/rke2-cluster.yaml
   # monitoring:nodeSelector: <node-pool-name>   # currently unused by any component
   # monitoring:lokiStorageClass: <storage-class>   # e.g. hostpath (on-prem), standard (GCP)
+  # monitoring:prometheusStorageClass: <storage-class>   # empty/omitted uses cluster default
 #
 # Managed by Pulumi.
 # Do not edit or remove the following line — required to decrypt secret config values.
