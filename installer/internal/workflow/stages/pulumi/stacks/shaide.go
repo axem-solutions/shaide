@@ -17,7 +17,7 @@ import (
 // only party that knows where they were mirrored to.
 const (
 	shaideServerImageName = "axem-solutions/shaide_server"
-	controlPanelImageName = "axem-solutions/control_panel"
+	controlPanelImageName = "axem-solutions/shaide_control_panel"
 	webappImageName       = "axem-solutions/shaide-webapp"
 	rustfsImageName       = "rustfs/rustfs"
 	qdrantImageName       = "qdrant/qdrant"
