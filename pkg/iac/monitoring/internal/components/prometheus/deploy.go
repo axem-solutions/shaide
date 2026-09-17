@@ -31,6 +31,9 @@ func Deploy(ctx *pulumi.Context, cfg appconfig.Values, opts ...pulumi.ResourceOp
 			},
 		},
 		"prometheus-node-exporter": pulumi.Map{
+			// The chart tolerates every NoSchedule taint by default. Keep
+			// monitoring off the GPU pool, like other non-inference workloads.
+			"tolerations": pulumi.Array{},
 			"resources": pulumi.Map{
 				"requests": pulumi.Map{"cpu": pulumi.String("50m"), "memory": pulumi.String("32Mi")},
 				"limits":   pulumi.Map{"cpu": pulumi.String("200m"), "memory": pulumi.String("128Mi")},

@@ -129,7 +129,7 @@ func lokiPersistence(cfg appconfig.Values) pulumi.Map {
 		"size":    pulumi.String("10Gi"),
 	}
 	if cfg.Loki.StorageClass != "" {
-		m["storageClassName"] = pulumi.String(cfg.Loki.StorageClass)
+		m["storageClass"] = pulumi.String(cfg.Loki.StorageClass)
 	}
 	return m
 }
