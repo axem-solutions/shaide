@@ -219,59 +219,6 @@ exclusive in practice — set one or the other, not both.
 Update the active stack config (`deployments/Pulumi.<stack>.yaml`), then apply changes with
 `pulumi up` to reconcile the cluster.
 
-## Mirror Images (on-prem)
-
-On-prem deployments cannot pull from `ghcr.io` directly. Images must be mirrored into
-Harbor from the provisioner laptop before running `pulumi up`.
-
-### 1 — Authenticate with GHCR
-
-The Shaide images are in a private GitHub Container Registry package. Authentication
-requires a GitHub Personal Access Token (PAT) with **`read:packages`** scope.
-
-**Option A — use the `gh` CLI (recommended):**
-
-```bash
-gh auth login          # follow the prompts; select HTTPS + browser
-gh auth token          # prints the token — used below
-```
-
-Then authenticate skopeo:
-
-```bash
-skopeo login ghcr.io \
-  --username "$(gh api user --jq .login)" \
-  --password "$(gh auth token)"
-```
-
-**Option B — use a PAT directly:**
-
-```bash
-skopeo login ghcr.io \
-  --username <your-github-username> \
-  --password <your-PAT>
-```
-
-Credentials are cached in `~/.config/containers/auth.json` for subsequent skopeo calls.
-
-### 2 — Download images
-
-```bash
-skopeo copy docker://ghcr.io/axem-solutions/shaide_server:v0.7.0 \
-  oci-archive:infra/on-prem/ansible/artifacts/images/shaide_server-v0.7.0.tar
-skopeo copy docker://ghcr.io/axem-solutions/control_panel:v0.3.0 \
-  oci-archive:infra/on-prem/ansible/artifacts/images/control_panel-v0.3.0.tar
-```
-
-### 3 — Upload to Harbor
-
-```bash
-cd infra/on-prem/ansible
-ansible-playbook -i inventory-dev harbor_upload.yml
-```
-
----
-
 ## Deploy
 
 ```bash
