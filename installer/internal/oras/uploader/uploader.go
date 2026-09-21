@@ -10,6 +10,7 @@ import (
 	"github.com/axem-solutions/ai_platform/installer/internal/oras/errdef"
 	"github.com/axem-solutions/ai_platform/installer/internal/oras/repository"
 	"github.com/axem-solutions/ai_platform/installer/internal/progress"
+	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"oras.land/oras-go/v2"
 	"oras.land/oras-go/v2/content"
@@ -28,7 +29,7 @@ type UploaderOptions struct {
 
 	// Platform restricts what is copied out of a multi-architecture image to
 	// the one variant the target cluster can run. Zero copies the whole graph.
-	Platform ocispec.Platform
+	Platform cluster.Platform
 
 	// StateDir stores resumable chunk-upload state.
 	StateDir string
@@ -47,7 +48,7 @@ type UploaderOptions struct {
 
 type Uploader struct {
 	client           client.Client
-	platform         ocispec.Platform
+	platform         cluster.Platform
 	chunkSize        int64
 	stateDir         string
 	artifactCacheDir string
@@ -152,6 +153,26 @@ func (u *Uploader) push(ctx context.Context, a Artifact) (ocispec.Descriptor, er
 func (u *Uploader) copy(ctx context.Context, artifact Artifact, target *repository.Repository, tracker *progress.Tracker) (ocispec.Descriptor, error) {
 	u.logf("oras upload: copying source=%s target=%s tag=%s", artifact.SourceRef, artifact.Ref(), artifact.Tag)
 
+	manifest, err := oras.Copy(
+		ctx,
+		artifact.Source,
+		artifact.SourceRef,
+		target,
+		artifact.Tag,
+		u.copyOptions(tracker),
+	)
+	if err != nil {
+		return ocispec.Descriptor{}, fmt.Errorf("copy artifact to Harbor: %w", u.copyError(err))
+	}
+
+	if err := u.verify(ctx, target, artifact.Tag, artifact.Ref(), manifest); err != nil {
+		return ocispec.Descriptor{}, err
+	}
+
+	return manifest, nil
+}
+
+func (u *Uploader) copyOptions(tracker *progress.Tracker) oras.CopyOptions {
 	options := oras.CopyOptions{
 		CopyGraphOptions: oras.CopyGraphOptions{
 			Concurrency: 1,
@@ -165,28 +186,15 @@ func (u *Uploader) copy(ctx context.Context, artifact Artifact, target *reposito
 	// Without a target platform oras copies the whole graph, so every
 	// architecture in a manifest list is mirrored — for a multi-GB image that
 	// is most of the transfer spent on variants the cluster cannot schedule.
-	if platform := u.targetPlatform(); platform != nil {
-		options.WithTargetPlatform(platform)
-		u.logf("oras upload: selecting platform %s/%s", platform.OS, platform.Architecture)
+	if u.platform.IsValid() {
+		options.WithTargetPlatform(&ocispec.Platform{
+			OS:           u.platform.OS,
+			Architecture: u.platform.Arch,
+		})
+		u.logf("oras upload: selecting platform %s", u.platform.String())
 	}
 
-	manifest, err := oras.Copy(
-		ctx,
-		artifact.Source,
-		artifact.SourceRef,
-		target,
-		artifact.Tag,
-		options,
-	)
-	if err != nil {
-		return ocispec.Descriptor{}, fmt.Errorf("copy artifact to Harbor: %w", u.copyError(err))
-	}
-
-	if err := u.verify(ctx, target, artifact.Tag, artifact.Ref(), manifest); err != nil {
-		return ocispec.Descriptor{}, err
-	}
-
-	return manifest, nil
+	return options
 }
 
 func (u *Uploader) verify(ctx context.Context, target *repository.Repository, tag string, ref string, manifest ocispec.Descriptor) error {
@@ -264,6 +272,10 @@ func targetRef(project string, name string, tag string) string {
 
 func (u *Uploader) uploadError(op string, target string, err error) error {
 	registry := errdef.RegistryHost(err)
+	platformName := ""
+	if u.platform.IsValid() {
+		platformName = u.platform.String()
+	}
 
 	return &errdef.Error{
 		Kind:     errdef.ClassifyError(err),
@@ -271,28 +283,9 @@ func (u *Uploader) uploadError(op string, target string, err error) error {
 		Target:   target,
 		Registry: registry,
 		Scope:    u.scope(registry),
-		Platform: u.platformName(),
+		Platform: platformName,
 		Err:      err,
 	}
-}
-
-// targetPlatform returns the platform to select, or nil to copy every variant.
-func (u *Uploader) targetPlatform() *ocispec.Platform {
-	if u.platform.OS == "" || u.platform.Architecture == "" {
-		return nil
-	}
-
-	platform := u.platform
-
-	return &platform
-}
-
-func (u *Uploader) platformName() string {
-	if u.targetPlatform() == nil {
-		return ""
-	}
-
-	return u.platform.OS + "/" + u.platform.Architecture
 }
 
 // copyError names a platform mismatch for what it is. oras reports a manifest
@@ -300,11 +293,11 @@ func (u *Uploader) platformName() string {
 // a missing Harbor repository — the source resolved fine moments earlier, so
 // the tag is there and the variant is not.
 func (u *Uploader) copyError(err error) error {
-	if u.targetPlatform() == nil || !errors.Is(err, oraserrdef.ErrNotFound) {
+	if !u.platform.IsValid() || !errors.Is(err, oraserrdef.ErrNotFound) {
 		return err
 	}
 
-	return fmt.Errorf("%w %s: %w", errdef.ErrPlatformUnavailable, u.platformName(), err)
+	return fmt.Errorf("%w %s: %w", errdef.ErrPlatformUnavailable, u.platform.String(), err)
 }
 
 // scope attributes a failure to the registry that returned it. Anything that is

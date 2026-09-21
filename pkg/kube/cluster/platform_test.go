@@ -107,6 +107,8 @@ func TestDetectPlatformNoUsableNodes(t *testing.T) {
 		{name: "no nodes"},
 		{name: "all cordoned", nodes: []runtime.Object{node("a", "linux", "amd64", true)}},
 		{name: "platform unreported", nodes: []runtime.Object{node("a", "", "", false)}},
+		{name: "OS unreported", nodes: []runtime.Object{node("a", "", "amd64", false)}},
+		{name: "architecture unreported", nodes: []runtime.Object{node("a", "linux", "", false)}},
 	}
 
 	for _, test := range tests {
@@ -114,6 +116,26 @@ func TestDetectPlatformNoUsableNodes(t *testing.T) {
 			client := fake.NewSimpleClientset(test.nodes...)
 			if _, err := DetectPlatform(context.Background(), client); err == nil {
 				t.Error("DetectPlatform() succeeded with no usable node")
+			}
+		})
+	}
+}
+
+func TestPlatformIsValid(t *testing.T) {
+	tests := []struct {
+		name     string
+		platform Platform
+		want     bool
+	}{
+		{"complete", Platform{OS: "linux", Arch: "amd64"}, true},
+		{"empty", Platform{}, false},
+		{"missing OS", Platform{Arch: "amd64"}, false},
+		{"missing architecture", Platform{OS: "linux"}, false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := test.platform.IsValid(); got != test.want {
+				t.Errorf("IsValid() = %v, want %v", got, test.want)
 			}
 		})
 	}

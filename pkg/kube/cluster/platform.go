@@ -22,8 +22,9 @@ func (a Platform) String() string {
 	return a.OS + "/" + a.Arch
 }
 
+// IsValid reports whether both the OS and CPU architecture are known.
 func (a Platform) IsValid() bool {
-	return !(a.OS == "" && a.Arch == "")
+	return a.OS != "" && a.Arch != ""
 }
 
 // DetectPlatform resolves the single platform a cluster runs, so that
