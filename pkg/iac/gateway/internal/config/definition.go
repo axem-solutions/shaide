@@ -1,7 +1,7 @@
 package config
 
 import (
-	"github.com/axem-solutions/ai_platform/pkg/kube/platform"
+	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
 	"github.com/axem-solutions/ai_platform/pkg/stack"
 	stackconfig "github.com/axem-solutions/ai_platform/pkg/stack/config"
 	pulumiconfig "github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
@@ -63,7 +63,7 @@ func New(projectDir string, opts stack.Options) Config {
 // Only values that must differ per cluster and cannot be derived are prompted
 // for. Everything else is either supplied from installer runtime state, shipped
 // as a packaged default, or left unset so applyDefaults can resolve it from the
-// platform. An unprompted entry is still configurable: Resolve only writes the
+// cluster. An unprompted entry is still configurable: Resolve only writes the
 // keys it produces, so a value set by hand in Pulumi.<stack>.yaml survives and
 // is read back by its setter.
 //
@@ -82,7 +82,7 @@ func newDefinition(opts stack.Options) stackconfig.Config[Values] {
 					Required: true,
 				},
 				Setter: func(cfg *Values, root *pulumiconfig.Config) {
-					cfg.Platform = platform.Platform(root.Get(KeyCloudProvider.String()))
+					cfg.Platform = cluster.Provider(root.Get(KeyCloudProvider.String()))
 				},
 			},
 			{
@@ -127,7 +127,7 @@ func newDefinition(opts stack.Options) stackconfig.Config[Values] {
 				// applied silently.
 				Key: KeyGatewayClassName,
 				Source: stackconfig.Source{
-					Default: defaultsForPlatform(opts.Platform).gatewayClassName,
+					Default: defaultsForProvider(opts.Platform).gatewayClassName,
 				},
 				Prompt: &stackconfig.Prompt{
 					Kind:  stackconfig.PromptInput,
@@ -159,7 +159,7 @@ func newDefinition(opts stack.Options) stackconfig.Config[Values] {
 					Placeholder: "shared-alb",
 				},
 				Policy: stackconfig.Policy{
-					When: stackconfig.WhenEquals(KeyCloudProvider, string(platform.Azure)),
+					When: stackconfig.WhenEquals(KeyCloudProvider, string(cluster.Azure)),
 				},
 				Setter: func(cfg *Values, root *pulumiconfig.Config) {
 					cfg.Gateway.ALB.Name = root.Get(KeyALBName.String())
@@ -173,7 +173,7 @@ func newDefinition(opts stack.Options) stackconfig.Config[Values] {
 					Placeholder: "/subscriptions/.../subnets/<subnet>",
 				},
 				Policy: stackconfig.Policy{
-					When: stackconfig.WhenEquals(KeyCloudProvider, string(platform.Azure)),
+					When: stackconfig.WhenEquals(KeyCloudProvider, string(cluster.Azure)),
 				},
 				Setter: func(cfg *Values, root *pulumiconfig.Config) {
 					cfg.Gateway.ALB.SubnetID = root.Get(KeyALBSubnetID.String())

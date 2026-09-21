@@ -1,14 +1,14 @@
 package stack
 
 import (
-	"github.com/axem-solutions/ai_platform/pkg/kube/platform"
+	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
 	stackconfig "github.com/axem-solutions/ai_platform/pkg/stack/config"
 	"github.com/pulumi/pulumi/sdk/v3/go/auto"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
 type Options struct {
-	Platform   platform.Platform
+	Platform   cluster.Provider
 	Kubeconfig string
 	Context    string
 }

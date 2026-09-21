@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
 	kubernetes "github.com/axem-solutions/ai_platform/pkg/kube/connection"
-	"github.com/axem-solutions/ai_platform/pkg/kube/platform"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	pulumiconfig "github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
 )
@@ -16,7 +16,7 @@ const (
 )
 
 type Values struct {
-	Platform   platform.Platform
+	Platform   cluster.Provider
 	Kubernetes kubernetes.Connection
 
 	Storage Storage

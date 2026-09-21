@@ -5,13 +5,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/axem-solutions/ai_platform/pkg/kube/platform"
+	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
 	"github.com/axem-solutions/ai_platform/pkg/stack"
 )
 
 func TestApplyDefaults(t *testing.T) {
 	configuration := New("/var/lib/shaide/monitoring", stack.Options{})
-	values := Values{Platform: platform.OnPrem}
+	values := Values{Platform: cluster.OnPrem}
 
 	configuration.applyDefaults(&values)
 	configuration.resolveChartPaths(&values)
@@ -54,7 +54,7 @@ func TestApplyDefaults(t *testing.T) {
 
 func TestApplyDefaultsUsesConfiguredVersionsForChartPaths(t *testing.T) {
 	configuration := New(".", stack.Options{})
-	values := Values{Platform: platform.OnPrem}
+	values := Values{Platform: cluster.OnPrem}
 	values.Loki.Version = "99.1.2"
 
 	configuration.applyDefaults(&values)
@@ -67,7 +67,7 @@ func TestApplyDefaultsUsesConfiguredVersionsForChartPaths(t *testing.T) {
 
 func TestValidate(t *testing.T) {
 	configuration := New("", stack.Options{})
-	valid := Values{Platform: platform.OnPrem}
+	valid := Values{Platform: cluster.OnPrem}
 	configuration.applyDefaults(&valid)
 
 	tests := []struct {
@@ -79,11 +79,11 @@ func TestValidate(t *testing.T) {
 			name: "valid defaults",
 		},
 		{
-			name: "invalid platform",
+			name: "invalid provider",
 			mutate: func(values *Values) {
 				values.Platform = "unsupported"
 			},
-			wantErr: "invalid platform",
+			wantErr: "invalid provider",
 		},
 		{
 			name: "empty namespace",
@@ -139,7 +139,7 @@ func TestValidate(t *testing.T) {
 
 func TestDefinition(t *testing.T) {
 	configuration := New("/tmp/monitoring", stack.Options{
-		Platform:   platform.Azure,
+		Platform:   cluster.Azure,
 		Kubeconfig: "/tmp/kubeconfig",
 		Context:    "cluster-context",
 	})
@@ -159,10 +159,10 @@ func TestDefinition(t *testing.T) {
 }
 
 func TestStorageClassDefaults(t *testing.T) {
-	for _, target := range []platform.Platform{platform.Azure, platform.AWS, platform.GCP, platform.OnPrem} {
+	for _, target := range []cluster.Provider{cluster.Azure, cluster.AWS, cluster.GCP, cluster.OnPrem} {
 		t.Run(string(target), func(t *testing.T) {
 			want := ""
-			if target == platform.OnPrem {
+			if target == cluster.OnPrem {
 				want = "hostpath"
 			}
 			definition := newDefinition(stack.Options{Platform: target})

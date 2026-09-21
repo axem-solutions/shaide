@@ -3,7 +3,7 @@ package config
 import (
 	"strings"
 
-	"github.com/axem-solutions/ai_platform/pkg/kube/platform"
+	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
 	"github.com/axem-solutions/ai_platform/pkg/stack"
 	stackconfig "github.com/axem-solutions/ai_platform/pkg/stack/config"
 	pulumiconfig "github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
@@ -186,17 +186,17 @@ func optionalSource(value string) any {
 // loadPlatform keeps direct Pulumi CLI deployments compatible with the old
 // cloudProvider key while installer-managed stacks use the shared four-value
 // platform field. App-serving only distinguishes on-prem from cloud, so the
-// legacy "cloud" value can safely map to any cloud platform.
-func loadPlatform(root *pulumiconfig.Config) platform.Platform {
+// legacy "cloud" value can safely map to any cloud cluster.
+func loadPlatform(root *pulumiconfig.Config) cluster.Provider {
 	if value := root.Get(KeyPlatform.String()); value != "" {
-		return platform.Platform(value)
+		return cluster.Provider(value)
 	}
 
 	switch root.Get(legacyKeyCloudProvider) {
 	case "on-prem":
-		return platform.OnPrem
+		return cluster.OnPrem
 	case "cloud":
-		return platform.GCP
+		return cluster.GCP
 	default:
 		return ""
 	}

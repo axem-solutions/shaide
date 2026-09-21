@@ -4,7 +4,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/axem-solutions/ai_platform/pkg/kube/platform"
+	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
 	"github.com/axem-solutions/ai_platform/pkg/stack"
 )
 
@@ -27,7 +27,7 @@ func (p *stubPrompter) MultiSelect(title string, _ []string) ([]string, error) {
 	return nil, nil
 }
 
-func resolveFor(t *testing.T, provider platform.Platform) (map[string]string, []string) {
+func resolveFor(t *testing.T, provider cluster.Provider) (map[string]string, []string) {
 	t.Helper()
 
 	cfg := New("/projects/gateway-provider", stack.Options{
@@ -53,7 +53,7 @@ func resolveFor(t *testing.T, provider platform.Platform) (map[string]string, []
 }
 
 func TestDefinitionValidates(t *testing.T) {
-	cfg := New("/projects/gateway-provider", stack.Options{Platform: platform.Azure})
+	cfg := New("/projects/gateway-provider", stack.Options{Platform: cluster.Azure})
 	if err := cfg.Definition().Validate(); err != nil {
 		t.Fatalf("Validate() error = %v", err)
 	}
@@ -64,11 +64,11 @@ func TestDefinitionValidates(t *testing.T) {
 // walked through settings that do not apply to their cluster.
 func TestPromptsAreLimitedToPerClusterValues(t *testing.T) {
 	tests := []struct {
-		platform platform.Platform
+		platform cluster.Provider
 		want     []string
 	}{
 		{
-			platform: platform.Azure,
+			platform: cluster.Azure,
 			want: []string{
 				"Azure Application Gateway for Containers name",
 				"Azure subnet resource ID for Application Gateway for Containers",
@@ -80,7 +80,7 @@ func TestPromptsAreLimitedToPerClusterValues(t *testing.T) {
 		{
 			// Application Gateway for Containers is Azure-only, so those two
 			// questions must not appear anywhere else.
-			platform: platform.GCP,
+			platform: cluster.GCP,
 			want: []string{
 				"Gateway class name",
 				"Gateway hostname",
@@ -88,7 +88,7 @@ func TestPromptsAreLimitedToPerClusterValues(t *testing.T) {
 			},
 		},
 		{
-			platform: platform.OnPrem,
+			platform: cluster.OnPrem,
 			want: []string{
 				"Gateway class name",
 				"Gateway hostname",
@@ -116,7 +116,7 @@ func TestPromptsAreLimitedToPerClusterValues(t *testing.T) {
 
 // Runtime state the installer already knows must be supplied, not asked for.
 func TestRuntimeValuesAreInjected(t *testing.T) {
-	values, _ := resolveFor(t, platform.Azure)
+	values, _ := resolveFor(t, cluster.Azure)
 
 	want := map[string]string{
 		"gateway-provider:cloudProvider": "azure",
@@ -134,7 +134,7 @@ func TestRuntimeValuesAreInjected(t *testing.T) {
 // The installer image ships the CRDs beside the project, so an install must not
 // reach GitHub for them.
 func TestPackagedCRDPathsAreWritten(t *testing.T) {
-	values, _ := resolveFor(t, platform.Azure)
+	values, _ := resolveFor(t, cluster.Azure)
 
 	if got := values["gateway-provider:gatewayApiCrdsPath"]; got != PackagedGatewayAPICRDsPath {
 		t.Errorf("gatewayApiCrdsPath = %q, want %q", got, PackagedGatewayAPICRDsPath)
@@ -147,7 +147,7 @@ func TestPackagedCRDPathsAreWritten(t *testing.T) {
 // An unprompted, unset entry must not be written, so a value placed in the
 // stack file by hand survives a later run.
 func TestUnsetEntriesAreNotWritten(t *testing.T) {
-	values, _ := resolveFor(t, platform.Azure)
+	values, _ := resolveFor(t, cluster.Azure)
 
 	for _, key := range []string{
 		"gateway-provider:gatewayStaticIPName",
@@ -166,11 +166,11 @@ func TestUnsetEntriesAreNotWritten(t *testing.T) {
 // the operator's back: Azure clusters split between Application Gateway for
 // Containers and Istio, so the default is right for only some of them.
 func TestGatewayClassDefaultsToThePlatformValue(t *testing.T) {
-	tests := map[platform.Platform]string{
-		platform.Azure:  "azure-alb-external",
-		platform.GCP:    "gke-l7-regional-external-managed",
-		platform.AWS:    "alb",
-		platform.OnPrem: "istio",
+	tests := map[cluster.Provider]string{
+		cluster.Azure:  "azure-alb-external",
+		cluster.GCP:    "gke-l7-regional-external-managed",
+		cluster.AWS:    "alb",
+		cluster.OnPrem: "istio",
 	}
 
 	for provider, want := range tests {
@@ -196,7 +196,7 @@ func TestGatewayClassDefaultsToThePlatformValue(t *testing.T) {
 
 // Azure-only entries must not leak onto other platforms even as empty keys.
 func TestALBKeysAreAzureOnly(t *testing.T) {
-	values, _ := resolveFor(t, platform.GCP)
+	values, _ := resolveFor(t, cluster.GCP)
 
 	for _, key := range []string{"gateway-provider:albName", "gateway-provider:albSubnetId"} {
 		if _, ok := values[key]; ok {

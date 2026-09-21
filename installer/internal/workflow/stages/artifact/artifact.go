@@ -266,6 +266,7 @@ func artifactUploader(rt *core.Runtime) (*oras.Uploader, error) {
 
 	return oras.NewUploader(oras.UploaderOptions{
 		Client:           clientOptions,
+		Platform:         rt.Cluster.Platform,
 		ChunkSize:        128 << 20,
 		StateDir:         rt.Bootstrap.Config.Paths.UploadState,
 		ArtifactCacheDir: rt.Bootstrap.Config.Paths.ArtifactCache,

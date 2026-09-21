@@ -4,7 +4,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/axem-solutions/ai_platform/pkg/kube/platform"
+	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
 	"github.com/axem-solutions/ai_platform/pkg/stack"
 )
 
@@ -31,7 +31,7 @@ func resolve(t *testing.T, sources Sources) (map[string]string, map[string]bool,
 	t.Helper()
 
 	cfg := New("/projects/app-shaide", stack.Options{
-		Platform:   platform.Azure,
+		Platform:   cluster.Azure,
 		Kubeconfig: "/.kube/config",
 	}, sources)
 
@@ -69,7 +69,7 @@ func completeSources() Sources {
 }
 
 func TestDefinitionValidates(t *testing.T) {
-	cfg := New("/projects/app-shaide", stack.Options{Platform: platform.Azure}, completeSources())
+	cfg := New("/projects/app-shaide", stack.Options{Platform: cluster.Azure}, completeSources())
 	if err := cfg.Definition().Validate(); err != nil {
 		t.Fatalf("Validate() error = %v", err)
 	}
@@ -146,7 +146,7 @@ func TestMissingImageIsRejected(t *testing.T) {
 	sources := completeSources()
 	sources.ShaideServerImage = ""
 
-	cfg := New("/projects/app-shaide", stack.Options{Platform: platform.Azure}, sources)
+	cfg := New("/projects/app-shaide", stack.Options{Platform: cluster.Azure}, sources)
 	if _, err := cfg.Resolve(&stubPrompter{}); err == nil {
 		t.Fatal("Resolve() succeeded without a shaide-server image")
 	}

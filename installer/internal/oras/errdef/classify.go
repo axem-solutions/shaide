@@ -23,6 +23,11 @@ func ClassifyError(err error) ErrorKind {
 	if errors.Is(err, ErrArtifactBuildFailure) {
 		return ErrArtifactBuild
 	}
+	// Checked before the oras not-found branches below, which would otherwise
+	// claim it: platform selection reports a missing variant as a not-found.
+	if errors.Is(err, ErrPlatformUnavailable) {
+		return ErrPlatform
+	}
 
 	var respErr *errcode.ErrorResponse
 	if errors.As(err, &respErr) {
