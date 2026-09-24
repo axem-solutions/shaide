@@ -24,5 +24,9 @@ func newStackDeployer(
 		Logger:      rt.Logger.Writer(),
 		Destroy:     opts.Destroy,
 		SkipRefresh: opts.SkipRefresh,
+		Target: &iac.ClusterTarget{
+			KubeconfigPath: rt.Cluster.ConfigPath,
+			Context:        rt.Cluster.SelectedContext,
+		},
 	})
 }
