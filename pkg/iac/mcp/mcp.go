@@ -11,8 +11,8 @@ import (
 	"github.com/axem-solutions/ai_platform/pkg/iac/mcp/internal/components/networkpolicy"
 	"github.com/axem-solutions/ai_platform/pkg/iac/mcp/internal/components/rbac"
 	appconfig "github.com/axem-solutions/ai_platform/pkg/iac/mcp/internal/config"
+	"github.com/axem-solutions/ai_platform/pkg/kube/connection"
 	stackpkg "github.com/axem-solutions/ai_platform/pkg/stack"
-	"github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
@@ -30,11 +30,14 @@ func deployAppMCP(ctx *pulumi.Context, stackConfig appconfig.Config) error {
 	}
 
 	// --- K8s Provider ---
-	k8sProviderArgs := &kubernetes.ProviderArgs{}
-	if appConfig.Kubeconfig != "" {
-		k8sProviderArgs.Kubeconfig = pulumi.StringPtr(appConfig.Kubeconfig)
-	}
-	k8sProvider, err := kubernetes.NewProvider(ctx, "app-mcp-k8s", k8sProviderArgs)
+	k8sProvider, err := iackube.NewProvider(
+		ctx,
+		connection.Connection{
+			KubeconfigPath: appConfig.Kubeconfig,
+			Context:        appConfig.Context,
+		},
+		iackube.ProviderOptions{Name: "app-mcp-k8s"},
+	)
 	if err != nil {
 		return err
 	}

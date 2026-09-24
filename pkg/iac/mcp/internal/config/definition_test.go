@@ -84,6 +84,24 @@ func TestShaideBindingDefaults(t *testing.T) {
 	}
 }
 
+// The provider must target the context the operator selected. Without it the
+// kubeconfig's current-context wins, and the stack deploys to another cluster.
+func TestSelectedContextIsWritten(t *testing.T) {
+	cfg := New("/projects/app-mcp", stack.Options{
+		Kubeconfig: "/.kube/config",
+		Context:    "selected-cluster",
+	}, Sources{Datasources: []Datasource{datasource()}})
+
+	resolved, err := cfg.Resolve(&stubPrompter{})
+	if err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+
+	if got := resolved["app-mcp:context"].Value; got != "selected-cluster" {
+		t.Errorf("context = %q, want %q", got, "selected-cluster")
+	}
+}
+
 // A data source list reaches the stack as JSON, which RequireObject reads back.
 func TestDatasourcesAreEncoded(t *testing.T) {
 	cfg := New("/projects/app-mcp", stack.Options{}, Sources{Datasources: []Datasource{datasource()}})
