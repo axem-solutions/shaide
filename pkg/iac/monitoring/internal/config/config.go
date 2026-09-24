@@ -22,8 +22,6 @@ const (
 	DefaultGrafanaVersion    = "12.3.2"
 	DefaultAlloyVersion      = "1.8.1"
 	DefaultPrometheusVersion = "29.21.0"
-
-	DefaultStorageClass = "hostpath"
 )
 
 type Values struct {
@@ -212,13 +210,6 @@ func (c Config) applyDefaults(cfg *Values) {
 
 // Managed clusters supply their own default provisioner. The hostpath class is
 // installed by the on-prem infrastructure stack only.
-func defaultStorageClass(target cluster.Provider) string {
-	if target == cluster.OnPrem {
-		return DefaultStorageClass
-	}
-	return ""
-}
-
 func (c Config) resolveChartPaths(cfg *Values) {
 	cfg.Loki.ChartPath = resolveProjectPath(c.ProjectDir(), cfg.Loki.ChartPath)
 	cfg.Grafana.ChartPath = resolveProjectPath(c.ProjectDir(), cfg.Grafana.ChartPath)

@@ -10,7 +10,7 @@ import (
 )
 
 func TestApplyDefaults(t *testing.T) {
-	configuration := New("/var/lib/shaide/monitoring", stack.Options{})
+	configuration := New("/var/lib/shaide/monitoring", stack.Options{}, Sources{})
 	values := Values{Platform: cluster.OnPrem}
 
 	configuration.applyDefaults(&values)
@@ -53,7 +53,7 @@ func TestApplyDefaults(t *testing.T) {
 }
 
 func TestApplyDefaultsUsesConfiguredVersionsForChartPaths(t *testing.T) {
-	configuration := New(".", stack.Options{})
+	configuration := New(".", stack.Options{}, Sources{})
 	values := Values{Platform: cluster.OnPrem}
 	values.Loki.Version = "99.1.2"
 
@@ -66,7 +66,7 @@ func TestApplyDefaultsUsesConfiguredVersionsForChartPaths(t *testing.T) {
 }
 
 func TestValidate(t *testing.T) {
-	configuration := New("", stack.Options{})
+	configuration := New("", stack.Options{}, Sources{})
 	valid := Values{Platform: cluster.OnPrem}
 	configuration.applyDefaults(&valid)
 
@@ -142,7 +142,7 @@ func TestDefinition(t *testing.T) {
 		Platform:   cluster.Azure,
 		Kubeconfig: "/tmp/kubeconfig",
 		Context:    "cluster-context",
-	})
+	}, Sources{})
 
 	if configuration.ProjectName() != Namespace {
 		t.Errorf("project name = %q, want %q", configuration.ProjectName(), Namespace)
@@ -158,33 +158,69 @@ func TestDefinition(t *testing.T) {
 	}
 }
 
-func TestStorageClassDefaults(t *testing.T) {
+// The storage classes come from the installer, which picks them from the
+// cluster or reads them off the existing PVCs; the stack must not ask again.
+func TestStorageClassesComeFromTheInstaller(t *testing.T) {
+	configuration := New("", stack.Options{Platform: cluster.Azure, Kubeconfig: "/.kube/config"}, Sources{
+		LokiStorageClass:       "managed-csi",
+		PrometheusStorageClass: "default",
+	})
+
+	for _, entry := range configuration.definition.Entries {
+		if (entry.Key == KeyLokiStorageClass || entry.Key == KeyPrometheusStorageClass) && entry.Prompt != nil {
+			t.Errorf("%s is prompted; the installer resolves it", entry.Key)
+		}
+	}
+
+	resolved, err := configuration.definition.Resolve(&noPrompter{})
+	if err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+	for key, want := range map[string]string{
+		"monitoring:lokiStorageClass":       "managed-csi",
+		"monitoring:prometheusStorageClass": "default",
+	} {
+		if got := resolved[key].Value; got != want {
+			t.Errorf("%s = %q, want %q", key, got, want)
+		}
+	}
+}
+
+// An empty class is left unwritten, so the chart uses the cluster default and
+// a value set by hand in the stack config survives. This holds on every
+// platform: there is no longer a hardcoded on-prem class.
+func TestEmptyStorageClassIsNotWritten(t *testing.T) {
 	for _, target := range []cluster.Provider{cluster.Azure, cluster.AWS, cluster.GCP, cluster.OnPrem} {
 		t.Run(string(target), func(t *testing.T) {
-			want := ""
-			if target == cluster.OnPrem {
-				want = "hostpath"
+			configuration := New("", stack.Options{Platform: target, Kubeconfig: "/.kube/config"}, Sources{})
+
+			resolved, err := configuration.definition.Resolve(&noPrompter{})
+			if err != nil {
+				t.Fatalf("Resolve() error = %v", err)
 			}
-			definition := newDefinition(stack.Options{Platform: target})
-			for _, entry := range definition.Entries {
-				if entry.Key == KeyLokiStorageClass || entry.Key == KeyPrometheusStorageClass {
-					if entry.Source.Default != want {
-						t.Errorf("%s default = %v, want %q", entry.Key, entry.Source.Default, want)
-					}
-				}
-			}
-			for _, selected := range []string{"", "default", "custom-storage"} {
-				values := Values{Platform: target}
-				values.Loki.StorageClass = selected
-				values.Prometheus.StorageClass = selected
-				configuration := New("", stack.Options{Platform: target})
-				configuration.applyDefaults(&values)
-				if values.Loki.StorageClass != selected || values.Prometheus.StorageClass != selected {
-					t.Errorf("selected storage class %q was overwritten: Loki=%q Prometheus=%q", selected, values.Loki.StorageClass, values.Prometheus.StorageClass)
+			for _, key := range []string{"monitoring:lokiStorageClass", "monitoring:prometheusStorageClass"} {
+				if value, ok := resolved[key]; ok {
+					t.Errorf("%s = %q was written; want it left to the cluster default", key, value.Value)
 				}
 			}
 		})
 	}
+}
+
+// noPrompter answers the prompts the monitoring stack still has, so Resolve can
+// run without a terminal.
+type noPrompter struct{}
+
+func (*noPrompter) Input(string, string, string) (string, error) {
+	return "secret", nil
+}
+
+func (*noPrompter) Select(_, current string, _ []string) (string, error) {
+	return current, nil
+}
+
+func (*noPrompter) MultiSelect(_ string, options []string) ([]string, error) {
+	return options, nil
 }
 
 func cloneComponents(components map[string]bool) map[string]bool {
