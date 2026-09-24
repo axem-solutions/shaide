@@ -1,6 +1,10 @@
 package config
 
 import (
+	"fmt"
+	"regexp"
+	"strings"
+
 	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
 	"github.com/axem-solutions/ai_platform/pkg/stack"
 	stackconfig "github.com/axem-solutions/ai_platform/pkg/stack/config"
@@ -49,8 +53,32 @@ type Config struct {
 	definition stackconfig.Config[Values]
 }
 
-func New(projectDir string, opts stack.Options) Config {
-	definition := newDefinition(opts)
+// Sources are values the installer discovers from the cluster.
+type Sources struct {
+	// GatewayClassName is the class the operator picked from those the
+	// cluster accepts. Empty falls back to the platform default.
+	GatewayClassName string
+
+	// ALBName is the ApplicationLoadBalancer already serving the Gateway.
+	// Empty falls back to DefaultALBName. Used only with the AGC class.
+	ALBName string
+
+	// ALBSubnetID pre-fills the subnet prompt, typically with the association
+	// of the ApplicationLoadBalancer already on the cluster.
+	ALBSubnetID string
+
+	// ALBSubnetPlaceholder hints at the expected ID when there is nothing to
+	// pre-fill, e.g. the cluster's VNet with the subnet name left open.
+	ALBSubnetPlaceholder string
+
+	// CertManagerIssuer is the ClusterIssuer the operator picked. It is
+	// always written, so an empty value switches a stack back to plain HTTP
+	// rather than keeping an issuer the cluster no longer has.
+	CertManagerIssuer string
+}
+
+func New(projectDir string, opts stack.Options, sources Sources) Config {
+	definition := newDefinition(opts, sources)
 
 	return Config{
 		Config:     stack.NewConfig(Namespace, Namespace, projectDir, definition),
@@ -69,7 +97,7 @@ func New(projectDir string, opts stack.Options) Config {
 //
 // cloudProvider is declared first because the Azure-only entries below depend
 // on it, and Validate requires a condition's key to be declared earlier.
-func newDefinition(opts stack.Options) stackconfig.Config[Values] {
+func newDefinition(opts stack.Options, sources Sources) stackconfig.Config[Values] {
 	return stackconfig.Config[Values]{
 		Namespace: Namespace,
 		Entries: []stackconfig.Entry[Values]{
@@ -122,16 +150,13 @@ func newDefinition(opts stack.Options) stackconfig.Config[Values] {
 			{
 				// Which Gateway implementation the cluster runs. The platform
 				// narrows it but does not decide it: Azure clusters split
-				// between Application Gateway for Containers and Istio, so the
-				// platform default is offered as the answer rather than
-				// applied silently.
+				// between Application Gateway for Containers and Istio. The
+				// installer offers the classes the cluster accepts, so the
+				// answer cannot name one that does not exist.
 				Key: KeyGatewayClassName,
 				Source: stackconfig.Source{
-					Default: defaultsForProvider(opts.Platform).gatewayClassName,
-				},
-				Prompt: &stackconfig.Prompt{
-					Kind:  stackconfig.PromptInput,
-					Title: "Gateway class name",
+					Value:   optionalSource(sources.GatewayClassName),
+					Default: DefaultGatewayClassName(opts.Platform),
 				},
 				Setter: func(cfg *Values, root *pulumiconfig.Config) {
 					cfg.Gateway.ClassName = root.Get(KeyGatewayClassName.String())
@@ -150,30 +175,38 @@ func newDefinition(opts stack.Options) stackconfig.Config[Values] {
 				},
 			},
 			{
-				// Application Gateway for Containers exists only on Azure, so
-				// the prompt does not appear anywhere else.
+				// Only the AGC class needs an ApplicationLoadBalancer. Its name
+				// is internal to the stack, so it is kept from the cluster or
+				// defaulted, never asked for.
 				Key: KeyALBName,
-				Prompt: &stackconfig.Prompt{
-					Kind:        stackconfig.PromptInput,
-					Title:       "Azure Application Gateway for Containers name",
-					Placeholder: "shared-alb",
+				Source: stackconfig.Source{
+					Value:   optionalSource(sources.ALBName),
+					Default: DefaultALBName,
 				},
 				Policy: stackconfig.Policy{
-					When: stackconfig.WhenEquals(KeyCloudProvider, string(cluster.Azure)),
+					When: stackconfig.WhenEquals(KeyGatewayClassName, AGCGatewayClassName),
 				},
 				Setter: func(cfg *Values, root *pulumiconfig.Config) {
 					cfg.Gateway.ALB.Name = root.Get(KeyALBName.String())
 				},
 			},
 			{
-				Key: KeyALBSubnetID,
+				// Required with the AGC class: an empty association makes the
+				// ALB controller delete the Application Gateway for Containers
+				// and its frontend, silently taking the platform offline. On an
+				// update the installer pre-fills the association already in
+				// place. Any other class needs no subnet and is not asked.
+				Key:    KeyALBSubnetID,
+				Source: stackconfig.Source{Default: optionalSource(sources.ALBSubnetID)},
 				Prompt: &stackconfig.Prompt{
 					Kind:        stackconfig.PromptInput,
 					Title:       "Azure subnet resource ID for Application Gateway for Containers",
-					Placeholder: "/subscriptions/.../subnets/<subnet>",
+					Placeholder: albSubnetPlaceholder(sources.ALBSubnetPlaceholder),
 				},
 				Policy: stackconfig.Policy{
-					When: stackconfig.WhenEquals(KeyCloudProvider, string(cluster.Azure)),
+					Required: true,
+					When:     stackconfig.WhenEquals(KeyGatewayClassName, AGCGatewayClassName),
+					Validate: ValidateSubnetID,
 				},
 				Setter: func(cfg *Values, root *pulumiconfig.Config) {
 					cfg.Gateway.ALB.SubnetID = root.Get(KeyALBSubnetID.String())
@@ -265,15 +298,11 @@ func newDefinition(opts stack.Options) stackconfig.Config[Values] {
 				},
 			},
 			{
-				// Without an issuer the Gateway serves plain HTTP, so this
-				// materially changes the deployment and the issuer name is
-				// per-cluster.
-				Key: KeyCertManagerIssuer,
-				Prompt: &stackconfig.Prompt{
-					Kind:        stackconfig.PromptInput,
-					Title:       "cert-manager ClusterIssuer for Gateway TLS (empty serves HTTP only)",
-					Placeholder: "letsencrypt",
-				},
+				// Without an issuer the Gateway serves plain HTTP. The installer
+				// offers the cluster's ClusterIssuers, and does not ask at all
+				// when there are none.
+				Key:    KeyCertManagerIssuer,
+				Source: stackconfig.Source{Value: sources.CertManagerIssuer},
 				Setter: func(cfg *Values, root *pulumiconfig.Config) {
 					cfg.TLS.CertManagerIssuer = root.Get(KeyCertManagerIssuer.String())
 				},
@@ -292,4 +321,42 @@ func newDefinition(opts stack.Options) stackconfig.Config[Values] {
 			},
 		},
 	}
+}
+
+// subnetIDPattern matches an Azure subnet resource ID. Resource provider and
+// type segments are case-insensitive in Azure, so the match is too.
+var subnetIDPattern = regexp.MustCompile(
+	`(?i)^/subscriptions/[^/]+/resourceGroups/[^/]+/providers/Microsoft\.Network/virtualNetworks/[^/]+/subnets/[^/]+$`,
+)
+
+// ValidateSubnetID rejects anything that is not a subnet resource ID, which
+// the ALB controller would otherwise reject only after deployment.
+func ValidateSubnetID(value string) error {
+	if !subnetIDPattern.MatchString(value) {
+		return fmt.Errorf(
+			"%q is not a subnet resource ID "+
+				"(/subscriptions/<id>/resourceGroups/<rg>/providers/Microsoft.Network/virtualNetworks/<vnet>/subnets/<subnet>)",
+			value,
+		)
+	}
+
+	return nil
+}
+
+func albSubnetPlaceholder(hint string) string {
+	if strings.TrimSpace(hint) != "" {
+		return hint
+	}
+
+	return "/subscriptions/.../subnets/<subnet>"
+}
+
+// optionalSource leaves an empty value unset, so the prompt starts empty
+// rather than pre-filled with a blank.
+func optionalSource(value string) any {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+
+	return value
 }

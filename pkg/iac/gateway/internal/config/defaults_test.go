@@ -109,3 +109,46 @@ func TestValidateRequiresOneGatewaySource(t *testing.T) {
 		}
 	})
 }
+
+// The class decides AGC. An albName left in the stack file from an earlier
+// choice must not turn an Istio Gateway into an AGC one.
+func TestUsesAGCFollowsTheClass(t *testing.T) {
+	tests := []struct {
+		name     string
+		platform cluster.Provider
+		class    string
+		albName  string
+		want     bool
+	}{
+		{"azure agc", cluster.Azure, AGCGatewayClassName, "", true},
+		{"azure istio with stale alb name", cluster.Azure, IstioGatewayClassName, "shared-alb", false},
+		{"agc class off azure", cluster.GCP, AGCGatewayClassName, "", false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var cfg Values
+			cfg.Platform = test.platform
+			cfg.Gateway.ClassName = test.class
+			cfg.Gateway.ALB.Name = test.albName
+
+			if got := cfg.UsesAGC(); got != test.want {
+				t.Errorf("UsesAGC() = %t, want %t", got, test.want)
+			}
+		})
+	}
+}
+
+// A direct pulumi up with the AGC class still names its load balancer.
+func TestApplyDefaultsNamesTheALBForAGC(t *testing.T) {
+	var cfg Values
+	cfg.Platform = cluster.Azure
+	cfg.Gateway.ClassName = AGCGatewayClassName
+
+	if err := applyDefaults(&cfg); err != nil {
+		t.Fatalf("applyDefaults() error = %v", err)
+	}
+	if cfg.Gateway.ALB.Name != DefaultALBName {
+		t.Errorf("ALB.Name = %q, want %q", cfg.Gateway.ALB.Name, DefaultALBName)
+	}
+}

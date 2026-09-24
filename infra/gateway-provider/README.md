@@ -25,7 +25,7 @@ For architecture details, traffic flows, and design decisions see [DESIGN.md](DE
 | `gieCrdsPath` | No | GitHub URL v1.4.0 | Override GIE CRD source (use local path for air-gapped environments) |
 | `infraStackRef` | No | — | Pulumi StackReference to cloud infra stack exporting `gatewayHostname`, `gatewayCertName`, `gatewayStaticIPName`, `albSubnetId`. Set on GCP and Azure stacks. |
 | `gatewayHostname` | No | — | Direct hostname for the shared gateway (on-prem alternative to `infraStackRef`). Set on RKE2 stack. |
-| `albName` | No | — | Azure AGC `ApplicationLoadBalancer` resource name. When set, creates the ALB in `gateway-system` using `albSubnetId` from `infraStackRef`. |
+| `albName` | No | `shared-alb` | Azure AGC `ApplicationLoadBalancer` resource name. Used only when `gatewayClassName` is `azure-alb-external`: creates the ALB in `gateway-system` using `albSubnetId`. Ignored for any other class. |
 | `tlsCertAnnotation` | No | — | Provider annotation for TLS certificate binding. GCP: `networking.gke.io/cert-manager-certs` |
 | `tlsSecretName` | No | — | K8s Secret name for TLS cert via `certificateRefs`. Used by on-prem (manual) and Azure (cert-manager). |
 | `certManagerIssuer` | No | — | cert-manager ClusterIssuer name. When set, creates a Certificate resource + HTTP listener for ACME challenge. Azure: `letsencrypt-azure` |

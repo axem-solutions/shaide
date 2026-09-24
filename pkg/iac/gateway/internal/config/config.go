@@ -115,6 +115,10 @@ func applyDefaults(cfg *Values) error {
 		cfg.Gateway.ClassName = providerDefaults.gatewayClassName
 	}
 
+	if cfg.UsesAGC() && cfg.Gateway.ALB.Name == "" {
+		cfg.Gateway.ALB.Name = DefaultALBName
+	}
+
 	if cfg.TLS.CertAnnotation == "" {
 		cfg.TLS.CertAnnotation = providerDefaults.tlsCertAnnotation
 	}
@@ -206,6 +210,13 @@ func resolveProjectPath(projectDir, path string) string {
 	}
 
 	return filepath.Clean(absPath)
+}
+
+// UsesAGC reports whether the Gateway runs on Azure Application Gateway for
+// Containers. The class decides it, not the ALB keys: those may linger in a
+// stack file from an earlier choice.
+func (cfg Values) UsesAGC() bool {
+	return cfg.Platform == cluster.Azure && cfg.Gateway.ClassName == AGCGatewayClassName
 }
 
 func (cfg Values) Validate() error {

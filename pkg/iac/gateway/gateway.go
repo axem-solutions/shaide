@@ -17,7 +17,7 @@ import (
 // stack configuration. It is the entry point for running the program directly
 // with the Pulumi CLI; the installer goes through Stack.Deploy instead.
 func DeployGatewayProvider(ctx *pulumi.Context, projectDir string) error {
-	return deployGatewayProvider(ctx, config.New(projectDir, stack.Options{}))
+	return deployGatewayProvider(ctx, config.New(projectDir, stack.Options{}, config.Sources{}))
 }
 
 func deployGatewayProvider(ctx *pulumi.Context, stackConfig config.Config) error {
