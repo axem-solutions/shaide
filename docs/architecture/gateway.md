@@ -153,6 +153,10 @@ shared-gateway  [gateway-system]             ← gateway-provider
 - No static IP needed — the hostname is stable
 - Requires `Microsoft.ServiceNetworking/trafficControllers`
 - The `ApplicationLoadBalancer` CR + delegated ALB subnet (`snet-alb-<stack>`) connect AGC to the cluster
+- The installer requires the subnet resource ID and validates its shape. On an update it pre-fills
+  the association already on the cluster; otherwise it suggests the nodes' VNet with the subnet
+  name left open. An empty association makes the ALB controller delete the AGC and its frontend,
+  taking the platform offline, so it is never accepted
 - Zero-ops: Microsoft manages scaling, patching, and availability
 
 ### Azure — Istio

@@ -6,6 +6,10 @@ type Policy struct {
 	Required bool
 	Secret   bool
 	When     Condition
+
+	// Validate checks a non-empty string value, wherever it came from, so a
+	// malformed answer fails before deployment instead of in the cluster.
+	Validate func(string) error
 }
 
 func (p Policy) Active(values Values) bool {

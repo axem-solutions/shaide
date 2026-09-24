@@ -2,6 +2,7 @@ package stacks
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -9,16 +10,29 @@ import (
 	"github.com/axem-solutions/ai_platform/pkg/iac/gateway"
 	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
 	"github.com/axem-solutions/ai_platform/pkg/stack"
+	"k8s.io/client-go/dynamic"
 )
 
 func DeployGatewayProvider(rt *core.Runtime) error {
+	platform := cluster.Provider(rt.Bootstrap.Provider)
+
+	var options gateway.Options
+	if platform == cluster.Azure {
+		dyn, err := dynamic.NewForConfig(rt.Cluster.RESTConfig)
+		if err != nil {
+			return fmt.Errorf("build dynamic client: %w", err)
+		}
+		options = discoverALBSubnet(context.Background(), dyn, rt.Cluster.Client, rt.Detailf)
+	}
+
 	gatewayStack := gateway.NewStack(
 		filepath.Join(rt.Bootstrap.Config.Paths.ProjectsDir, projectGatewayProvider),
 		stack.Options{
-			Platform:   cluster.Provider(rt.Bootstrap.Provider),
+			Platform:   platform,
 			Kubeconfig: rt.Cluster.ConfigPath,
 			Context:    rt.Cluster.SelectedContext,
 		},
+		options,
 	)
 
 	deployer, err := newStackDeployer(rt, gatewayStack, stackDeploymentOptions{})
