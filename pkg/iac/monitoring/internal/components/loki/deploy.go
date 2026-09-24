@@ -142,6 +142,10 @@ func lokiPersistence(cfg appconfig.Values) pulumi.Map {
 // the bucket already existed. aws-cli's head-bucket/create-bucket are plain
 // S3 API calls any S3-compatible backend (including RustFS) implements the
 // same way, so this is portable across backends, not just AWS.
+//
+// The Job is auto-named (loki-create-bucket-<suffix>) because its pod template
+// is immutable: a fixed name collides with any Job of that name left on the
+// cluster, and a changed template could not be applied in place.
 func createBucketJob(ctx *pulumi.Context, cfg appconfig.Values, opts ...pulumi.ResourceOption) (*batchv1.Job, error) {
 	cmd := fmt.Sprintf(
 		"aws --endpoint-url %s s3api head-bucket --bucket %s || aws --endpoint-url %s s3api create-bucket --bucket %s",
@@ -150,7 +154,6 @@ func createBucketJob(ctx *pulumi.Context, cfg appconfig.Values, opts ...pulumi.R
 
 	return batchv1.NewJob(ctx, "loki-create-bucket", &batchv1.JobArgs{
 		Metadata: &metav1.ObjectMetaArgs{
-			Name:      pulumi.String("loki-create-bucket"),
 			Namespace: pulumi.String(cfg.Namespace),
 		},
 		Spec: &batchv1.JobSpecArgs{
