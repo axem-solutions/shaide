@@ -19,7 +19,7 @@ import (
 // inline Automation API program does not inherit auto.WorkDir as its process
 // working directory.
 func DeployMonitoring(ctx *pulumi.Context, projectDir string) error {
-	return deployMonitoring(ctx, appconfig.New(projectDir, stack.Options{}))
+	return deployMonitoring(ctx, appconfig.New(projectDir, stack.Options{}, appconfig.Sources{}))
 }
 
 func deployMonitoring(ctx *pulumi.Context, configuration appconfig.Config) error {

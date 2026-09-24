@@ -473,7 +473,8 @@ Which certificate prompt appears depends on the platform selected above.
 
 | Prompt | Options / Input |
 |---|---|
-| `StorageClass for model PVCs` | Leave empty to use the cluster default |
+| `StorageClass for model PVCs` | Pick from the cluster's StorageClasses, or `(cluster default)` |
+| `StorageClass for monitoring PVCs (Loki, Prometheus)` | Pick from the cluster's StorageClasses, or `(cluster default)`. Asked once, and only for volumes that do not exist yet: an existing Loki or Prometheus PVC keeps its class, because a PVC's StorageClass cannot change |
 | `Shaide admin password` | Creates the initial administrator account |
 
 #### App-serving deployment mode
