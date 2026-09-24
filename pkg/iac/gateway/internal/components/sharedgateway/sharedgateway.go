@@ -20,7 +20,7 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
-const gatewayName = "shared-gateway"
+const gatewayName = config.SharedGatewayName
 
 type infrastructure struct {
 	Hostname     pulumi.StringOutput
@@ -45,7 +45,7 @@ func Deploy(
 
 	// Istio creates its GatewayClass as part of this update, so that class may
 	// legitimately be absent while the Pulumi program is being evaluated.
-	classCreatedByThisUpdate := cfg.Istio.Enabled && cfg.Gateway.ClassName == "istio"
+	classCreatedByThisUpdate := cfg.Istio.Enabled && cfg.Gateway.ClassName == config.IstioGatewayClassName
 	if err := validateGatewayClass(
 		ctx.Context(),
 		cfg.Kubernetes,
@@ -474,11 +474,11 @@ func buildGatewaySpec(
 }
 
 func usesAzureAGC(cfg config.Values) bool {
-	return cfg.Platform == cluster.Azure && cfg.Gateway.ALB.Name != ""
+	return cfg.UsesAGC()
 }
 
 func usesAzureIstio(cfg config.Values) bool {
-	return cfg.Platform == cluster.Azure && cfg.Gateway.ALB.Name == ""
+	return cfg.Platform == cluster.Azure && !cfg.UsesAGC()
 }
 
 func azureIstioInfrastructure() map[string]interface{} {

@@ -454,8 +454,10 @@ with the installer. The prompts below cover what cannot be known in advance.
 | Prompt | Options / Input |
 |---|---|
 | `Cloud platform` | `gcp`, `aws`, `azure`, `on-prem`. Detected from the cluster; confirm or override |
-| `Gateway class name` | Selected from the GatewayClasses present in the cluster |
+| `Gateway class` | Selected from the GatewayClasses the cluster accepts, plus `istio`, which the gateway stack installs. The class of the existing shared Gateway is pre-selected. Not asked when `istio` is the only option |
 | `Gateway hostname (e.g. shaide.example.com)` | Public hostname for the shared Gateway |
+| `Azure subnet resource ID for Application Gateway for Containers` | Only with the `azure-alb-external` class. Pre-filled with the existing association on an update |
+| `cert-manager ClusterIssuer for Gateway TLS` | Selected from the cluster's ClusterIssuers, or `(none, HTTP only)`. Not asked when the cluster has no ClusterIssuer |
 
 #### TLS
 

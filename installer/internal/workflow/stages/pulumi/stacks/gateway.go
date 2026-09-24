@@ -2,6 +2,7 @@ package stacks
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -9,16 +10,25 @@ import (
 	"github.com/axem-solutions/ai_platform/pkg/iac/gateway"
 	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
 	"github.com/axem-solutions/ai_platform/pkg/stack"
+	"k8s.io/client-go/dynamic"
 )
 
 func DeployGatewayProvider(rt *core.Runtime) error {
+	platform := cluster.Provider(rt.Bootstrap.Provider)
+
+	options, err := gatewayOptions(rt, platform)
+	if err != nil {
+		return err
+	}
+
 	gatewayStack := gateway.NewStack(
 		filepath.Join(rt.Bootstrap.Config.Paths.ProjectsDir, projectGatewayProvider),
 		stack.Options{
-			Platform:   cluster.Provider(rt.Bootstrap.Provider),
+			Platform:   platform,
 			Kubeconfig: rt.Cluster.ConfigPath,
 			Context:    rt.Cluster.SelectedContext,
 		},
+		options,
 	)
 
 	deployer, err := newStackDeployer(rt, gatewayStack, stackDeploymentOptions{})
@@ -49,4 +59,42 @@ func DeployGatewayProvider(rt *core.Runtime) error {
 	}
 
 	return nil
+}
+
+// gatewayOptions answers the gateway questions from the cluster: the class and
+// the ClusterIssuer are picked from what exists, pre-selecting what the live
+// Gateway uses, and the AGC load balancer is looked up only when AGC is the
+// class. A question with a single possible answer is not asked.
+func gatewayOptions(rt *core.Runtime, platform cluster.Provider) (gateway.Options, error) {
+	// Each lookup has its own timeout: the prompts in between wait for the
+	// operator, which a shared deadline would count against the lookups.
+	ctx := context.Background()
+
+	dyn, err := dynamic.NewForConfig(rt.Cluster.RESTConfig)
+	if err != nil {
+		return gateway.Options{}, fmt.Errorf("build dynamic client: %w", err)
+	}
+
+	live, err := readSharedGateway(ctx, dyn)
+	if err != nil {
+		rt.Detailf("could not read the existing shared Gateway (%v); nothing is pre-selected from it", err)
+	}
+
+	class, err := selectGatewayClass(ctx, rt, dyn, platform, live.class)
+	if err != nil {
+		return gateway.Options{}, err
+	}
+
+	var options gateway.Options
+	if platform == cluster.Azure && class == gateway.AGCGatewayClassName {
+		options = discoverALB(ctx, dyn, rt.Cluster.Client, rt.Detailf)
+	}
+	options.GatewayClassName = class
+
+	options.CertManagerIssuer, err = selectCertManagerIssuer(ctx, rt, dyn, live.issuer)
+	if err != nil {
+		return gateway.Options{}, err
+	}
+
+	return options, nil
 }
