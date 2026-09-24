@@ -32,6 +32,13 @@ func RecoverMonitoring(rt *core.Runtime, runErr error) (core.RecoveryAction, err
 func recoverStackError(rt *core.Runtime, runErr error, target stackTarget) (core.RecoveryAction, error) {
 	rt.Detailf("%s failed: %s", displayStack(target), runErr)
 
+	// The state belongs to another cluster, or the operator declined: retrying
+	// would ask the same question about the same state.
+	var targetErr *iac.ClusterTargetError
+	if errors.As(runErr, &targetErr) {
+		return core.RecoveryFail, nil
+	}
+
 	var lockedErr *iac.StackLockedError
 	if errors.As(runErr, &lockedErr) {
 		return recoverRetryAbort(

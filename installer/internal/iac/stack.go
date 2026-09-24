@@ -21,6 +21,9 @@ type StackDeployerOptions struct {
 	Logger      io.Writer
 	Destroy     bool
 	SkipRefresh bool
+
+	// Target is the cluster selected for this run; see DeployerOptions.
+	Target *ClusterTarget
 }
 
 // StackDeployer adapts a stack.Stack to the installer's Pulumi deployer. It
@@ -53,6 +56,8 @@ func NewStackDeployer(opts StackDeployerOptions) (*StackDeployer, error) {
 		Destroy:     opts.Destroy,
 		SkipRefresh: opts.SkipRefresh,
 		Logger:      opts.Logger,
+		Target:      opts.Target,
+		Confirmer:   opts.Prompter,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create %s stack deployer: %w", config.StackName(), err)

@@ -42,6 +42,14 @@ type DeployerOptions struct {
 
 	// Logger receives Pulumi progress output and deployer log messages.
 	Logger io.Writer
+
+	// Target is the cluster selected for this run. When set, a stack whose
+	// state belongs to another cluster is refused before any operation.
+	Target *ClusterTarget
+
+	// Confirmer asks before deploying a stack whose cluster cannot be
+	// verified or that carries pending deletions.
+	Confirmer Confirmer
 }
 
 type Deployer struct {
@@ -54,6 +62,8 @@ type Deployer struct {
 	Logger      io.Writer
 	Destroy     bool
 	SkipRefresh bool
+	Target      *ClusterTarget
+	Confirmer   Confirmer
 }
 
 func NewDeployer(opts DeployerOptions) (*Deployer, error) {
@@ -83,12 +93,18 @@ func NewDeployer(opts DeployerOptions) (*Deployer, error) {
 		Destroy:     opts.Destroy,
 		Passphrase:  opts.Passphrase,
 		SkipRefresh: opts.SkipRefresh,
+		Target:      opts.Target,
+		Confirmer:   opts.Confirmer,
 	}, nil
 }
 
 func (d *Deployer) Deploy(ctx context.Context, deployment func(ctx *pulumi.Context) error) (*auto.UpResult, error) {
 	stack, err := d.prepareStack(ctx, deployment)
 	if err != nil {
+		return nil, err
+	}
+
+	if err := d.checkClusterTarget(ctx, stack); err != nil {
 		return nil, err
 	}
 
