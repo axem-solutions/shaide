@@ -193,6 +193,55 @@ func TestResolveRequiredAndSecret(t *testing.T) {
 	})
 }
 
+// A space pasted along with an answer must not reach the stack: a Gateway
+// hostname of " shaide.example.com" is rejected by the API server only after
+// the deployment has started.
+func TestResolveTrimsInputAnswers(t *testing.T) {
+	prompt := &Prompt{Kind: PromptInput, Title: "Hostname"}
+	definition := Config[testValues]{
+		Namespace: "ns",
+		Entries:   []Entry[testValues]{entry("k", Source{}, prompt, Policy{})},
+	}
+
+	got, err := definition.Resolve(&recordingPrompter{answers: map[string]string{"Hostname": " shaide.example.com \t"}})
+	if err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+	if value := got["ns:k"].Value; value != "shaide.example.com" {
+		t.Errorf("value = %q, want it trimmed", value)
+	}
+}
+
+// A blank answer to a required prompt is still rejected once trimmed.
+func TestResolveRejectsBlankRequiredInput(t *testing.T) {
+	prompt := &Prompt{Kind: PromptInput, Title: "Hostname"}
+	definition := Config[testValues]{
+		Namespace: "ns",
+		Entries:   []Entry[testValues]{entry("k", Source{}, prompt, Policy{Required: true})},
+	}
+
+	if _, err := definition.Resolve(&recordingPrompter{answers: map[string]string{"Hostname": "   "}}); err == nil {
+		t.Fatal("Resolve() accepted a blank answer for a required entry")
+	}
+}
+
+// A secret is kept verbatim, since a password may contain surrounding spaces.
+func TestResolveKeepsSecretInputVerbatim(t *testing.T) {
+	prompt := &Prompt{Kind: PromptInput, Title: "Password"}
+	definition := Config[testValues]{
+		Namespace: "ns",
+		Entries:   []Entry[testValues]{entry("k", Source{}, prompt, Policy{Secret: true})},
+	}
+
+	got, err := definition.Resolve(&recordingPrompter{answers: map[string]string{"Password": " p4ss "}})
+	if err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+	if value := got["ns:k"].Value; value != " p4ss " {
+		t.Errorf("secret = %q, want it unchanged", value)
+	}
+}
+
 // A condition may only depend on an entry declared earlier, because Resolve
 // evaluates in order and would otherwise silently read a missing value.
 func TestValidateRejectsForwardDependency(t *testing.T) {
