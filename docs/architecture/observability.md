@@ -36,9 +36,12 @@ It is deployed and managed by `app_shaide` — this stack references it but does
 | Alloy     | No        | —    | Stateless DaemonSet, no local buffering |
 | Prometheus | YES      | 10Gi | TSDB data directory                     |
 
-Only Loki claims a PVC (`/var/loki`, `ReadWriteOnce`). On on-prem clusters set
-`monitoring:lokiStorageClass: hostpath` in the stack YAML; on GCP use `standard` or
-`premium-rwo`. Omit the key to fall back to the cluster's default StorageClass.
+Loki (`/var/loki`) and Prometheus claim a `ReadWriteOnce` PVC each. The installer asks
+once for their StorageClass, offering the classes that exist on the cluster, and applies
+the answer to both. On an update an existing PVC keeps its class, since a PVC's
+StorageClass cannot change. Outside the installer, set `monitoring:lokiStorageClass` and
+`monitoring:prometheusStorageClass` in the stack YAML; omit them to fall back to the
+cluster's default StorageClass.
 
 ## Directory Structure
 

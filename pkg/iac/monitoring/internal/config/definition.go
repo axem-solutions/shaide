@@ -1,6 +1,8 @@
 package config
 
 import (
+	"strings"
+
 	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
 	"github.com/axem-solutions/ai_platform/pkg/stack"
 	stackconfig "github.com/axem-solutions/ai_platform/pkg/stack/config"
@@ -63,8 +65,17 @@ type Config struct {
 	definition stackconfig.Config[Values]
 }
 
-func New(projectDir string, opts stack.Options) Config {
-	definition := newDefinition(opts)
+// Sources are the values the installer resolves before the stack runs.
+type Sources struct {
+	// Storage classes for the Loki and Prometheus PVCs. Empty leaves the key
+	// unwritten, so the chart falls back to the cluster's default
+	// StorageClass.
+	LokiStorageClass       string
+	PrometheusStorageClass string
+}
+
+func New(projectDir string, opts stack.Options, sources Sources) Config {
+	definition := newDefinition(opts, sources)
 
 	return Config{
 		Config:     stack.NewConfig(Namespace, Namespace, projectDir, definition),
@@ -72,7 +83,7 @@ func New(projectDir string, opts stack.Options) Config {
 	}
 }
 
-func newDefinition(opts stack.Options) stackconfig.Config[Values] {
+func newDefinition(opts stack.Options, sources Sources) stackconfig.Config[Values] {
 	return stackconfig.Config[Values]{
 		Namespace: Namespace,
 		Entries: []stackconfig.Entry[Values]{
@@ -204,14 +215,12 @@ func newDefinition(opts stack.Options) stackconfig.Config[Values] {
 				},
 			},
 			{
-				Key: KeyLokiStorageClass,
-				Source: stackconfig.Source{
-					Default: defaultStorageClass(opts.Platform),
-				},
-				Prompt: &stackconfig.Prompt{
-					Kind:  stackconfig.PromptInput,
-					Title: "Loki storage class (empty uses cluster default)",
-				},
+				// Chosen by the installer from the cluster's StorageClasses, or
+				// read back from the existing PVC on an update: a PVC's class
+				// is immutable, so a free-text answer here could only break an
+				// upgrade.
+				Key:    KeyLokiStorageClass,
+				Source: stackconfig.Source{Value: optionalSource(sources.LokiStorageClass)},
 				Setter: func(cfg *Values, root *pulumiconfig.Config) {
 					cfg.Loki.StorageClass = root.Get(KeyLokiStorageClass.String())
 				},
@@ -276,18 +285,22 @@ func newDefinition(opts stack.Options) stackconfig.Config[Values] {
 				},
 			},
 			{
-				Key: KeyPrometheusStorageClass,
-				Source: stackconfig.Source{
-					Default: defaultStorageClass(opts.Platform),
-				},
-				Prompt: &stackconfig.Prompt{
-					Kind:  stackconfig.PromptInput,
-					Title: "Prometheus storage class (empty uses cluster default)",
-				},
+				Key:    KeyPrometheusStorageClass,
+				Source: stackconfig.Source{Value: optionalSource(sources.PrometheusStorageClass)},
 				Setter: func(cfg *Values, root *pulumiconfig.Config) {
 					cfg.Prometheus.StorageClass = root.Get(KeyPrometheusStorageClass.String())
 				},
 			},
 		},
 	}
+}
+
+// optionalSource leaves an empty value unwritten, so a key set by hand in the
+// stack config survives and the chart default applies otherwise.
+func optionalSource(value string) any {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+
+	return value
 }

@@ -6,19 +6,12 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"time"
 
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/core"
 	"github.com/axem-solutions/ai_platform/pkg/iac/serving"
 	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
 	stackpkg "github.com/axem-solutions/ai_platform/pkg/stack"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
-
-// clusterDefaultStorageClassLabel is the option label shown when the user wants
-// to leave model PVCs without an explicit storageClass so Kubernetes uses the
-// cluster default. Resolved to the empty string before injection.
-const clusterDefaultStorageClassLabel = "(cluster default)"
 
 // Deployment modes offered for the app-serving stack. The labels are shown
 // verbatim in the picker, so they spell out the consequence of each choice.
@@ -54,7 +47,7 @@ func ServesModels(rt *core.Runtime) bool {
 func DeployAppServing(rt *core.Runtime) error {
 	workDir := filepath.Join(rt.Bootstrap.Config.Paths.ProjectsDir, projectAppServing)
 
-	storageClass, err := promptModelStorageClass(rt)
+	storageClass, err := promptStorageClass(rt, "StorageClass for model PVCs", "")
 	if err != nil {
 		return err
 	}
@@ -105,60 +98,6 @@ func DeployAppServing(rt *core.Runtime) error {
 	}
 
 	return nil
-}
-
-// promptModelStorageClass asks the user to pick a StorageClass for model PVCs.
-// Options are the cluster's actual StorageClasses plus a "cluster default" entry
-// (which resolves to empty string - K8s uses the cluster default).
-// The default selection is the cluster-default option. Returns the selected
-// StorageClass name, or empty string for cluster default.
-func promptModelStorageClass(rt *core.Runtime) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-
-	scList, err := rt.Cluster.Client.StorageV1().StorageClasses().List(ctx, metav1.ListOptions{})
-	if err != nil {
-		// If we can't list (RBAC, transient), fall back to a free-form prompt.
-		rt.Detailf("could not list cluster StorageClasses (%v); prompting free-form", err)
-		value, err := rt.Reporter.Input(
-			"StorageClass for model PVCs (leave empty for cluster default)",
-			"", "",
-		)
-		if err != nil {
-			return "", err
-		}
-		return value, nil
-	}
-
-	options := []string{clusterDefaultStorageClassLabel}
-	defaultLabel := clusterDefaultStorageClassLabel
-	for _, sc := range scList.Items {
-		label := sc.Name
-		if sc.Annotations["storageclass.kubernetes.io/is-default-class"] == "true" {
-			label = fmt.Sprintf("%s (cluster default)", sc.Name)
-			defaultLabel = label
-		}
-		options = append(options, label)
-	}
-
-	selected, err := rt.Reporter.Select(
-		"StorageClass for model PVCs",
-		defaultLabel,
-		options,
-	)
-	if err != nil {
-		return "", err
-	}
-
-	if selected == clusterDefaultStorageClassLabel {
-		return "", nil
-	}
-	// Strip the "(cluster default)" suffix to recover the bare StorageClass name.
-	name := selected
-	if suffix := " (cluster default)"; len(name) > len(suffix) && name[len(name)-len(suffix):] == suffix {
-		name = name[:len(name)-len(suffix)]
-	}
-	return name, nil
 }
 
 // selectedModels maps the model manifest onto the stack's model list.
