@@ -1,6 +1,10 @@
 package config
 
 import (
+	"fmt"
+	"regexp"
+	"strings"
+
 	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
 	"github.com/axem-solutions/ai_platform/pkg/stack"
 	stackconfig "github.com/axem-solutions/ai_platform/pkg/stack/config"
@@ -49,8 +53,19 @@ type Config struct {
 	definition stackconfig.Config[Values]
 }
 
-func New(projectDir string, opts stack.Options) Config {
-	definition := newDefinition(opts)
+// Sources are values the installer discovers from the cluster.
+type Sources struct {
+	// ALBSubnetID pre-fills the subnet prompt, typically with the association
+	// of the ApplicationLoadBalancer already on the cluster.
+	ALBSubnetID string
+
+	// ALBSubnetPlaceholder hints at the expected ID when there is nothing to
+	// pre-fill, e.g. the cluster's VNet with the subnet name left open.
+	ALBSubnetPlaceholder string
+}
+
+func New(projectDir string, opts stack.Options, sources Sources) Config {
+	definition := newDefinition(opts, sources)
 
 	return Config{
 		Config:     stack.NewConfig(Namespace, Namespace, projectDir, definition),
@@ -69,7 +84,7 @@ func New(projectDir string, opts stack.Options) Config {
 //
 // cloudProvider is declared first because the Azure-only entries below depend
 // on it, and Validate requires a condition's key to be declared earlier.
-func newDefinition(opts stack.Options) stackconfig.Config[Values] {
+func newDefinition(opts stack.Options, sources Sources) stackconfig.Config[Values] {
 	return stackconfig.Config[Values]{
 		Namespace: Namespace,
 		Entries: []stackconfig.Entry[Values]{
@@ -166,14 +181,21 @@ func newDefinition(opts stack.Options) stackconfig.Config[Values] {
 				},
 			},
 			{
-				Key: KeyALBSubnetID,
+				// Required: an empty association makes the ALB controller
+				// delete the Application Gateway for Containers and its
+				// frontend, silently taking the platform offline. On an update
+				// the installer pre-fills the association already in place.
+				Key:    KeyALBSubnetID,
+				Source: stackconfig.Source{Default: optionalSource(sources.ALBSubnetID)},
 				Prompt: &stackconfig.Prompt{
 					Kind:        stackconfig.PromptInput,
 					Title:       "Azure subnet resource ID for Application Gateway for Containers",
-					Placeholder: "/subscriptions/.../subnets/<subnet>",
+					Placeholder: albSubnetPlaceholder(sources.ALBSubnetPlaceholder),
 				},
 				Policy: stackconfig.Policy{
-					When: stackconfig.WhenEquals(KeyCloudProvider, string(cluster.Azure)),
+					Required: true,
+					When:     stackconfig.WhenEquals(KeyCloudProvider, string(cluster.Azure)),
+					Validate: ValidateSubnetID,
 				},
 				Setter: func(cfg *Values, root *pulumiconfig.Config) {
 					cfg.Gateway.ALB.SubnetID = root.Get(KeyALBSubnetID.String())
@@ -292,4 +314,42 @@ func newDefinition(opts stack.Options) stackconfig.Config[Values] {
 			},
 		},
 	}
+}
+
+// subnetIDPattern matches an Azure subnet resource ID. Resource provider and
+// type segments are case-insensitive in Azure, so the match is too.
+var subnetIDPattern = regexp.MustCompile(
+	`(?i)^/subscriptions/[^/]+/resourceGroups/[^/]+/providers/Microsoft\.Network/virtualNetworks/[^/]+/subnets/[^/]+$`,
+)
+
+// ValidateSubnetID rejects anything that is not a subnet resource ID, which
+// the ALB controller would otherwise reject only after deployment.
+func ValidateSubnetID(value string) error {
+	if !subnetIDPattern.MatchString(value) {
+		return fmt.Errorf(
+			"%q is not a subnet resource ID "+
+				"(/subscriptions/<id>/resourceGroups/<rg>/providers/Microsoft.Network/virtualNetworks/<vnet>/subnets/<subnet>)",
+			value,
+		)
+	}
+
+	return nil
+}
+
+func albSubnetPlaceholder(hint string) string {
+	if strings.TrimSpace(hint) != "" {
+		return hint
+	}
+
+	return "/subscriptions/.../subnets/<subnet>"
+}
+
+// optionalSource leaves an empty value unset, so the prompt starts empty
+// rather than pre-filled with a blank.
+func optionalSource(value string) any {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+
+	return value
 }

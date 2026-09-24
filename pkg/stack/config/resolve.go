@@ -36,6 +36,14 @@ func (c Config[T]) Resolve(p Prompter) (auto.ConfigMap, error) {
 			continue
 		}
 
+		if entry.Policy.Validate != nil {
+			if text, isString := value.(string); isString && strings.TrimSpace(text) != "" {
+				if err := entry.Policy.Validate(strings.TrimSpace(text)); err != nil {
+					return nil, fmt.Errorf("%s: %w", c.Key(entry.Key), err)
+				}
+			}
+		}
+
 		encoded, err := encode(value)
 		if err != nil {
 			return nil, fmt.Errorf("encode %s: %w", c.Key(entry.Key), err)

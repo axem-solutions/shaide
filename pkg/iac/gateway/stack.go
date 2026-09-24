@@ -7,12 +7,26 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
+// Options are values the installer discovers from the cluster.
+type Options struct {
+	// ALBSubnetID pre-fills the Application Gateway for Containers subnet,
+	// typically with the association already on the cluster.
+	ALBSubnetID string
+
+	// ALBSubnetPlaceholder hints at the expected subnet ID when there is
+	// nothing to pre-fill.
+	ALBSubnetPlaceholder string
+}
+
 type Stack struct {
 	config gatewayconfig.Config
 }
 
-func NewStack(projectDir string, options stack.Options) *Stack {
-	return &Stack{config: gatewayconfig.New(projectDir, options)}
+func NewStack(projectDir string, options stack.Options, opts Options) *Stack {
+	return &Stack{config: gatewayconfig.New(projectDir, options, gatewayconfig.Sources{
+		ALBSubnetID:          opts.ALBSubnetID,
+		ALBSubnetPlaceholder: opts.ALBSubnetPlaceholder,
+	})}
 }
 
 func (s *Stack) Config() stack.Config {

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -191,6 +192,38 @@ func TestResolveRequiredAndSecret(t *testing.T) {
 			t.Error("a secret entry was written without the secret flag")
 		}
 	})
+}
+
+// Validate runs on non-empty string values, whatever their source, and names
+// the key when it rejects one.
+func TestResolveValidatesValues(t *testing.T) {
+	reject := func(value string) error {
+		if value != "good" {
+			return errors.New("bad value")
+		}
+		return nil
+	}
+	for _, test := range []struct {
+		value   string
+		wantErr bool
+	}{
+		{"good", false},
+		{"bad", true},
+		{"  ", false}, // blank values are for Required, not Validate
+	} {
+		definition := Config[testValues]{
+			Namespace: "ns",
+			Entries:   []Entry[testValues]{entry("k", Source{Value: test.value}, nil, Policy{Validate: reject})},
+		}
+
+		_, err := definition.Resolve(&recordingPrompter{})
+		if (err != nil) != test.wantErr {
+			t.Errorf("value %q: Resolve() error = %v, wantErr %v", test.value, err, test.wantErr)
+		}
+		if err != nil && !strings.Contains(err.Error(), "ns:k") {
+			t.Errorf("error = %v, want it to name the key", err)
+		}
+	}
 }
 
 // A condition may only depend on an entry declared earlier, because Resolve
