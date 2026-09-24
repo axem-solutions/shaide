@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"strings"
 
 	pulumiconfig "github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
 )
@@ -90,13 +91,25 @@ func (e Entry[T]) resolvePrompt(p Prompter) (any, error) {
 
 	switch e.Prompt.Kind {
 	case PromptInput:
+		// A secret is kept verbatim: a password may legitimately contain
+		// surrounding spaces.
 		if e.Policy.Secret {
 			if secretPrompter, ok := p.(SecretPrompter); ok {
 				return secretPrompter.SecretInput(e.Prompt.Title, e.Prompt.Placeholder, defaultValue)
 			}
+
+			return p.Input(e.Prompt.Title, e.Prompt.Placeholder, defaultValue)
 		}
 
-		return p.Input(e.Prompt.Title, e.Prompt.Placeholder, defaultValue)
+		// Anything else is an identifier (hostname, resource name or ID), where
+		// a stray space pasted along with the value is never intended and only
+		// fails later, e.g. as an invalid Gateway listener hostname.
+		value, err := p.Input(e.Prompt.Title, e.Prompt.Placeholder, defaultValue)
+		if err != nil {
+			return nil, err
+		}
+
+		return strings.TrimSpace(value), nil
 	case PromptSelect:
 		return p.Select(e.Prompt.Title, defaultValue, e.Prompt.Options)
 	case PromptMultiSelect:
