@@ -47,6 +47,7 @@ type Values struct {
 	ShaideNamespace          string   // app-shaide namespace — where the Shaide Server ServiceAccount lives
 	ShaideServiceAccountName string   // Shaide Server ServiceAccount name in ShaideNamespace; must match app_shaide stack config
 	Kubeconfig               string   // optional — path to kubeconfig file; empty = use KUBECONFIG env / ~/.kube/config
+	Context                  string   // optional — kubeconfig context to deploy to; empty = the kubeconfig's current-context
 	CompanyCACert            string   // PEM-encoded company internal root CA cert; per-datasource CACert takes precedence
 	CompanyCATrustEnvVar     string   // fallback trust env var when datasource.CATrustEnvVar is empty; NODE_EXTRA_CA_CERTS | REQUESTS_CA_BUNDLE | SSL_CERT_FILE
 	NodeSelectorKey          string   // label key used for node selection (default: nodegroup)

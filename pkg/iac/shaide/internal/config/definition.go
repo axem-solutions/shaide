@@ -17,6 +17,7 @@ const (
 const (
 	KeyCloudProvider  stackconfig.Key = "cloudProvider"
 	KeyKubeconfig     stackconfig.Key = "kubeconfig"
+	KeyContext        stackconfig.Key = "context"
 	KeyNamespace      stackconfig.Key = "namespace"
 	KeyServiceAccount stackconfig.Key = "shaideServiceAccountName"
 	KeyHarborHostname stackconfig.Key = "harborHostname"
@@ -188,6 +189,16 @@ func runtimeEntries(opts stack.Options, sources Sources) []stackconfig.Entry[Val
 			Source: stackconfig.Source{Value: optionalSource(opts.Kubeconfig)},
 			Setter: func(cfg *Values, root *pulumiconfig.Config) {
 				cfg.Kubeconfig = root.Get(KeyKubeconfig.String())
+			},
+		},
+		{
+			// Without it the provider falls back to the kubeconfig's
+			// current-context, which need not be the cluster the operator
+			// selected.
+			Key:    KeyContext,
+			Source: stackconfig.Source{Value: optionalSource(opts.Context)},
+			Setter: func(cfg *Values, root *pulumiconfig.Config) {
+				cfg.Context = root.Get(KeyContext.String())
 			},
 		},
 		{
