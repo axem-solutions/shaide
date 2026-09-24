@@ -15,6 +15,7 @@ const (
 
 const (
 	KeyKubeconfig       stackconfig.Key = "kubeconfig"
+	KeyContext          stackconfig.Key = "context"
 	KeyNamespace        stackconfig.Key = "namespace"
 	KeyShaideNamespace  stackconfig.Key = "shaideNamespace"
 	KeyShaideSAName     stackconfig.Key = "shaideServiceAccountName"
@@ -79,6 +80,16 @@ func newDefinition(opts stack.Options, sources Sources) stackconfig.Config[Value
 				Source: stackconfig.Source{Value: optionalSource(opts.Kubeconfig)},
 				Setter: func(cfg *Values, root *pulumiconfig.Config) {
 					cfg.Kubeconfig = root.Get(KeyKubeconfig.String())
+				},
+			},
+			{
+				// Without it the provider falls back to the kubeconfig's
+				// current-context, which need not be the cluster the operator
+				// selected.
+				Key:    KeyContext,
+				Source: stackconfig.Source{Value: optionalSource(opts.Context)},
+				Setter: func(cfg *Values, root *pulumiconfig.Config) {
+					cfg.Context = root.Get(KeyContext.String())
 				},
 			},
 			{

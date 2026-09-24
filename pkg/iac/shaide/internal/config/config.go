@@ -114,6 +114,7 @@ type Values struct {
 	PVNodeHostname           string // optional — node hostname for hostPath PV nodeAffinity (on-prem only)
 	HarborHostname           string // optional — internal Harbor registry hostname (on-prem only, e.g. harbor.internal.lan)
 	Kubeconfig               string // optional — path to kubeconfig file; empty = use KUBECONFIG env / ~/.kube/config
+	Context                  string // optional — kubeconfig context to deploy to; empty = the kubeconfig's current-context
 	ShaidePVSize             string // optional — shaide-server PV/PVC size (default: 5Gi)
 	RustfsPVSize             string // optional — rustfs PV/PVC size (default: 5Gi)
 	QdrantPVSize             string // optional — qdrant PV/PVC size (default: 5Gi)

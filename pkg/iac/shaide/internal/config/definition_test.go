@@ -33,6 +33,7 @@ func resolve(t *testing.T, sources Sources) (map[string]string, map[string]bool,
 	cfg := New("/projects/app-shaide", stack.Options{
 		Platform:   cluster.Azure,
 		Kubeconfig: "/.kube/config",
+		Context:    "selected-cluster",
 	}, sources)
 
 	prompter := &stubPrompter{}
@@ -137,6 +138,16 @@ func TestImagesComeFromTheInstaller(t *testing.T) {
 	}
 	if got := values["app-shaide:ghcrUser"]; got != sources.RegistryUser {
 		t.Errorf("ghcrUser = %q, want the Harbor robot %q", got, sources.RegistryUser)
+	}
+}
+
+// The provider must target the context the operator selected. Without it the
+// kubeconfig's current-context wins, and the stack deploys to another cluster.
+func TestSelectedContextIsWritten(t *testing.T) {
+	values, _, _ := resolve(t, completeSources())
+
+	if got := values["app-shaide:context"]; got != "selected-cluster" {
+		t.Errorf("context = %q, want %q", got, "selected-cluster")
 	}
 }
 
