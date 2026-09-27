@@ -2,9 +2,11 @@ package gateway
 
 import (
 	gatewayconfig "github.com/axem-solutions/ai_platform/pkg/iac/gateway/internal/config"
+	"github.com/axem-solutions/ai_platform/pkg/iac/gateway/internal/workflow"
 	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
 	"github.com/axem-solutions/ai_platform/pkg/stack"
 	"github.com/pulumi/pulumi/sdk/v3/go/auto"
+	"github.com/pulumi/pulumi/sdk/v3/go/common/apitype"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
@@ -46,6 +48,15 @@ type Options struct {
 
 type Stack struct {
 	config gatewayconfig.Config
+	owned  workflow.OwnedObjects
+}
+
+// SetStateResources tells the stack which resources its Pulumi state holds, so
+// the Istio ownership sweep can tell this stack's objects from ones another
+// Pulumi deployment wrote. Without it the sweep assumes any Pulumi-written
+// object is this stack's.
+func (s *Stack) SetStateResources(resources []apitype.ResourceV3) {
+	s.owned = workflow.OwnedObjectsFromState(resources)
 }
 
 func NewStack(projectDir string, options stack.Options, opts Options) *Stack {
@@ -63,7 +74,7 @@ func (s *Stack) Config() stack.Config {
 }
 
 func (s *Stack) Deploy(ctx *pulumi.Context) error {
-	return deployGatewayProvider(ctx, s.config)
+	return deployGatewayProvider(ctx, s.config, s.owned)
 }
 
 // Hostname reports the Gateway hostname that was resolved for this deployment.

@@ -13,7 +13,7 @@ import (
 )
 
 func TestEnsureIstioChartOwnershipRequiresRESTConfig(t *testing.T) {
-	err := ensureIstioChartOwnership(context.Background(), nil, "istio-system", nil)
+	err := ensureIstioChartOwnership(context.Background(), nil, "istio-system", nil, nil)
 	if err == nil {
 		t.Fatal("expected an error for a nil REST config")
 	}
@@ -31,6 +31,7 @@ func TestOwnOrDestroyTakesOwnership(t *testing.T) {
 		"istiod",
 		"istio-system",
 		chartResource{gvr: gvr, name: "istio", namespace: "istio-system"},
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("ownOrDestroy() error = %v", err)
@@ -73,6 +74,7 @@ func TestOwnOrDestroyForceDeletes(t *testing.T) {
 			namespace:    "istio-system",
 			forceDestroy: true,
 		},
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("ownOrDestroy() error = %v", err)
@@ -110,6 +112,7 @@ func TestOwnOrDestroyKeepsAlreadyOwnedForcedResource(t *testing.T) {
 			namespace:    "istio-system",
 			forceDestroy: true,
 		},
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("ownOrDestroy() error = %v", err)
@@ -161,6 +164,7 @@ func TestOwnOrDestroyKeepsPulumiManagedResource(t *testing.T) {
 			name:         "destinationrules.networking.istio.io",
 			forceDestroy: true,
 		},
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("ownOrDestroy() error = %v", err)
@@ -200,5 +204,57 @@ func TestManagedByPulumi(t *testing.T) {
 				t.Errorf("managedByPulumi(%v) = %v, want %v", test.managers, got, test.want)
 			}
 		})
+	}
+}
+
+func pulumiWrittenCRD(name string) *unstructured.Unstructured {
+	object := testUnstructured("apiextensions.k8s.io/v1", "CustomResourceDefinition", "", name)
+	object.SetManagedFields([]metav1.ManagedFieldsEntry{
+		{Manager: "pulumi-kubernetes", Operation: metav1.ManagedFieldsOperationUpdate},
+	})
+	return object
+}
+
+// The trial-westeurope case: Istio written by an earlier Pulumi deployment
+// that is not in this stack's state. The object is foreign to this stack, so
+// the forced policy deletes it and the chart recreates it, instead of the
+// chart failing with "already exists".
+func TestOwnOrDestroyDestroysResourceFromAnotherPulumiStack(t *testing.T) {
+	gvr := schema.GroupVersionResource{Group: "apiextensions.k8s.io", Version: "v1", Resource: "customresourcedefinitions"}
+	name := "virtualservices.networking.istio.io"
+	client := dynamicfake.NewSimpleDynamicClient(runtime.NewScheme(), pulumiWrittenCRD(name))
+
+	err := ownOrDestroy(context.Background(), nilSafeLogf, client, "istio-base", "istio-system",
+		chartResource{gvr: gvr, name: name, forceDestroy: true},
+		OwnedObjects{}, // a fresh state owns nothing
+	)
+	if err != nil {
+		t.Fatalf("ownOrDestroy() error = %v", err)
+	}
+
+	if _, err := client.Resource(gvr).Get(context.Background(), name, metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("resource from another Pulumi deployment was kept, get error = %v", err)
+	}
+}
+
+// The dev-westeurope and dev-polandcentral case: this stack wrote the object,
+// so it stays and Pulumi updates it. This is the regression the Pulumi check
+// was added for.
+func TestOwnOrDestroyKeepsResourceInThisStacksState(t *testing.T) {
+	gvr := schema.GroupVersionResource{Group: "apiextensions.k8s.io", Version: "v1", Resource: "customresourcedefinitions"}
+	name := "virtualservices.networking.istio.io"
+	client := dynamicfake.NewSimpleDynamicClient(runtime.NewScheme(), pulumiWrittenCRD(name))
+	owned := OwnedObjects{{Group: "apiextensions.k8s.io", Kind: "CustomResourceDefinition", Name: name}: {}}
+
+	err := ownOrDestroy(context.Background(), nilSafeLogf, client, "istio-base", "istio-system",
+		chartResource{gvr: gvr, name: name, forceDestroy: true},
+		owned,
+	)
+	if err != nil {
+		t.Fatalf("ownOrDestroy() error = %v", err)
+	}
+
+	if _, err := client.Resource(gvr).Get(context.Background(), name, metav1.GetOptions{}); err != nil {
+		t.Fatalf("resource in this stack's state was not kept: %v", err)
 	}
 }

@@ -36,6 +36,15 @@ func DeployGatewayProvider(rt *core.Runtime) error {
 		return err
 	}
 
+	// The Istio ownership sweep must tell this stack's objects from ones an
+	// earlier Pulumi deployment wrote; only the stack's state can say which.
+	resources, err := deployer.StateResources(context.Background())
+	if err != nil {
+		return fmt.Errorf("read gateway-provider stack state: %w", err)
+	}
+	gatewayStack.SetStateResources(resources)
+	rt.Detailf("gateway-provider state holds %d resources", len(resources))
+
 	// Take the hostname the operator supplied up front so later stages have it
 	// even when the Gateway itself does not export one.
 	if hostname, ok := gatewayStack.Hostname(deployer.ResolvedConfig()); ok {
