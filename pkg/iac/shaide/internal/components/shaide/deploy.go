@@ -3,7 +3,6 @@
 // Only externally reachable entrypoint in the app-shaide namespace.
 // If infraStackRef is set: ClusterIP Service + HTTPRoute to shared Gateway (in gateway-system namespace).
 // Otherwise: LoadBalancer Service with annotations from lbAnnotations stack config.
-// Uses private GHCR image — requires imagePullSecrets.
 package shaide
 
 import (
@@ -71,11 +70,6 @@ func Deploy(ctx *pulumi.Context, deps *runtime.DeploymentContext, cfg appconfig.
 					SecurityContext: &corev1.PodSecurityContextArgs{
 						FsGroup: pulumi.Int(1000),
 					},
-					ImagePullSecrets: corev1.LocalObjectReferenceArray{
-						&corev1.LocalObjectReferenceArgs{
-							Name: pulumi.String(deps.RegistrySecretName),
-						},
-					},
 					Containers: corev1.ContainerArray{
 						&corev1.ContainerArgs{
 							Name:            pulumi.String("shaide-server"),
@@ -134,7 +128,7 @@ func Deploy(ctx *pulumi.Context, deps *runtime.DeploymentContext, cfg appconfig.
 				},
 			},
 		},
-	}, deps.ProviderOpt, deps.NsOpt, deps.RegistryDeps, deps.ServiceAccountDeps, deps.StorageDeps)
+	}, deps.ProviderOpt, deps.NsOpt, deps.ConfigDeps, deps.ServiceAccountDeps, deps.StorageDeps)
 	if err != nil {
 		return err
 	}

@@ -1,14 +1,7 @@
-// App Shaide application stack orchestrator.
+// App Shaide application stack entry point for the Pulumi CLI.
 //
-// Creates all shared dependencies and dispatches each component to its own file:
-//   - deploy-namespace.go          (Namespace)
-//   - deploy-app-shaide-config.go  (ConfigMap, Secret)
-//   - ghcr-secret.go               (GitHub Container Registry pull secret)
-//   - deploy-shaide-server.go      (StatefulSet, LoadBalancer)
-//   - deploy-control-panel.go      (Deployment, ClusterIP)
-//   - deploy-webapp.go             (Deployment, ClusterIP)
-//   - deploy-rustfs.go             (StatefulSet, ClusterIP)
-//   - deploy-qdrant.go             (StatefulSet, ClusterIP)
+// The program itself lives in pkg/iac/shaide, which the installer deploys
+// through the same code path.
 package main
 
 import (

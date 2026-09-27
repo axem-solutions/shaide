@@ -47,11 +47,6 @@ func Deploy(ctx *pulumi.Context, deps *runtime.DeploymentContext, cfg appconfig.
 						NodeAffinity:    cfg.NodeAffinityFor(cfg.NodeSelectorControlPanel),
 						PodAntiAffinity: deps.PodAntiAffinityFor(name),
 					},
-					ImagePullSecrets: corev1.LocalObjectReferenceArray{
-						&corev1.LocalObjectReferenceArgs{
-							Name: pulumi.String(deps.RegistrySecretName),
-						},
-					},
 					Containers: corev1.ContainerArray{
 						&corev1.ContainerArgs{
 							Name:            pulumi.String(name),
@@ -97,7 +92,7 @@ func Deploy(ctx *pulumi.Context, deps *runtime.DeploymentContext, cfg appconfig.
 				},
 			},
 		},
-	}, deps.ProviderOpt, deps.NsOpt, deps.RegistryDeps, pulumi.DeleteBeforeReplace(true))
+	}, deps.ProviderOpt, deps.NsOpt, deps.ConfigDeps, pulumi.DeleteBeforeReplace(true))
 	if err != nil {
 		return err
 	}

@@ -20,8 +20,7 @@ pkg/iac/shaide/
     ├── platform/
     │   ├── k8s-serviceaccount.go           # shaide-server ServiceAccount (+ workload-identity annotations)
     │   ├── k8s-rbac.go                     # ClusterRole/ClusterRoleBinding — cluster-wide pod/service/namespace read
-    │   ├── configmap.go                    # shaide-config ConfigMap + shaide-secrets Secret
-    │   └── secret.go                       # ghcr-creds pull secret (ghcr.io or Harbor)
+    │   └── configmap.go                    # shaide-config ConfigMap + shaide-secrets Secret
     ├── components/
     │   ├── shaide/deploy.go                # shaide-server StatefulSet + Service (+ HTTPRoute)
     │   ├── controlpanel/deploy.go          # control-panel Deployment + Service
@@ -44,8 +43,9 @@ The stack orchestrator and dependency coordinator:
 - Loads Pulumi config via `appconfig.Load(ctx)`.
 - Creates the Kubernetes provider used by all resources in this stack.
 - Creates the namespace first, so all subsequent resources are scoped correctly.
-- Creates shared prerequisites: GHCR/Harbor pull secret, `shaide-config` ConfigMap,
-  `shaide-secrets` Secret, ServiceAccount, and cluster-wide RBAC.
+- Creates shared prerequisites: `shaide-config` ConfigMap, `shaide-secrets` Secret,
+  ServiceAccount, and cluster-wide RBAC. Images are pulled anonymously, so no pull
+  secret is created.
 - Selects a `cloudprovider.Provider` (see below) and calls `ProvisionStorage` before any
   StatefulSet is created.
 - Calls per-component `Deploy` functions in a stable order: `shaide`, `controlpanel`,
@@ -71,9 +71,6 @@ Loads and types all Pulumi stack config into a single `Config` struct.
   [Installed Model Discovery](#installed-model-discovery) below.
 - `configmap.go`: Creates the shared `shaide-config` ConfigMap (non-secret runtime
   settings, service discovery) and `shaide-secrets` Secret (`adminAuthKey`, `s3Password`, `jwtSecret`, `sessionSecret`).
-- `secret.go`: Creates `ghcr-creds` (`kubernetes.io/dockerconfigjson`). Authenticates
-  against `ghcr.io` using `ghcrUser`/`ghcrToken` — or, when `harborHostname` is set,
-  against that internal Harbor registry instead, using the same two config keys.
 
 ### `pkg/iac/shaide/internal/components/`
 
@@ -174,7 +171,7 @@ All parameters are defined in the active stack's `deployments/Pulumi.<stack>.yam
   `TRIAL` env var — only the `trial` stack sets it to `TRUE`).
 - RustFS console exposure (`rustfsConsoleEnabled`).
 - MCP integration (`mcpNamespace`, optional — see [MCP Integration](#mcp-integration-optional)).
-- Secrets (`ghcrToken`, `adminAuthKey`, `s3Password`, `jwtSecret`, `sessionSecret`).
+- Secrets (`adminAuthKey`, `s3Password`, `jwtSecret`, `sessionSecret`).
 
 The `nodeSelector` value must match a `nodegroup` label on the target node pool (e.g. `shaide-nodepool`).
 
@@ -182,7 +179,7 @@ The `nodeSelector` value must match a `nodegroup` label on the target node pool 
 
 - Kubernetes context points to the target cluster.
 - Pulumi stack is selected for this project.
-- Required secrets are set (`ghcrToken`, `adminAuthKey`, `s3Password`, `jwtSecret`, `sessionSecret`).
+- Required secrets are set (`adminAuthKey`, `s3Password`, `jwtSecret`, `sessionSecret`).
 
 ## Workload Identity
 
@@ -215,7 +212,8 @@ stack is deployed (e.g. `mcp-gateway`). It is optional:
 ## Security Notes
 
 - Sensitive values live in the `shaide-secrets` Kubernetes Secret created by Pulumi.
-- The GHCR token must have `read:packages` to pull the private Shaide image.
+- Every image registry (the in-cluster Harbor mirror and the upstream registries) allows
+  anonymous pulls, so the stack holds no registry credentials.
 - Avoid committing plaintext secrets into stack config; use `pulumi config set --secret`.
 
 ## Resource Ownership
@@ -281,8 +279,8 @@ kubectl logs -n app-shaide rustfs-0
 ## Troubleshooting
 
 - `ImagePullBackOff` for shaide-server:
-  - Confirm `ghcr-creds` exists in `app-shaide` and contains valid `ghcrUser`/`ghcrToken`.
-  - Re-set the token with `pulumi config set --secret ghcrToken <token>` and `pulumi up`.
+  - Confirm the image reference in `shaideServerImage` exists in the registry it points at.
+  - For a Harbor mirror, confirm the project is public (the Harbor stack creates them public).
 
 - RustFS fails with permission errors:
   - Ensure the `fix-permissions` initContainer ran and set `/data` and `/logs` to `0755` with `10001:10001`.
