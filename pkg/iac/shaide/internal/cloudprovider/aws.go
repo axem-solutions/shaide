@@ -8,7 +8,6 @@ import (
 )
 
 // AWSProvider deploys AWS-specific resources for the shaide stack.
-// LB behaviour is fully driven by lbAnnotations in stack config.
 // EBS/EFS dynamic provisioning handles storage — no static PVs needed.
 type AWSProvider struct{}
 

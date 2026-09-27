@@ -18,8 +18,8 @@ import (
 // per stateful component, each pinned to pvNodeHostname via nodeAffinity and
 // pre-bound via claimRef for deterministic PVC assignment.
 //
-// Load balancing: handled by MetalLB via the metallb.universe.tf/address-pool
-// annotation in lbAnnotations. No additional resources are needed post-deploy.
+// Load balancing: MetalLB gives the shared Gateway its address. shaide-server
+// is a ClusterIP Service behind it, so nothing is needed post-deploy.
 type OnPremProvider struct{}
 
 // pvDef describes a single PV to create.

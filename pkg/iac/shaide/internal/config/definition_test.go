@@ -183,7 +183,6 @@ func TestOptionalEntriesAreNotWritten(t *testing.T) {
 		"app-shaide:nodeSelector",
 		"app-shaide:storageClassName",
 		"app-shaide:pvNodeHostname",
-		"app-shaide:lbAnnotations",
 		"app-shaide:serviceAccountAnnotations",
 	} {
 		if _, ok := values[key]; ok {

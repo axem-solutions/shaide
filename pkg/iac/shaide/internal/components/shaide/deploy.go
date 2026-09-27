@@ -1,8 +1,10 @@
 // shaide-server: main application hub.
 // StatefulSet with PVC (SQLite DB at /root/.config).
-// Only externally reachable entrypoint in the app-shaide namespace.
-// If infraStackRef is set: ClusterIP Service + HTTPRoute to shared Gateway (in gateway-system namespace).
-// Otherwise: LoadBalancer Service with annotations from lbAnnotations stack config.
+// Only externally reachable entrypoint in the app-shaide namespace, and only
+// through the shared Gateway: the Service is always ClusterIP, and an HTTPRoute
+// attaches it to the Gateway when infraStackRef or gatewayHostname is set.
+// Without either, it is reachable only from inside the cluster, e.g. through
+// kubectl port-forward during development.
 package shaide
 
 import (
@@ -17,10 +19,9 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
-// Deploy creates the shaide-server StatefulSet and external-facing Service.
-// If infraStackRef is set, the Service is ClusterIP and an HTTPRoute routes traffic
-// from the shared Gateway (in gateway-system) to this Service.
-// Otherwise, a LoadBalancer Service is created with annotations from lbAnnotations config.
+// Deploy creates the shaide-server StatefulSet and its ClusterIP Service.
+// If infraStackRef or gatewayHostname is set, an HTTPRoute routes traffic from
+// the shared Gateway (in gateway-system) to this Service.
 // Cloud-specific post-deploy resources are delegated to the provider.
 func Deploy(ctx *pulumi.Context, deps *runtime.DeploymentContext, cfg appconfig.Values, provider cloudprovider.Provider) error {
 	image := cfg.Images.ShaideServer
@@ -133,27 +134,19 @@ func Deploy(ctx *pulumi.Context, deps *runtime.DeploymentContext, cfg appconfig.
 		return err
 	}
 
-	// If infraStackRef or gatewayHostname is set, route via shared Gateway (ClusterIP).
-	// Otherwise expose directly as LoadBalancer with caller-supplied annotations.
+	// shaide-server is never a LoadBalancer of its own. External traffic
+	// enters through the shared Gateway, whose load balancer the platform
+	// provides (a cloud LB, or MetalLB on-prem).
 	useGateway := cfg.Routing.InfraStackRef != "" || cfg.Routing.GatewayHostname != ""
-
-	svcType := "LoadBalancer"
-	var annotations pulumi.StringMap
-	if useGateway {
-		svcType = "ClusterIP"
-	} else {
-		annotations = toStringMap(cfg.LBAnnotations)
-	}
 
 	shaideSvc, err := corev1.NewService(ctx, "shaide-server-svc", &corev1.ServiceArgs{
 		Metadata: &metav1.ObjectMetaArgs{
-			Name:        pulumi.String("shaide-server"),
-			Namespace:   pulumi.String(cfg.Namespace),
-			Labels:      deps.MetaLabels("shaide-server", "server"),
-			Annotations: annotations,
+			Name:      pulumi.String("shaide-server"),
+			Namespace: pulumi.String(cfg.Namespace),
+			Labels:    deps.MetaLabels("shaide-server", "server"),
 		},
 		Spec: &corev1.ServiceSpecArgs{
-			Type:     pulumi.String(svcType),
+			Type:     pulumi.String("ClusterIP"),
 			Selector: deps.Labels("shaide-server"),
 			Ports: corev1.ServicePortArray{
 				&corev1.ServicePortArgs{
@@ -177,19 +170,6 @@ func Deploy(ctx *pulumi.Context, deps *runtime.DeploymentContext, cfg appconfig.
 	}
 
 	return provider.PostDeployService(ctx, deps, cfg.Namespace, shaideSvc)
-}
-
-// toStringMap converts a map[string]string to pulumi.StringMap.
-// Returns nil if the input is empty, which omits annotations from the resource.
-func toStringMap(m map[string]string) pulumi.StringMap {
-	if len(m) == 0 {
-		return nil
-	}
-	out := make(pulumi.StringMap, len(m))
-	for k, v := range m {
-		out[k] = pulumi.String(v)
-	}
-	return out
 }
 
 // getGatewayHostname returns the gateway hostname either from a Pulumi StackReference

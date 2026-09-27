@@ -19,10 +19,8 @@ func (p *AzureProvider) ProvisionStorage(_ *pulumi.Context, _ *runtime.Deploymen
 	return nil, nil
 }
 
-// PostDeployService is a no-op for Azure. Both current Azure stacks set infraStackRef,
-// so the shaide-server Service is ClusterIP + HTTPRoute, never a standalone Azure Load
-// Balancer — an LB health-probe annotation would be unused. Revisit if a non-gateway
-// Azure stack config is introduced.
+// PostDeployService is a no-op for Azure. The shaide-server Service is ClusterIP
+// behind the shared Gateway, so there is no Azure Load Balancer to configure.
 func (p *AzureProvider) PostDeployService(_ *pulumi.Context, _ *runtime.DeploymentContext, _ string, _ pulumi.Resource) error {
 	return nil
 }

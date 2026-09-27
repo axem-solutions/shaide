@@ -76,7 +76,6 @@ const (
 	KeyRustfsPVSize           stackconfig.Key = "rustfsPVSize"
 	KeyQdrantPVSize           stackconfig.Key = "qdrantPVSize"
 	KeyKnowledgeCenterEnabled stackconfig.Key = "knowledgeCenterEnabled"
-	KeyLBAnnotations          stackconfig.Key = "lbAnnotations"
 	KeySAAnnotations          stackconfig.Key = "serviceAccountAnnotations"
 )
 
@@ -422,12 +421,6 @@ func optionalEntries() []stackconfig.Entry[Values] {
 			Key: KeyRustfsConsoleEnabled,
 			Setter: func(cfg *Values, root *pulumiconfig.Config) {
 				cfg.RustEnv.ConsoleEnabled = root.GetBool(KeyRustfsConsoleEnabled.String())
-			},
-		},
-		stackconfig.Entry[Values]{
-			Key: KeyLBAnnotations,
-			Setter: func(cfg *Values, root *pulumiconfig.Config) {
-				root.GetObject(KeyLBAnnotations.String(), &cfg.LBAnnotations)
 			},
 		},
 		stackconfig.Entry[Values]{

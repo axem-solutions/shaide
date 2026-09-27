@@ -114,7 +114,6 @@ type Values struct {
 	QdrantPVSize             string // optional — qdrant PV/PVC size (default: 5Gi)
 	KnowledgeCenterEnabled   bool   // optional — presence of the Knowledge Center feature; injected into control-panel as KNOWLEDGE_CENTER_ENABLED; default: false
 
-	LBAnnotations             map[string]string
 	ServiceAccountAnnotations map[string]string
 	ServiceAccountName        string
 	Services                  ServiceNames
