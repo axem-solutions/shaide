@@ -94,8 +94,11 @@ type ArtifactExtraConfig struct {
 }
 
 type CreateProjectRequest struct {
-	Name   string `json:"project_name"`
-	Public bool   `json:"public"`
+	Name string `json:"project_name"`
+	// Public is Harbor's deprecated top-level flag; Metadata.Public replaces
+	// it. omitempty keeps an unset flag from overriding the metadata.
+	Public   bool             `json:"public,omitempty"`
+	Metadata *ProjectMetadata `json:"metadata,omitempty"`
 }
 
 type UpdateProjectRequest struct {

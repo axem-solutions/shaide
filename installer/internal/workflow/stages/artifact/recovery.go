@@ -10,6 +10,7 @@ import (
 	huggingface "github.com/axem-solutions/ai_platform/installer/internal/huggingface/errors"
 	oras "github.com/axem-solutions/ai_platform/installer/internal/oras/errdef"
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/core"
+	"github.com/axem-solutions/ai_platform/installer/internal/workflow/stages/discovery"
 )
 
 func recoverCheckModelArtifacts(rt *core.Runtime, runErr error) (core.RecoveryAction, error) {
@@ -148,6 +149,13 @@ func recoverArtifactUpload(rt *core.Runtime, runErr error) (core.RecoveryAction,
 				errMsg,
 				orasErr.Target,
 			))
+		}
+		// Harbor answers a push into a project that does not exist with 401,
+		// so rule that out before sending the operator after credentials.
+		if project := discovery.HarborProjectForTarget(rt, orasErr.Target); project != "" {
+			if exists, ok := discovery.HarborProjectExists(rt, project); ok && !exists {
+				return recoverMissingHarborProject(rt, orasErr.Target, project)
+			}
 		}
 		return recoverModelUploadAuth(rt, errMsg)
 	case httpapi.ErrNetwork, httpapi.ErrRateLimited:
@@ -320,4 +328,30 @@ func recoverUpload(rt *core.Runtime, title string) (core.RecoveryAction, error) 
 	}
 
 	return core.RecoveryFail, nil
+}
+
+func recoverMissingHarborProject(rt *core.Runtime, target, project string) (core.RecoveryAction, error) {
+	title := fmt.Sprintf(
+		"Upload failed for %s.\n Harbor project %q does not exist, so Harbor rejects the push as unauthorized.",
+		target,
+		project,
+	)
+	options := []string{
+		"Create missing Harbor projects",
+		"Abort",
+	}
+
+	selected, err := rt.Reporter.Select(title, options[0], options)
+	if err != nil {
+		return core.RecoveryFail, err
+	}
+	if selected != options[0] {
+		return core.RecoveryFail, nil
+	}
+
+	if err := discovery.EnsureHarborProjects(rt); err != nil {
+		rt.Detailf("could not create the missing Harbor projects: %v", err)
+		return core.RecoveryFail, nil
+	}
+	return core.RecoveryRetryStep, nil
 }

@@ -105,7 +105,18 @@ func CheckResources(rt *core.Runtime) error {
 		return err
 	}
 
-	if err := EnsurePortForward(rt); err != nil {
+	if err := startPortForward(rt); err != nil {
+		return err
+	}
+
+	// A Harbor the installer did not deploy may lack its projects. They have to
+	// exist before the readiness probe, which asks for a token scoped to a model
+	// project, and before anything is pushed.
+	if err := EnsureHarborProjects(rt); err != nil {
+		return fmt.Errorf("ensure Harbor projects: %w", err)
+	}
+
+	if err := waitRegistryReady(rt); err != nil {
 		return err
 	}
 
