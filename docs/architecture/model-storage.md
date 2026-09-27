@@ -158,11 +158,10 @@ artifact extracts to the correct layout.
 
 ## ORAS Image
 
-The ORAS CLI image (`oras-project/oras:v1.3.1`) is pulled from:
-
-- **Cloud (GKE)**: `ghcr.io/oras-project/oras:v1.3.1` — pulled directly from GitHub Container Registry.
-- **On-prem (air-gapped)**: `<harborHostname>/images-infra/oras-project/oras:v1.3.1` — pre-loaded
-  into the `images-infra` Harbor project via `infra/on-prem/ansible/harbor_upload.yml`.
+The ORAS CLI image (`oras-project/oras:v1.3.1`) is pulled from where the installer mirrored it,
+`<harbor>/services/oras-project/oras:v1.3.1`, on every platform. The installer passes the
+mirrored reference as `app-serving:orasImage`. A direct `pulumi up` without it falls back to
+`ghcr.io/oras-project/oras:v1.3.1`.
 
 ---
 

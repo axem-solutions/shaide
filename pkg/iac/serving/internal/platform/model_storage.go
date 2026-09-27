@@ -14,8 +14,6 @@ import (
 
 const hostpathBase = "/var/lib/hostpath/models"
 
-const orasVersion = "v1.3.1"
-
 // PrepareModelStorage creates model storage when the model has a source. Models
 // that use their chart's remote model URI do not need a PVC or pull Job.
 func PrepareModelStorage(
@@ -58,7 +56,7 @@ func createModelStorage(
 	opts ...pulumi.ResourceOption,
 ) (*corev1.PersistentVolumeClaim, pulumi.Resource, error) {
 	src := model.ModelSource
-	pvcName := model.Slug + "-model"
+	pvcName := model.ClaimName()
 	pvcOpts := append([]pulumi.ResourceOption{pulumi.DependsOn([]pulumi.Resource{llmdNamespace})}, opts...)
 
 	// On on-prem with hostpath storage, create a PV bound to the target node before the PVC.
@@ -128,13 +126,6 @@ func createModelStorage(
 	}, pvcOpts...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("create model PVC %q: %w", pvcName, err)
-	}
-
-	// On air-gapped on-prem the ORAS image is pre-loaded into the "services" Harbor project.
-	// On cloud (GKE has internet) it is pulled directly from ghcr.io.
-	orasImage := "ghcr.io/oras-project/oras:" + orasVersion
-	if cfg.Platform == kubecluster.OnPrem {
-		orasImage = cfg.Harbor.Hostname + "/images-infra/oras-project/oras:" + orasVersion
 	}
 
 	// --plain-http is required: Harbor is deployed with TLS disabled (ClusterIP HTTP).
@@ -212,7 +203,7 @@ func createModelStorage(
 					Containers: corev1.ContainerArray{
 						&corev1.ContainerArgs{
 							Name:       pulumi.String("oras-pull"),
-							Image:      pulumi.String(orasImage),
+							Image:      pulumi.String(cfg.ORASImage),
 							WorkingDir: pulumi.String("/model-cache/hub"),
 							Command: pulumi.StringArray{
 								pulumi.String("sh"),
