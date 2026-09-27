@@ -163,9 +163,32 @@ shared-gateway  [gateway-system]             ← gateway-provider
 
 ### Azure — Istio
 
-**Not supported.** AGC is the only supported gateway implementation on AKS. Istio remains
-installed for inference routing (the per-model gateways above), but it is not used as the
-shared ingress gateway on Azure.
+Supported, and used where AGC is not available: in regions without Application Gateway for
+Containers (`polandcentral` at the time of writing, e.g. `aks-axem-dev-polandcentral`), or on
+clusters without the ALB controller. Istio is installed by this stack anyway, for the per-model
+inference gateways, so the only extra cost is the `shared-gateway-istio` Envoy pod and an Azure
+Standard Load Balancer in front of it.
+
+```
+Client
+    │
+    ▼
+Azure Standard Load Balancer (public IP, L4)
+    │
+    ▼
+shared-gateway-istio (Envoy, gateway-system)    ← gateway-provider (Gateway, class istio)
+    │
+    └── HTTPRoute (app-shaide)  ──▶ shaide-server (ClusterIP)
+```
+
+- Pick `istio` at the installer's `Gateway class` prompt. On a cluster whose `shared-gateway`
+  already uses `istio`, it is pre-selected; on a cluster with no accepted class other than
+  `istio`, it is used without asking.
+- No `ApplicationLoadBalancer`, ALB subnet or `albName` is created or asked for.
+- The stack annotates the generated LoadBalancer Service so the Azure Load Balancer probes
+  Istio's status port (see [Health probes](#health-probes)).
+- A pre-allocated public IP can be bound with `gatewayStaticIP`. Without it, Azure assigns the
+  Service an address, which changes if the Service is recreated.
 
 Downstream stacks (`app_shaide`, `app_serving`) are unaffected — the `Gateway` and `HTTPRoute`
 resources are identical regardless of which implementation backs them.
@@ -262,7 +285,9 @@ on the `Gateway` resource — Azure then probes Istio's dedicated status endpoin
 |---|---|---|
 | GKE | `gke-l7-regional-external-managed` | Google Cloud L7 load balancer |
 | AKS | `azure-alb-external` | Application Gateway for Containers |
+| AKS (no AGC in the region) | `istio` | Istio Envoy behind an Azure Standard Load Balancer |
 | On-prem | `istio` | Istio Envoy behind MetalLB |
 
-On **AKS, AGC is the only supported option.** It offloads L7 routing to Azure, keeps
-in-cluster resource usage down, and needs no health-probe workaround.
+On **AKS, prefer AGC where the region offers it.** It offloads L7 routing to Azure, keeps
+in-cluster resource usage down, and needs no health-probe workaround. Use Istio where AGC is
+unavailable.
