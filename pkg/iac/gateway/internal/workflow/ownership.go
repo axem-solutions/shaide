@@ -44,6 +44,7 @@ func ensureIstioChartOwnership(
 	ctx context.Context,
 	restConfig *rest.Config,
 	namespace string,
+	owned OwnedObjects,
 	logf logf,
 ) error {
 	if restConfig == nil {
@@ -58,10 +59,10 @@ func ensureIstioChartOwnership(
 
 	logf("ensuring ownership of Istio chart resources in %s", namespace)
 
-	if err := ensureChartOwnership(ctx, restConfig, logf, "istio-base", namespace, istioBaseChartResources(namespace)); err != nil {
+	if err := ensureChartOwnership(ctx, restConfig, logf, "istio-base", namespace, istioBaseChartResources(namespace), owned); err != nil {
 		return fmt.Errorf("take ownership of istio-base resources: %w", err)
 	}
-	if err := ensureChartOwnership(ctx, restConfig, logf, "istiod", namespace, istiodChartResources(namespace)); err != nil {
+	if err := ensureChartOwnership(ctx, restConfig, logf, "istiod", namespace, istiodChartResources(namespace), owned); err != nil {
 		return fmt.Errorf("take ownership of istiod resources: %w", err)
 	}
 
@@ -86,6 +87,7 @@ func ensureChartOwnership(
 	logf logf,
 	releaseName, releaseNamespace string,
 	resources []chartResource,
+	owned OwnedObjects,
 ) error {
 	dyn, err := dynamic.NewForConfig(restConfig)
 	if err != nil {
@@ -93,7 +95,7 @@ func ensureChartOwnership(
 	}
 
 	for _, r := range resources {
-		if err := ownOrDestroy(ctx, logf, dyn, releaseName, releaseNamespace, r); err != nil {
+		if err := ownOrDestroy(ctx, logf, dyn, releaseName, releaseNamespace, r, owned); err != nil {
 			return fmt.Errorf("ownership policy failed for %s %s/%s: %w",
 				r.gvr.Resource, namespaceOrCluster(r.namespace), r.name, err)
 		}
@@ -108,6 +110,7 @@ func ownOrDestroy(
 	dyn dynamic.Interface,
 	releaseName, releaseNamespace string,
 	r chartResource,
+	owned OwnedObjects,
 ) error {
 	client := resourceClient(dyn, r)
 
@@ -120,15 +123,23 @@ func ownOrDestroy(
 		return fmt.Errorf("get: %w", err)
 	}
 
-	// A resource applied by a Pulumi Kubernetes provider is already tracked
-	// in a Pulumi stack's state, so the chart updates it in place and there
-	// is no "already exists" conflict to resolve. Destroying it here would
-	// be invisible to Pulumi: this sweep runs inside the program, after the
-	// refresh recorded the resource as present, so the update reports
-	// "unchanged" and never recreates what was just deleted.
+	// A resource this stack applied is tracked in its state, so the chart
+	// updates it in place and there is no "already exists" conflict to
+	// resolve. Destroying it here would be invisible to Pulumi: this sweep
+	// runs inside the program, after the refresh recorded the resource as
+	// present, so the update reports "unchanged" and never recreates what was
+	// just deleted.
+	//
+	// A Pulumi field manager alone does not prove that, though: another
+	// Pulumi deployment may have written the object, and this stack's chart
+	// would then fail to create it. Such an object is foreign to this stack
+	// and falls through to the policy below.
 	if managedByPulumi(existing) {
-		logf("  %s %s: already managed by Pulumi, skipping", r.gvr.Resource, r.name)
-		return nil
+		if owned.ownedByThisStack(existing) {
+			logf("  %s %s: managed by this stack, skipping", r.gvr.Resource, r.name)
+			return nil
+		}
+		logf("  %s %s: written by another Pulumi deployment, not this stack", r.gvr.Resource, r.name)
 	}
 
 	// Already owned by our release? Skip. forceDestroy applies only to a

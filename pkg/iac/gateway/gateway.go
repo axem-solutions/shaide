@@ -17,15 +17,15 @@ import (
 // stack configuration. It is the entry point for running the program directly
 // with the Pulumi CLI; the installer goes through Stack.Deploy instead.
 func DeployGatewayProvider(ctx *pulumi.Context, projectDir string) error {
-	return deployGatewayProvider(ctx, config.New(projectDir, stack.Options{}, config.Sources{}))
+	return deployGatewayProvider(ctx, config.New(projectDir, stack.Options{}, config.Sources{}), nil)
 }
 
-func deployGatewayProvider(ctx *pulumi.Context, stackConfig config.Config) error {
+func deployGatewayProvider(ctx *pulumi.Context, stackConfig config.Config, owned workflow.OwnedObjects) error {
 	cfg, err := stackConfig.Load(ctx)
 	if err != nil {
 		return fmt.Errorf("load gateway provider config: %w", err)
 	}
-	if err := workflow.Prepare(ctx, cfg); err != nil {
+	if err := workflow.Prepare(ctx, cfg, owned); err != nil {
 		return fmt.Errorf("prepare gateway provider: %w", err)
 	}
 

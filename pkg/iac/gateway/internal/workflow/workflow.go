@@ -11,8 +11,9 @@ import (
 )
 
 // Prepare prepares pre-existing Istio resources for Helm ownership during an
-// update that installs Istio.
-func Prepare(ctx *pulumi.Context, cfg config.Values) error {
+// update that installs Istio. owned is the set of objects the current stack's
+// state manages, or nil when that is unknown.
+func Prepare(ctx *pulumi.Context, cfg config.Values, owned OwnedObjects) error {
 	if ctx.DryRun() || !cfg.Istio.Enabled {
 		return nil
 	}
@@ -30,6 +31,7 @@ func Prepare(ctx *pulumi.Context, cfg config.Values) error {
 		ctx.Context(),
 		restConfig,
 		cfg.Istio.Namespace,
+		owned,
 		writeLog,
 	); err != nil {
 		return fmt.Errorf("prepare Istio chart ownership: %w", err)
