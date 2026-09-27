@@ -22,9 +22,9 @@ It is reachable inside the cluster at `harbor.harbor.svc.cluster.local`.
 - **Model upload** (provisioner → Harbor): via `kubectl port-forward`
 - **Model pull** (ORAS Job inside cluster → Harbor): K8s DNS, `--plain-http`
 - **Node image pulls** (`kubelet`/containerd → Harbor): a DaemonSet, not DNS/TLS — see
-  `documentation/NODE_REGISTRY_CONFIG.md`
+  [Node registry trust](../operations/node-registry-trust.md)
 - **Keeping Harbor populated**: an optional, declarative image mirror — see
-  `documentation/IMAGE_MIRROR.md`
+  [Image mirroring](../operations/image-mirroring.md)
 - **TLS**: disabled — not needed for an internal-only registry
 - **Storage**: dynamic PVCs from the cluster default storage class (e.g. `pd-ssd` on GKE)
 - **Trivy**: disabled — requires external connectivity for vulnerability DB updates
@@ -39,14 +39,11 @@ cloud-harbor/
 ├── deployment/
 │   ├── Pulumi.yaml               # Project descriptor
 │   └── Pulumi.<stack>.yaml       # Per-cluster stack configs (run pulumi from here)
-├── documentation/
-│   ├── NODE_REGISTRY_CONFIG.md   # How nodes reach Harbor's ClusterIP to pull images
-│   └── IMAGE_MIRROR.md           # How the public/private image mirror works
 ├── scripts/
 │   ├── harbor-setup.sh           # Post-deploy: creates projects + robot account
 │   ├── harbor-validate.sh        # Validates admin and robot credentials
 │   ├── harbor-reset-robot-secret.sh  # Resets robot password without recreating account
-│   └── harbor-image-upload.sh    # One-off manual image upload (see also IMAGE_MIRROR.md)
+│   └── harbor-image-upload.sh    # One-off manual image upload (see also Image mirroring)
 └── charts/
     └── harbor-1.18.2.tgz         # Harbor Helm chart
 
@@ -54,8 +51,8 @@ pkg/iac/harbor/                   # Actual Pulumi program logic, shared via Go m
 ├── harbor.go                     # Namespace + Helm release + pull secret + HTTPS port fix
 ├── setup.go                      # Configures Harbor itself: projects (public) + robot account,
 │                                  # via the pulumiverse/pulumi-harbor provider
-├── node_trust.go                 # Node-trust DaemonSet (see NODE_REGISTRY_CONFIG.md)
-└── mirror.go                     # Image mirror Jobs/CronJob (see IMAGE_MIRROR.md)
+├── node_trust.go                 # Node-trust DaemonSet (see Node registry trust)
+└── mirror.go                     # Image mirror Jobs/CronJob (see Image mirroring)
 
 pkg/kube/                         # Port-forward helpers setup.go uses to reach Harbor's
                                    # ClusterIP-only Service from wherever pulumi up runs
@@ -232,7 +229,7 @@ Runs four checks: admin REST API, admin token service, robot REST API, robot tok
 | `harbor:staticClusterIP` | no | Pin Harbor's Service to a fixed ClusterIP; required for the node-trust DaemonSet |
 | `kubeconfig` | no | Path to kubeconfig; omit to use `KUBECONFIG` env / `~/.kube/config` |
 
-**Image mirror** (see `documentation/IMAGE_MIRROR.md` for full detail) — all opt-in, no
+**Image mirror** (see [Image mirroring](../operations/image-mirroring.md) for full detail) — all opt-in, no
 defaults baked into the code:
 
 | Key | Required | Description |
@@ -299,7 +296,7 @@ pulumi up --stack <stack-name>
 ## Uploading Container Images
 
 For ongoing, declarative mirroring driven by stack config, use the image mirror described in
-`documentation/IMAGE_MIRROR.md` (`harbor:mirrorEnabled`) instead — it runs as part of
+[Image mirroring](../operations/image-mirroring.md) (`harbor:mirrorEnabled`) instead — it runs as part of
 `pulumi up`, no manual script invocation needed. The steps below remain useful for a one-off,
 ad hoc upload outside that declared list.
 

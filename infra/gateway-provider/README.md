@@ -6,7 +6,7 @@ Pulumi stack that installs the networking foundation required by all model-servi
 - Installs Istio control plane (`istio-base` + `istiod`) as the Gateway API implementation
 - Creates a shared `Gateway` resource in `gateway-system` for centralised ingress
 
-For architecture details, traffic flows, and design decisions see [DESIGN.md](DESIGN.md).
+For architecture details, traffic flows, and design decisions see [Gateway and routing](../../docs/architecture/gateway.md).
 
 ---
 
@@ -29,7 +29,7 @@ For architecture details, traffic flows, and design decisions see [DESIGN.md](DE
 | `tlsCertAnnotation` | No | — | Provider annotation for TLS certificate binding. GCP: `networking.gke.io/cert-manager-certs` |
 | `tlsSecretName` | No | — | K8s Secret name for TLS cert via `certificateRefs`. Used by on-prem (manual) and Azure (cert-manager). |
 | `certManagerIssuer` | No | — | cert-manager ClusterIssuer name. When set, creates a Certificate resource + HTTP listener for ACME challenge. Azure: `letsencrypt-azure` |
-| `bootstrapTlsSecret` | No | `false` | Azure/AGC only. Seeds `tlsSecretName` with a throwaway self-signed cert on first `pulumi up` so the ALB Controller will program the `http` listener instead of deadlocking on the not-yet-issued secret. See [TLS.md](TLS.md#azureagc-azure-alb-external-the-first-boot-deadlock). Safe to leave set permanently. |
+| `bootstrapTlsSecret` | No | `false` | Azure/AGC only. Seeds `tlsSecretName` with a throwaway self-signed cert on first `pulumi up` so the ALB Controller will program the `http` listener instead of deadlocking on the not-yet-issued secret. See [TLS certificates](../../docs/operations/tls-certificates.md). Safe to leave set permanently. |
 
 `infraStackRef` and `gatewayHostname` are mutually exclusive. If neither is set, no shared
 gateway or `gateway-system` namespace is created.

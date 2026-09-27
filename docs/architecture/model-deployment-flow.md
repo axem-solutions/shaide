@@ -193,7 +193,7 @@ against Harbor. The ORAS image is pulled from `ghcr.io` on cloud or from
 The ModelService chart (Step 10) depends on both the PVC and the Job, so the inference
 pod never starts with an empty PVC.
 
-See [MODEL_STORAGE.md](model-storage.md) for the full directory layout and recovery
+See [Model storage](model-storage.md) for the full directory layout and recovery
 procedure.
 
 ---
