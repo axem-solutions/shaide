@@ -36,6 +36,19 @@ Before deploying a stack, the installer also asks for confirmation (default `Abo
 | `...deployed without a verifiable cluster` | The state was written by an older installer that did not record the context, or with a context the kubeconfig no longer defines |
 | `...will first delete N resources left pending` | An interrupted update left resources pending deletion; the next update deletes them first. The installer log lists each one and its cluster |
 
+## Existing Harbor
+
+When the installer finds a Harbor it did not deploy, it switches to update mode and
+creates any of its projects that are missing (`ai-models`, `shaide`, `services`, and
+any others the manifests name) as public projects. It needs the Harbor admin password
+for that. It reads the password from the `harbor-core` secret in the Harbor namespace,
+and asks for it if that secret is missing or out of date.
+
+Harbor rejects a push into a project that does not exist with `401 Unauthorized`. If an
+upload still fails that way, the installer checks the project first: when the project
+is missing it offers to create it, and it only asks for new credentials when the
+project exists.
+
 ## Manifest validation
 
 The installer validates the image manifest that ships inside the image, and the model
