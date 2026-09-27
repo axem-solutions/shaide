@@ -114,7 +114,7 @@ func TestUnknownContextIsUnverified(t *testing.T) {
 		provider("p1", "deleted-cluster", false),
 	}, testKubeconfig(), westeurope)
 
-	if len(report.Unverified) != 1 || !strings.Contains(report.Unverified[0], "deleted-cluster") {
+	if len(report.Unverified) != 1 || !strings.Contains(report.Unverified[0].reason, "deleted-cluster") {
 		t.Errorf("unverified = %v, want the unknown context named", report.Unverified)
 	}
 }
