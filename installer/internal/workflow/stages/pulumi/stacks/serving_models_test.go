@@ -7,6 +7,10 @@ import (
 	"strings"
 	"testing"
 
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+
 	"github.com/axem-solutions/ai_platform/installer/internal/logger"
 
 	"github.com/axem-solutions/ai_platform/installer/internal/config/catalog"
@@ -15,16 +19,23 @@ import (
 	"github.com/axem-solutions/ai_platform/pkg/iac/serving"
 )
 
-// packagedModels lays out the values directories the installer image ships, so
-// the category lookup has something real to find.
+// packagedModels lays out the values directories the installer image ships:
+// deployments/models/<category>/<name>/{gaie,ms}-<slug>/values.yaml, with the
+// slug being the lowercased name.
 func packagedModels(t *testing.T, names map[string]string) string {
 	t.Helper()
 
 	root := t.TempDir()
 	for name, category := range names {
-		dir := filepath.Join(root, projectAppServing, "deployments", "models", category, name)
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			t.Fatalf("create %s: %v", dir, err)
+		slug := strings.ToLower(name)
+		for _, release := range []string{"gaie-" + slug, "ms-" + slug} {
+			dir := filepath.Join(root, projectAppServing, "deployments", "models", category, name, release)
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				t.Fatalf("create %s: %v", dir, err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, "values.yaml"), nil, 0o644); err != nil {
+				t.Fatal(err)
+			}
 		}
 	}
 
@@ -61,9 +72,9 @@ func gptOSS() catalog.Model {
 	}
 }
 
-// The manifest already records where a model was mirrored, so the reference the
-// cluster pulls and the path inside the volume are derived, not configured.
-func TestSelectedModelsDerivesHarborRefAndURI(t *testing.T) {
+// The manifest already records where a model was mirrored and which
+// repository it is, so the installer passes both; the stack derives the rest.
+func TestSelectedModelsCarryTheManifest(t *testing.T) {
 	projects := packagedModels(t, map[string]string{"GPT-OSS-20B": "generative"})
 	rt := runtimeWith(t, projects, []catalog.Model{gptOSS()})
 
@@ -72,21 +83,14 @@ func TestSelectedModelsDerivesHarborRefAndURI(t *testing.T) {
 		t.Fatalf("selected %d models, want 1", len(models))
 	}
 
-	model := models[0]
-	if want := "harbor.harbor.svc.cluster.local/ai-models/gpt-oss-20b:1.0.0"; model.HarborRef != want {
-		t.Errorf("HarborRef = %q, want %q", model.HarborRef, want)
+	want := serving.Model{
+		Name:        "GPT-OSS-20B",
+		ID:          "openai/gpt-oss-20b",
+		HarborRef:   "harbor.harbor.svc.cluster.local/ai-models/gpt-oss-20b:1.0.0",
+		StorageSize: "70Gi",
 	}
-	if want := "hub/openai/gpt-oss-20b"; model.ModelURI != want {
-		t.Errorf("ModelURI = %q, want %q", model.ModelURI, want)
-	}
-	if model.Category != serving.CategoryGenerative {
-		t.Errorf("Category = %q, want it found from the packaged directory", model.Category)
-	}
-	if got := model.NodeSelector["nodegroup"]; got != "generative" {
-		t.Errorf("NodeSelector = %v, want the nodegroup pool", model.NodeSelector)
-	}
-	if model.StorageSize != "70Gi" {
-		t.Errorf("StorageSize = %q, want 70Gi", model.StorageSize)
+	if models[0] != want {
+		t.Errorf("model = %+v, want %+v", models[0], want)
 	}
 }
 
@@ -103,58 +107,118 @@ func TestModelsWithoutServingAreNotDeployed(t *testing.T) {
 	}
 }
 
-// Naming a model the image does not package would deploy the wrong runtime or
-// none at all, so it is skipped rather than passed through.
-func TestUnknownModelDirectoryIsSkipped(t *testing.T) {
-	projects := packagedModels(t, map[string]string{"GPT-OSS-20B": "generative"})
-
-	unknown := gptOSS()
-	unknown.Serving.Name = "Model-That-Is-Not-Packaged"
-
-	rt := runtimeWith(t, projects, []catalog.Model{unknown})
-
-	if models := selectedModels(rt); len(models) != 0 {
-		t.Errorf("selected %v, want the unpackaged model skipped", models)
+func modelPVC(namespace, name, class string) *corev1.PersistentVolumeClaim {
+	return &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
+		Spec:       corev1.PersistentVolumeClaimSpec{StorageClassName: &class},
 	}
 }
 
-// An embedder must be found in its own category directory.
-func TestEmbedderCategoryIsFound(t *testing.T) {
-	projects := packagedModels(t, map[string]string{"BGE-M3": "embedder"})
+func servingStorageRuntime(t *testing.T, reporter *storageReporter, objects ...runtime.Object) (*core.Runtime, string) {
+	t.Helper()
 
-	embedder := gptOSS()
-	embedder.Serving.Name = "BGE-M3"
+	projects := packagedModels(t, map[string]string{"GPT-OSS-20B": "generative", "BGE-M3": "embedder"})
+	rt := storageRuntime(reporter, append(objects,
+		storageClass("managed-csi", true),
+		storageClass("premium", false),
+	)...)
+	return rt, filepath.Join(projects, projectAppServing)
+}
 
-	rt := runtimeWith(t, projects, []catalog.Model{embedder})
+func servingModels() []serving.Model {
+	return []serving.Model{{Name: "GPT-OSS-20B"}, {Name: "BGE-M3"}}
+}
 
-	models := selectedModels(rt)
-	if len(models) != 1 || models[0].Category != serving.CategoryEmbedder {
-		t.Fatalf("selected %v, want one embedder", models)
+// On an update, a model whose volume exists keeps its class, and nothing is
+// asked when every model has one.
+func TestModelStorageKeepsExistingVolumes(t *testing.T) {
+	reporter := &storageReporter{}
+	rt, workDir := servingStorageRuntime(t, reporter,
+		modelPVC("llm-d-gpt-oss-20b", "gpt-oss-20b-model", "premium"),
+		modelPVC("llm-d-bge-m3", "bge-m3-model", "managed-csi"),
+	)
+
+	models, err := modelStorageClasses(rt, workDir, "azure", servingModels(), false)
+	if err != nil {
+		t.Fatalf("modelStorageClasses() error = %v", err)
+	}
+	if reporter.asked != 0 {
+		t.Errorf("asked %d times, want no question", reporter.asked)
+	}
+	if models[0].StorageClass != "premium" || models[1].StorageClass != "managed-csi" {
+		t.Errorf("classes = %q, %q, want each volume's own", models[0].StorageClass, models[1].StorageClass)
 	}
 }
 
-// The installer currently has one explicit scheduling class for inference.
-// A manifest value must not move a model onto a general-purpose node until the
-// installer gains a more sophisticated placement policy.
-func TestInferenceNodeSelectorIsInstallerManaged(t *testing.T) {
-	projects := packagedModels(t, map[string]string{"GPT-OSS-20B": "generative"})
+// A new model is asked about, pre-selecting the class already in use, and the
+// answer does not reach the model whose volume exists.
+func TestModelStorageAsksOnlyForNewVolumes(t *testing.T) {
+	reporter := &storageReporter{}
+	rt, workDir := servingStorageRuntime(t, reporter,
+		modelPVC("llm-d-gpt-oss-20b", "gpt-oss-20b-model", "premium"),
+	)
 
-	model := gptOSS()
-	model.Serving.NodeSelector = "some-other-pool"
-
-	rt := runtimeWith(t, projects, []catalog.Model{model})
-
-	if got := selectedModels(rt)[0].NodeSelector; got[inferenceNodeSelectorKey] != inferenceNodeSelectorValue {
-		t.Errorf("NodeSelector = %v, want %s=%s", got, inferenceNodeSelectorKey, inferenceNodeSelectorValue)
+	models, err := modelStorageClasses(rt, workDir, "azure", servingModels(), false)
+	if err != nil {
+		t.Fatalf("modelStorageClasses() error = %v", err)
+	}
+	if reporter.asked != 1 || reporter.current != "premium" {
+		t.Errorf("asked %d times pre-selecting %q, want once pre-selecting premium", reporter.asked, reporter.current)
+	}
+	if models[0].StorageClass != "premium" || models[1].StorageClass != "premium" {
+		t.Errorf("classes = %q, %q, want premium for both", models[0].StorageClass, models[1].StorageClass)
 	}
 }
 
-func TestInferenceGPUTolerationMatchesReservedPoolTaint(t *testing.T) {
-	toleration := inferenceGPUToleration()
+// Recreating deletes the volumes, so every model is asked about again.
+func TestModelStorageAsksAgainWhenRecreating(t *testing.T) {
+	reporter := &storageReporter{answer: "managed-csi (cluster default)"}
+	rt, workDir := servingStorageRuntime(t, reporter,
+		modelPVC("llm-d-gpt-oss-20b", "gpt-oss-20b-model", "premium"),
+		modelPVC("llm-d-bge-m3", "bge-m3-model", "premium"),
+	)
 
-	if toleration.Key != "nvidia.com/gpu" || toleration.Operator != "Equal" ||
-		toleration.Value != "present" || toleration.Effect != "NoSchedule" {
-		t.Fatalf("inference toleration = %+v, want the reserved GPU pool taint", toleration)
+	models, err := modelStorageClasses(rt, workDir, "azure", servingModels(), true)
+	if err != nil {
+		t.Fatalf("modelStorageClasses() error = %v", err)
+	}
+	if reporter.asked != 1 || reporter.current != "premium" {
+		t.Errorf("asked %d times pre-selecting %q, want once pre-selecting premium", reporter.asked, reporter.current)
+	}
+	if models[0].StorageClass != "managed-csi" || models[1].StorageClass != "managed-csi" {
+		t.Errorf("classes = %q, %q, want the new answer for both", models[0].StorageClass, models[1].StorageClass)
+	}
+}
+
+// A class the manifest pins is used as is.
+func TestModelStorageLeavesPinnedClasses(t *testing.T) {
+	reporter := &storageReporter{}
+	rt, workDir := servingStorageRuntime(t, reporter)
+
+	models := servingModels()
+	models[0].StorageClass = "hyperdisk-balanced"
+	models[1].StorageClass = "premium"
+
+	got, err := modelStorageClasses(rt, workDir, "azure", models, false)
+	if err != nil {
+		t.Fatalf("modelStorageClasses() error = %v", err)
+	}
+	if reporter.asked != 0 || got[0].StorageClass != "hyperdisk-balanced" {
+		t.Errorf("asked %d, class %q, want the pinned class and no question", reporter.asked, got[0].StorageClass)
+	}
+}
+
+// On-prem the stack puts every model volume on the hostpath class, so the
+// answer could not matter and nothing is asked.
+func TestModelStorageIsNotAskedOnPrem(t *testing.T) {
+	reporter := &storageReporter{}
+	rt, workDir := servingStorageRuntime(t, reporter)
+
+	if _, err := modelStorageClasses(rt, workDir, "on-prem", servingModels(), false); err != nil {
+		t.Fatalf("modelStorageClasses() error = %v", err)
+	}
+	if reporter.asked != 0 {
+		t.Errorf("asked %d times on-prem, want no question", reporter.asked)
 	}
 }
 

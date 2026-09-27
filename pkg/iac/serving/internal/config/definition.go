@@ -25,6 +25,7 @@ const (
 	KeyHarborToken       stackconfig.Key = "harborToken"
 	KeyGPUToleration     stackconfig.Key = "gpuToleration"
 	KeyModelStorageClass stackconfig.Key = "modelStorageClass"
+	KeyORASImage         stackconfig.Key = "orasImage"
 )
 
 const legacyKeyCloudProvider = "cloudProvider"
@@ -42,7 +43,10 @@ type Sources struct {
 	HarborUser        string
 	HarborToken       string
 	ModelStorageClass string
-	GPUToleration     *Toleration
+
+	// ORASImage is where the ORAS image was mirrored. Empty falls back to
+	// DefaultORASImage.
+	ORASImage string
 }
 
 type Config struct {
@@ -143,9 +147,11 @@ func newDefinition(opts stack.Options, sources Sources) stackconfig.Config[Value
 				},
 			},
 			{
+				// Model workloads, and the Jobs pulling their weights, must
+				// tolerate the taint reserving the GPU pool.
 				Key: KeyGPUToleration,
 				Source: stackconfig.Source{
-					Value: optionalToleration(sources.GPUToleration),
+					Default: DefaultGPUToleration,
 				},
 				Setter: func(cfg *Values, root *pulumiconfig.Config) {
 					// TryObject keeps an omitted toleration nil. GetObject would
@@ -154,6 +160,16 @@ func newDefinition(opts stack.Options, sources Sources) stackconfig.Config[Value
 					if err := root.TryObject(KeyGPUToleration.String(), &toleration); err == nil {
 						cfg.Toleration = &toleration
 					}
+				},
+			},
+			{
+				Key: KeyORASImage,
+				Source: stackconfig.Source{
+					Value:   optionalSource(sources.ORASImage),
+					Default: DefaultORASImage,
+				},
+				Setter: func(cfg *Values, root *pulumiconfig.Config) {
+					cfg.ORASImage = root.Get(KeyORASImage.String())
 				},
 			},
 			{
@@ -167,13 +183,6 @@ func newDefinition(opts stack.Options, sources Sources) stackconfig.Config[Value
 			},
 		},
 	}
-}
-
-func optionalToleration(value *Toleration) any {
-	if value == nil || *value == (Toleration{}) {
-		return nil
-	}
-	return value
 }
 
 func optionalSource(value string) any {

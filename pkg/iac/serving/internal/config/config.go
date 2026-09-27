@@ -45,6 +45,9 @@ type Values struct {
 
 	Toleration *Toleration
 
+	// ORASImage pulls model weights into their volume.
+	ORASImage string
+
 	Models struct {
 		Generative []Model `json:"generative"`
 		Embedder   []Model `json:"embedder"`
@@ -108,6 +111,10 @@ func (c Config) applyDefaults(values *Values) {
 		values.LLMd.ChartPath = DefaultLLMdChartPath
 	}
 
+	if values.ORASImage == "" {
+		values.ORASImage = DefaultORASImage
+	}
+
 	applyModelDefaults := func(models []Model) {
 		for i := range models {
 			model := &models[i]
@@ -159,7 +166,7 @@ func (c Config) resolveModels(category string, models []Model, gaieLocalChartPat
 		model.ModelPaths = paths
 
 		if model.Namespace == "" {
-			model.Namespace = "llm-d-" + model.Slug
+			model.Namespace = modelNamespace(model.Slug)
 		}
 
 		if model.ReleaseName == "" {

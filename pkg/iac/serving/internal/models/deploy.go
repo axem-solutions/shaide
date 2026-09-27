@@ -14,11 +14,6 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
-const (
-	generativeCategory = "generative"
-	embedderCategory   = "embedder"
-)
-
 // Deploy deploys every enabled model. Generative and embedder models share the
 // same resource chain; only their category label and final endpoint differ.
 func Deploy(ctx *pulumi.Context, provider pulumi.ProviderResource, cfg config.Values) error {
@@ -26,8 +21,8 @@ func Deploy(ctx *pulumi.Context, provider pulumi.ProviderResource, cfg config.Va
 		category string
 		models   []config.Model
 	}{
-		{category: generativeCategory, models: cfg.Models.Generative},
-		{category: embedderCategory, models: cfg.Models.Embedder},
+		{category: config.CategoryGenerative, models: cfg.Models.Generative},
+		{category: config.CategoryEmbedder, models: cfg.Models.Embedder},
 	}
 
 	for _, group := range groups {
@@ -105,7 +100,7 @@ func deployModel(ctx *pulumi.Context, provider pulumi.ProviderResource, cfg conf
 		return fmt.Errorf("deploy model service: %w", err)
 	}
 
-	if category == embedderCategory {
+	if category == config.CategoryEmbedder {
 		if err := embeddingservice.Deploy(ctx, modelService, model, category, providerOpt); err != nil {
 			return fmt.Errorf("deploy embedding service: %w", err)
 		}

@@ -187,8 +187,9 @@ When a model has a `modelSource` block in the stack config, Pulumi creates:
    `backoffLimit: 3`, `ttlSecondsAfterFinished: 86400` (auto-cleaned after 24 h).
 
 The Job uses `harbor-creds` (mounted as `/root/.docker/config.json`) to authenticate
-against Harbor. The ORAS image is pulled from `ghcr.io` on cloud or from
-`<harborHostname>/images-infra/oras-project/oras:v1.3.1` on air-gapped on-prem.
+against Harbor. The ORAS image is pulled from where the installer mirrored it
+(`app-serving:orasImage`, `<harbor>/services/oras-project/oras:v1.3.1`), or from `ghcr.io`
+when no mirrored reference is set.
 
 The ModelService chart (Step 10) depends on both the PVC and the Job, so the inference
 pod never starts with an empty PVC.
@@ -393,9 +394,9 @@ app-serving:harborToken:
 | Harbor pull secret | Created as `harbor-creds` in each model namespace |
 | Model weights | Pulled from Harbor by ORAS Job into PVC (models with `modelSource`) |
 | Model PV | hostpath PV auto-created by Pulumi when `hostpathNode` is set; directory managed by `hostpath_dirs` Ansible role |
-| GPU scheduling | `gpuToleration` (optional) applied stack-wide to model pods and the ORAS pull Job |
+| GPU scheduling | Models select `nodegroup=generative` and tolerate `nvidia.com/gpu=present:NoSchedule`; the stack writes the toleration as `gpuToleration`, applied to model pods and the ORAS pull Job |
 | Images | Pulled from `harbor.harbor.svc.cluster.local/images-shaide/...` by cluster nodes (no internet) |
-| ORAS image | `harbor.harbor.svc.cluster.local/images-infra/oras-project/oras:v1.3.1` (air-gapped) |
+| ORAS image | `harbor.harbor.svc.cluster.local/services/oras-project/oras:v1.3.1`, mirrored by the installer |
 | Helm charts | Downloaded from OCI / HTTP by Pulumi on provisioner laptop (has internet) |
 | Node targeting | RKE2 node label (`workload: cpu` or `workload: gpu`) |
 | Namespaces | One per model, derived from slug (e.g. `llm-d-<slug>`) |

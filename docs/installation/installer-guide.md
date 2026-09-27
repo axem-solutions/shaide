@@ -475,7 +475,7 @@ Which certificate prompt appears depends on the platform selected above.
 
 | Prompt | Options / Input |
 |---|---|
-| `StorageClass for model PVCs` | Pick from the cluster's StorageClasses, or `(cluster default)` |
+| `StorageClass for model PVCs` | Pick from the cluster's StorageClasses, or `(cluster default)`. Asked once, only for models whose volume does not exist yet (every model on `Recreate`), pre-selecting the class in use. A model's existing PVC keeps its class, and a class the model manifest sets is used as is. Not asked on-prem, where model volumes use `hostpath` |
 | `StorageClass for monitoring PVCs (Loki, Prometheus)` | Pick from the cluster's StorageClasses, or `(cluster default)`. Asked once, and only for volumes that do not exist yet: an existing Loki or Prometheus PVC keeps its class, because a PVC's StorageClass cannot change |
 | `Shaide admin password` | Creates the initial administrator account |
 

@@ -29,6 +29,11 @@ func nodeAffinityMatchExpressions(selector map[string]string) []map[string]inter
 	return exprs
 }
 
+// ClaimName is the PersistentVolumeClaim holding the model's weights.
+func (m *Model) ClaimName() string {
+	return modelClaim(m.Slug)
+}
+
 func (m *Model) ReleasePostFix() string {
 	if m.ReleaseName == "" {
 		return "sim"

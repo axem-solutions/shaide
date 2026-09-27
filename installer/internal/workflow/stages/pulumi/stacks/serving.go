@@ -3,8 +3,6 @@ package stacks
 import (
 	"context"
 	"fmt"
-	"os"
-	"path"
 	"path/filepath"
 
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/core"
@@ -18,15 +16,6 @@ import (
 const (
 	servingModeUpdate   = "Update — keep model volumes"
 	servingModeRecreate = "Recreate — destroy the stack, deleting model volumes"
-
-	// Temporary cluster scheduling policy. Inference workloads are isolated on
-	// the GPU pool; the remaining platform workloads do not receive this
-	// toleration and therefore stay off its NoSchedule-tainted nodes.
-	inferenceNodeSelectorKey   = "nodegroup"
-	inferenceNodeSelectorValue = "generative"
-	inferenceTaintKey          = "nvidia.com/gpu"
-	inferenceTaintValue        = "present"
-	inferenceTaintEffect       = "NoSchedule"
 )
 
 // ServesModels reports whether anything is selected to serve on the cluster.
@@ -46,11 +35,7 @@ func ServesModels(rt *core.Runtime) bool {
 
 func DeployAppServing(rt *core.Runtime) error {
 	workDir := filepath.Join(rt.Bootstrap.Config.Paths.ProjectsDir, projectAppServing)
-
-	storageClass, err := promptStorageClass(rt, "StorageClass for model PVCs", "")
-	if err != nil {
-		return err
-	}
+	platform := cluster.Provider(rt.Bootstrap.Provider)
 
 	// Recreating tears the stack down before deploying it again, which deletes
 	// the model PersistentVolumeClaims along with it — the weights have to be
@@ -67,21 +52,26 @@ func DeployAppServing(rt *core.Runtime) error {
 
 	destroy := mode == servingModeRecreate
 
+	models, err := modelStorageClasses(rt, workDir, platform, selectedModels(rt), destroy)
+	if err != nil {
+		return err
+	}
+
+	registry := harborRegistryHostname(rt)
 	servingStack := serving.NewStack(
 		workDir,
 		stackpkg.Options{
-			Platform:   cluster.Provider(rt.Bootstrap.Provider),
+			Platform:   platform,
 			Kubeconfig: rt.Cluster.ConfigPath,
 			Context:    rt.Cluster.SelectedContext,
 		},
 		serving.Options{
-			Models:            selectedModels(rt),
-			HarborHostname:    harborRegistryHostname(rt),
-			HarborUser:        rt.Discovery.Auth.Username,
-			HarborToken:       rt.Discovery.Auth.Password,
-			ModelStorageClass: storageClass,
-			GPUToleration:     inferenceGPUToleration(),
-			Logf:              rt.Detailf,
+			Models:         models,
+			Images:         mirroredImages(rt.Bootstrap.Catalog.ServiceImages, registry),
+			HarborHostname: registry,
+			HarborUser:     rt.Discovery.Auth.Username,
+			HarborToken:    rt.Discovery.Auth.Password,
+			Logf:           rt.Detailf,
 		},
 	)
 
@@ -100,11 +90,8 @@ func DeployAppServing(rt *core.Runtime) error {
 	return nil
 }
 
-// selectedModels maps the model manifest onto the stack's model list.
-//
-// The manifest already says where each model was mirrored, so the Harbor
-// reference and the URI inside the volume are derived rather than configured.
-// Only a model carrying a serving block is deployed: the rest are published to
+// selectedModels maps the model manifest onto the stack's model list. Only a
+// model carrying a serving block is deployed: the rest are published to
 // Harbor for another consumer to pull.
 func selectedModels(rt *core.Runtime) []serving.Model {
 	registry := harborRegistryHostname(rt)
@@ -115,24 +102,13 @@ func selectedModels(rt *core.Runtime) []serving.Model {
 			continue
 		}
 
-		category := modelCategory(rt, model.Serving.Name)
-		if category == "" {
-			rt.Detailf(
-				"model %q has no packaged values directory; skipping it for serving",
-				model.Serving.Name,
-			)
-			continue
-		}
-
 		models = append(models, serving.Model{
-			Name:         model.Serving.Name,
-			Category:     category,
-			NodeSelector: inferenceNodeSelector(),
+			Name: model.Serving.Name,
+			ID:   model.ID,
 			HarborRef: fmt.Sprintf(
 				"%s/%s/%s:%s",
 				registry, model.HarborProject, model.HarborName, model.HarborTag,
 			),
-			ModelURI:     path.Join("hub", model.ID),
 			StorageSize:  model.Serving.StorageSize,
 			StorageClass: model.Serving.StorageClass,
 		})
@@ -141,32 +117,71 @@ func selectedModels(rt *core.Runtime) []serving.Model {
 	return models
 }
 
-// modelCategory finds which packaged category holds the model's values, so the
-// manifest does not have to repeat what the image already knows.
-func modelCategory(rt *core.Runtime, name string) string {
-	workDir := filepath.Join(rt.Bootstrap.Config.Paths.ProjectsDir, projectAppServing)
+// modelStorageClasses settles the StorageClass of each model's volume.
+//
+// A PVC's class cannot change, so on an update a model whose volume exists
+// keeps its class and is not asked about. The operator is asked once, for the
+// models without a volume, or for all of them when recreating, with the class
+// already in use pre-selected. The answer is set on those models only: as the
+// stack-wide default it would also reach an existing volume created without a
+// class, which cannot take one. A class the manifest pins is left alone, and
+// on-prem nothing is asked, since the stack puts every model volume on the
+// hostpath class there.
+func modelStorageClasses(
+	rt *core.Runtime,
+	workDir string,
+	platform cluster.Provider,
+	models []serving.Model,
+	destroy bool,
+) ([]serving.Model, error) {
+	if platform == cluster.OnPrem {
+		return models, nil
+	}
 
-	for _, category := range []string{serving.CategoryGenerative, serving.CategoryEmbedder} {
-		if _, err := os.Stat(filepath.Join(workDir, "deployments", "models", category, name)); err == nil {
-			return category
+	volumes, err := serving.ModelVolumes(workDir, models)
+	if err != nil {
+		return nil, fmt.Errorf("name model volumes: %w", err)
+	}
+	volumeOf := make(map[string]serving.ModelVolume, len(volumes))
+	for _, volume := range volumes {
+		volumeOf[volume.Model] = volume
+	}
+
+	var unsettled []int
+	preferred := ""
+	for i, model := range models {
+		volume, deployed := volumeOf[model.Name]
+		if model.StorageClass != "" || !deployed {
+			continue
 		}
+
+		class, found, err := existingPVCStorageClass(rt, volume.Namespace, volume.Claim)
+		if err != nil {
+			return nil, err
+		}
+		if found {
+			preferred = class
+		}
+		if found && !destroy {
+			rt.Detailf("keeping StorageClass %q of existing PVC %s/%s", displayStorageClass(class), volume.Namespace, volume.Claim)
+			models[i].StorageClass = class
+			continue
+		}
+
+		unsettled = append(unsettled, i)
 	}
 
-	return ""
-}
-
-// inferenceNodeSelector applies the temporary installer-wide placement policy.
-// Model-manifest placement becomes configurable again when the scheduler grows
-// support for multiple inference pools.
-func inferenceNodeSelector() map[string]string {
-	return map[string]string{inferenceNodeSelectorKey: inferenceNodeSelectorValue}
-}
-
-func inferenceGPUToleration() *serving.Toleration {
-	return &serving.Toleration{
-		Key:      inferenceTaintKey,
-		Operator: "Equal",
-		Value:    inferenceTaintValue,
-		Effect:   inferenceTaintEffect,
+	if len(unsettled) == 0 {
+		return models, nil
 	}
+
+	selected, err := promptStorageClass(rt, "StorageClass for model PVCs", preferred)
+	if err != nil {
+		return nil, err
+	}
+	for _, i := range unsettled {
+		models[i].StorageClass = selected
+	}
+
+	return models, nil
 }

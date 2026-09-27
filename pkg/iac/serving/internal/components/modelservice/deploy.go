@@ -57,7 +57,7 @@ func Deploy(
 	}
 	if model.ModelSource != nil {
 		// Override modelArtifacts.uri to load weights from the pre-populated PVC.
-		pvcName := model.Slug + "-model"
+		pvcName := model.ClaimName()
 		uri := fmt.Sprintf("pvc+hf://%s/%s", pvcName, model.ModelSource.ModelUri)
 
 		modelArtifacts["uri"] = pulumi.String(uri)
