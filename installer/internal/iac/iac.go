@@ -64,6 +64,10 @@ type Deployer struct {
 	SkipRefresh bool
 	Target      *ClusterTarget
 	Confirmer   Confirmer
+
+	// lookup reads live objects for the cluster check. Nil builds one from
+	// Target when it is needed.
+	lookup ObjectLookup
 }
 
 func NewDeployer(opts DeployerOptions) (*Deployer, error) {

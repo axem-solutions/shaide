@@ -24,7 +24,10 @@ Confirm the mount points at the same host directory used previously and that
 `PULUMI_CONFIG_PASSPHRASE` is exported.
 
 **The stack state belongs to another cluster** - a stack's state records the cluster
-it was deployed to, and it does not match the selected Kubernetes context. Deploying
+it was deployed to, and it does not match the selected Kubernetes context. For state
+written by an older installer, which did not record the context, the installer compares
+the recorded object UIDs with the selected cluster instead: objects that exist there
+only under different UIDs mean the state is another cluster's. Deploying
 would move every resource to the selected cluster and delete the originals from the
 recorded one, so the installer stops before changing anything. Use the state directory
 of the selected cluster, or move that stack's state aside so the run starts fresh.
@@ -33,7 +36,7 @@ Before deploying a stack, the installer also asks for confirmation (default `Abo
 
 | Prompt | Meaning |
 | --- | --- |
-| `...deployed without a verifiable cluster` | The state was written by an older installer that did not record the context, or with a context the kubeconfig no longer defines |
+| `...deployed without a verifiable cluster` | The state records no usable context (an older installer, or a context the kubeconfig no longer defines), and no recorded object could be compared on the selected cluster: they are missing or unreadable. When one of them is live with its recorded UID, the stack is verified without asking. The installer log names the objects it checked |
 | `...will first delete N resources left pending` | An interrupted update left resources pending deletion; the next update deletes them first. The installer log lists each one and its cluster |
 
 ## Existing Harbor

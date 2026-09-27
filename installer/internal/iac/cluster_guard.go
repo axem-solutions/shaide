@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/pulumi/pulumi/sdk/v3/go/auto"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/apitype"
@@ -50,15 +51,29 @@ type clusterReport struct {
 	// delete the originals from the recorded one.
 	Mismatched []string
 
-	// Live Kubernetes providers whose cluster cannot be established: recorded
-	// without a context (the kubeconfig's current-context at the time), or
-	// with a context the kubeconfig no longer knows.
-	Unverified []string
+	// Live Kubernetes providers whose cluster cannot be established from
+	// their context: recorded without one (the kubeconfig's current-context at
+	// the time), or with one the kubeconfig no longer knows.
+	Unverified []unverifiedProvider
 
 	// Resources an earlier, interrupted update left pending deletion. The next
 	// update deletes them before anything else.
 	PendingDeletes []string
 }
+
+// unverifiedProvider is a provider whose context does not establish its
+// cluster. key is its "<urn>::<id>" reference, which its resources carry.
+type unverifiedProvider struct {
+	key    string
+	reason string
+}
+
+// otherClusterAdvice is how the operator gets out of a state that belongs to
+// another cluster.
+const otherClusterAdvice = "Use the state directory of the selected cluster, or move this stack's state aside"
+
+// uidLookupTimeout bounds reading recorded objects from the selected cluster.
+const uidLookupTimeout = 30 * time.Second
 
 // checkClusterTarget refuses to deploy a stack whose state belongs to another
 // cluster, and asks before deploying one it cannot verify or that carries
@@ -101,14 +116,18 @@ func (d *Deployer) checkClusterTarget(ctx context.Context, stack auto.Stack) err
 			Stack:    d.StackName,
 			Selected: d.Target.Context,
 			Reason: "the stack state belongs to another cluster; deploying would move every resource " +
-				"to the selected cluster and delete the originals. Use the state directory of the " +
-				"selected cluster, or move this stack's state aside",
+				"to the selected cluster and delete the originals. " + otherClusterAdvice,
 		}
 	}
 
-	if len(report.Unverified) > 0 {
-		for _, provider := range report.Unverified {
-			d.logf("stack %q: %s", d.StackName, provider)
+	unverified, err := d.verifyByObjectUID(ctx, resources, report.Unverified)
+	if err != nil {
+		return err
+	}
+
+	if len(unverified) > 0 {
+		for _, provider := range unverified {
+			d.logf("stack %q: %s", d.StackName, provider.reason)
 		}
 		if err := d.confirm(fmt.Sprintf(
 			"Stack %s was deployed without a verifiable cluster (see Logs). Deploy it to %s anyway?",
@@ -132,6 +151,57 @@ func (d *Deployer) checkClusterTarget(ctx context.Context, stack auto.Stack) err
 	}
 
 	return nil
+}
+
+// verifyByObjectUID settles providers whose context does not establish their
+// cluster by comparing the UIDs the state recorded with the live objects on
+// the selected cluster. It returns the providers it could not settle.
+func (d *Deployer) verifyByObjectUID(
+	ctx context.Context,
+	resources []apitype.ResourceV3,
+	providers []unverifiedProvider,
+) ([]unverifiedProvider, error) {
+	if len(providers) == 0 {
+		return nil, nil
+	}
+
+	lookup := d.lookup
+	if lookup == nil {
+		clusterLookup, err := clusterObjectLookup(*d.Target)
+		if err != nil {
+			d.logf("stack %q: cannot read context %q to compare object UIDs: %v", d.StackName, d.Target.Context, err)
+			return providers, nil
+		}
+		lookup = clusterLookup
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, uidLookupTimeout)
+	defer cancel()
+
+	var remaining []unverifiedProvider
+	for _, provider := range providers {
+		verdict, detail := verifyByUID(ctx, lookup, providerObjects(resources, provider.key))
+
+		switch verdict {
+		case uidSameCluster:
+			d.logf("stack %q: %s; verified on %q by object UID: %s", d.StackName, provider.reason, d.Target.Context, detail)
+		case uidOtherCluster:
+			d.logf("stack %q: %s; %s", d.StackName, provider.reason, detail)
+			return nil, &ClusterTargetError{
+				Stack:    d.StackName,
+				Selected: d.Target.Context,
+				Reason: "the stack state belongs to another cluster: its objects exist on the selected cluster " +
+					"under different UIDs. " + otherClusterAdvice,
+			}
+		default:
+			remaining = append(remaining, unverifiedProvider{
+				key:    provider.key,
+				reason: provider.reason + "; " + detail,
+			})
+		}
+	}
+
+	return remaining, nil
 }
 
 // confirm defaults to Abort: every question here guards against deleting
@@ -204,14 +274,15 @@ func inspectClusterTarget(
 				name, recorded, contextServer(kubeconfig, recorded), selected, contextServer(kubeconfig, selected),
 			))
 		case clusterUnknown:
+			key := string(resource.URN) + "::" + resource.ID.String()
 			if recorded == "" {
-				report.Unverified = append(report.Unverified, fmt.Sprintf(
+				report.Unverified = append(report.Unverified, unverifiedProvider{key: key, reason: fmt.Sprintf(
 					"provider %s has no recorded context; it targeted the kubeconfig's current-context at the time", name,
-				))
+				)})
 			} else {
-				report.Unverified = append(report.Unverified, fmt.Sprintf(
+				report.Unverified = append(report.Unverified, unverifiedProvider{key: key, reason: fmt.Sprintf(
 					"provider %s targets context %q, which the kubeconfig does not define", name, recorded,
-				))
+				)})
 			}
 		}
 	}
