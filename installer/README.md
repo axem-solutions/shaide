@@ -73,7 +73,8 @@ go test ./...
 | `cmd/installer` | Entrypoint |
 | `internal/config` | Runtime defaults, storage paths, project staging, and the image and model catalog |
 | `internal/workflow` | Stage runner, recovery behavior and workflow state |
-| `internal/workflow/stages` | `bootstrap`, `kubernetes`, `models`, `discovery`, `artifact` and `pulumi` stages |
+| `internal/workflow/stages` | `bootstrap`, `kubernetes`, `models`, `nodes`, `discovery`, `artifact` and `pulumi` stages |
+| `internal/placement` | Node labels that decide where workloads run |
 | `internal/ui` | Bubble Tea terminal UI |
 | `internal/kube` | Kubernetes helpers |
 | `internal/harbor` | Harbor auth and API helpers |

@@ -67,20 +67,8 @@ func (p *Reporter) MultiSelect(title string, options []string) ([]string, error)
 func (p *Reporter) Choose(prompt core.ChoicePrompt) ([]string, error) {
 	replyCh := make(chan messages.PromptReply, 1)
 
-	rows := make([]messages.ChoiceRow, 0, len(prompt.Rows))
-	for _, row := range prompt.Rows {
-		rows = append(rows, messages.ChoiceRow{
-			Cells:   row.Cells,
-			Detail:  row.Detail,
-			Options: row.Options,
-			Current: row.Current,
-		})
-	}
-
 	p.program.Send(messages.PromptChoiceMessage{
-		Title:   prompt.Title,
-		Columns: prompt.Columns,
-		Rows:    rows,
+		Prompt:  prompt,
 		ReplyCh: replyCh,
 	})
 

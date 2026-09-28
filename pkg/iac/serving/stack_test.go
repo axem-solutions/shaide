@@ -62,6 +62,26 @@ func TestModelsInputPlacesModels(t *testing.T) {
 	}
 }
 
+// A model the installer placed on its own pool keeps that selector instead of
+// the default GPU pool.
+func TestModelsInputKeepsAModelsOwnNodeSelector(t *testing.T) {
+	project := packagedProject(t, map[string]string{"GPT-OSS-20B": servingconfig.CategoryGenerative})
+	pool := map[string]string{
+		"axem.dev/model-gpt-oss-20b":   "true",
+		"axem.dev/workload-generative": "true",
+	}
+
+	input := modelsInput(project, []Model{{Name: "GPT-OSS-20B", NodeSelector: pool}}, nil)
+
+	got := input.Generative[0].NodeSelector
+	if len(got) != len(pool) || got["axem.dev/model-gpt-oss-20b"] != "true" || got["axem.dev/workload-generative"] != "true" {
+		t.Errorf("node selector = %v, want the model's own pool %v", got, pool)
+	}
+	if _, ok := got["nodegroup"]; ok {
+		t.Errorf("node selector = %v, want the default GPU pool replaced", got)
+	}
+}
+
 // Serving a model from the wrong values directory would deploy the wrong
 // runtime, so a model with no packaged values is dropped and logged.
 func TestModelsInputDropsUnpackagedModels(t *testing.T) {

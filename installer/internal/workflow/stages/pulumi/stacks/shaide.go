@@ -4,6 +4,7 @@ import (
 	"context"
 	"path/filepath"
 
+	"github.com/axem-solutions/ai_platform/installer/internal/placement"
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/core"
 	"github.com/axem-solutions/ai_platform/pkg/iac/shaide"
 	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
@@ -21,6 +22,12 @@ func DeployAppShaide(rt *core.Runtime) error {
 		shaide.Options{
 			GatewayHostname: rt.Bootstrap.GatewayHostname,
 			Images:          mirroredImages(rt.Bootstrap.Catalog.ServiceImages, harborRegistryHostname(rt)),
+
+			// Prefer the nodes the node assignment stage labelled for CPU
+			// work. The preference is soft, so the components still schedule
+			// if those nodes are full.
+			NodeSelectorKey: placement.CPULabel,
+			NodeSelector:    placement.Value,
 		},
 	)
 

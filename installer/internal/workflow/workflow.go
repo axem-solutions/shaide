@@ -12,6 +12,7 @@ import (
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/stages/discovery"
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/stages/kubernetes"
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/stages/models"
+	"github.com/axem-solutions/ai_platform/installer/internal/workflow/stages/nodes"
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/stages/pulumi"
 )
 
@@ -34,6 +35,7 @@ func defaultStages() []core.Stage {
 		bootstrap.Stage(),
 		kubernetes.Stage(),
 		models.Stage(),
+		nodes.Stage(),
 		discovery.Stage(),
 		artifact.Stage(),
 		pulumi.Stage(),

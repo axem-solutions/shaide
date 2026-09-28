@@ -83,14 +83,43 @@ func TestSelectedModelsCarryTheCatalog(t *testing.T) {
 		t.Fatalf("selected %d models, want 1", len(models))
 	}
 
+	got := models[0]
 	want := serving.Model{
 		Name:        "GPT-OSS-20B",
 		ID:          "openai/gpt-oss-20b",
 		HarborRef:   "harbor.harbor.svc.cluster.local/ai-models/gpt-oss-20b:6cee5e81ee83",
 		StorageSize: "70Gi",
 	}
-	if models[0] != want {
-		t.Errorf("model = %+v, want %+v", models[0], want)
+	if got.Name != want.Name || got.ID != want.ID || got.HarborRef != want.HarborRef ||
+		got.StorageSize != want.StorageSize || got.StorageClass != "" {
+		t.Errorf("model = %+v, want %+v", got, want)
+	}
+}
+
+// Each model runs on its own pool, the nodes the node assignment stage
+// labelled for it, which also carry the class of the pool.
+func TestModelsRunOnTheirOwnPool(t *testing.T) {
+	embedder := gptOSS()
+	embedder.Name, embedder.Slug, embedder.Category = "BGE-M3", "bge-m3", catalog.CategoryEmbedder
+
+	rt := runtimeWith(t, t.TempDir(), []catalog.Model{gptOSS(), embedder})
+	models := selectedModels(rt)
+
+	want := []map[string]string{
+		{"axem.dev/model-gpt-oss-20b": "true", "axem.dev/workload-generative": "true"},
+		{"axem.dev/model-bge-m3": "true", "axem.dev/workload-embedding": "true"},
+	}
+	for i, selector := range want {
+		got := models[i].NodeSelector
+		if len(got) != len(selector) {
+			t.Errorf("%s NodeSelector = %v, want %v", models[i].Name, got, selector)
+			continue
+		}
+		for key, value := range selector {
+			if got[key] != value {
+				t.Errorf("%s NodeSelector = %v, want %v", models[i].Name, got, selector)
+			}
+		}
 	}
 }
 

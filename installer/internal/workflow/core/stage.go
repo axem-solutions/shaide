@@ -28,6 +28,37 @@ type ChoicePrompt struct {
 	Title   string
 	Columns []string
 	Rows    []ChoiceRow
+
+	// Groups, when set, shows the rows under a header per option instead of
+	// in one table, in this order, so moving a row to another option moves it
+	// to that group. Every row option must be one of them.
+	Groups []ChoiceGroup
+
+	// ClearOption is the option a row is set to when it is cleared, for
+	// example "unassigned". Empty disables clearing.
+	ClearOption string
+
+	// Check reports, for the current choices, the status shown in each group
+	// header and whether the choices can be submitted. Nil accepts any
+	// choice.
+	Check func(values []string) ChoiceCheck
+}
+
+type ChoiceGroup struct {
+	Option string
+	Title  string
+}
+
+type ChoiceCheck struct {
+	// Groups maps an option to the status shown in its group header.
+	Groups map[string]GroupStatus
+	// Blocking, when set, explains why the choices cannot be submitted yet.
+	Blocking string
+}
+
+type GroupStatus struct {
+	OK   bool
+	Text string
 }
 
 type ChoiceRow struct {

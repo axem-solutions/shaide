@@ -11,6 +11,12 @@ import (
 type Options struct {
 	GatewayHostname string
 
+	// NodeSelectorKey and NodeSelector name the node label the components
+	// prefer (soft node affinity), for example "axem.dev/workload-cpu" and
+	// "true".
+	NodeSelectorKey string
+	NodeSelector    string
+
 	// Images maps an upstream image name, as the image manifest lists it
 	// (e.g. "qdrant/qdrant"), to the reference the cluster pulls it from. The
 	// stack picks the images it deploys and ignores the rest.
@@ -32,6 +38,8 @@ func NewStack(projectDir string, common stackpkg.Options, options ...Options) *S
 		common,
 		appconfig.Sources{
 			GatewayHostname: shaideOptions.GatewayHostname,
+			NodeSelectorKey: shaideOptions.NodeSelectorKey,
+			NodeSelector:    shaideOptions.NodeSelector,
 			Images:          shaideOptions.Images,
 		},
 	)}

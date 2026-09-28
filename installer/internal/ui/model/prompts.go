@@ -55,8 +55,8 @@ func (m Model) startChoicePrompt(msg messages.PromptChoiceMessage) Model {
 
 	m.Mode = ModeChoice
 	m.ReplyCh = msg.ReplyCh
-	m.PromptTitle = msg.Title
-	m.Choice = newChoiceModel(msg, m.HasDarkBackground)
+	m.PromptTitle = msg.Prompt.Title
+	m.Choice = newChoiceModel(msg.Prompt, m.HasDarkBackground)
 	m.Input.Blur()
 	m.resizeComponents()
 

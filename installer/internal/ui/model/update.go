@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/axem-solutions/ai_platform/installer/internal/ui/messages"
+	"github.com/axem-solutions/ai_platform/installer/internal/workflow/core"
 )
 
 var ErrPromptAlreadyActive = errors.New("another prompt is already active")
@@ -13,7 +14,7 @@ var ErrNoSelectOptions = errors.New("select prompt has no options")
 
 // validateChoiceRows rejects a choice prompt the table cannot show: every row
 // needs an option to be set to.
-func validateChoiceRows(rows []messages.ChoiceRow) error {
+func validateChoiceRows(rows []core.ChoiceRow) error {
 	if len(rows) == 0 {
 		return ErrNoSelectOptions
 	}
@@ -98,7 +99,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		if err := validateChoiceRows(msg.Rows); err != nil {
+		if err := validateChoiceRows(msg.Prompt.Rows); err != nil {
 			msg.ReplyCh <- messages.PromptReply{Err: err}
 			return m, nil
 		}
