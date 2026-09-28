@@ -55,7 +55,7 @@ shaide - see [Compute](../cluster-requirements/compute.md).
 | Symptom | Cause |
 | --- | --- |
 | Cannot read previous state | Wrong passphrase or state directory |
-| Model manifest not readable | Place `models.yaml` under `<STORAGE_PATH>/manifests/`, or set `MODEL_MANIFEST_PATH` |
+| Model manifest does not exist or is not readable | Place `models.yaml` under `<STORAGE_PATH>/manifests/`, or set `MODEL_MANIFEST_PATH` |
 | Requires a terminal | Missing `-it` on `docker run` |
 | Times out reaching cluster | kubeconfig or network path |
 

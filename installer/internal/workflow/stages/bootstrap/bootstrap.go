@@ -110,6 +110,7 @@ func prepareAssets(rt *core.Runtime) error {
 			ImageManifestPath: paths.ImageManifestPath,
 			ModelManifestPath: paths.ModelManifestPath,
 			ImagesDir:         paths.ImagesDir,
+			Describe:          paths.Describe,
 		})
 	if err != nil {
 		return fmt.Errorf("load catalog: %w", err)

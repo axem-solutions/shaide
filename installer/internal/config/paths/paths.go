@@ -1,6 +1,9 @@
 package paths
 
-import "path/filepath"
+import (
+	"path/filepath"
+	"strings"
+)
 
 const (
 	// Mount the kubeconfig to:
@@ -87,4 +90,27 @@ func (p Paths) StorageDirs() []string {
 		p.Logs,
 		p.Temp,
 	}
+}
+
+// Relative gives path relative to the storage root. ok is false for a path
+// outside it.
+func (p Paths) Relative(path string) (rel string, ok bool) {
+	rel, err := filepath.Rel(p.StorageRoot, filepath.Clean(path))
+	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", false
+	}
+
+	return rel, true
+}
+
+// Describe names a path the way the operator knows it. The storage root is a
+// host directory the operator bind-mounted, and its host path cannot be seen
+// reliably from inside the container, so a path under it is given relative to
+// it: "logs/x.log in the storage directory". Any other path is returned as is.
+func (p Paths) Describe(path string) string {
+	if rel, ok := p.Relative(path); ok {
+		return rel + " in the storage directory"
+	}
+
+	return path
 }

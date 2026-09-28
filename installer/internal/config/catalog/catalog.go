@@ -1,7 +1,9 @@
 package catalog
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"strings"
 )
@@ -26,6 +28,17 @@ type LoadOptions struct {
 	ImageManifestPath string
 	ModelManifestPath string
 	ImagesDir         string
+
+	// Describe names a path for the operator, e.g. relative to the storage
+	// directory they mounted. Nil shows the path as is.
+	Describe func(path string) string
+}
+
+func (opts LoadOptions) describe(path string) string {
+	if opts.Describe == nil {
+		return path
+	}
+	return opts.Describe(path)
 }
 
 func (opts LoadOptions) Validate() error {
@@ -60,10 +73,11 @@ func (opts LoadOptions) checkInputs() error {
 	}
 
 	if _, err := os.Stat(opts.ModelManifestPath); err != nil {
-		return fmt.Errorf(
-			"model manifest %q is not readable: %w (place models.yaml there before running the installer, "+
-				"or point %s at another location)",
-			opts.ModelManifestPath, err, "MODEL_MANIFEST_PATH")
+		const remedy = "place models.yaml there before running the installer, or point MODEL_MANIFEST_PATH at another location"
+		if errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("model manifest %s does not exist (%s)", opts.describe(opts.ModelManifestPath), remedy)
+		}
+		return fmt.Errorf("model manifest %s is not readable: %w (%s)", opts.describe(opts.ModelManifestPath), err, remedy)
 	}
 
 	return nil
