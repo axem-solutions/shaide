@@ -120,7 +120,9 @@ files always match the installer version. Pulumi state and stack config live out
 and survive.
 
 Press `ctrl+y` in the TUI to save visible installer logs to
-`/var/shaide-installer/logs/`.
+`/var/shaide-installer/logs/`, which is `logs/` in the host storage directory. The installer
+names the saved file relative to that directory, since the container cannot reliably tell the
+host path of its bind mount.
 
 ## Common Developer Tasks
 

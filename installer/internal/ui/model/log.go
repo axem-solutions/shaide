@@ -68,7 +68,18 @@ func (m Model) handleLogsSaved(msg logsSavedMsg) Model {
 		return m
 	}
 
-	m.LogSaveStatus = fmt.Sprintf("saved %s to %s", pluralize(msg.LineCount, "line", "lines"), msg.Path)
+	// The file is on the host, in the directory the operator mounted as the
+	// storage root; the container path would not lead them to it. The header
+	// status stays short, as it is dropped when it does not fit, so the log
+	// carries the full sentence.
+	storage := paths.DefaultPaths()
+	shown := msg.Path
+	if rel, ok := storage.Relative(msg.Path); ok {
+		shown = rel
+	}
+
+	m.appendLog(messages.LogEntry{Line: "Logs saved to " + storage.Describe(msg.Path)})
+	m.LogSaveStatus = fmt.Sprintf("saved %s to %s", pluralize(msg.LineCount, "line", "lines"), shown)
 	return m
 }
 

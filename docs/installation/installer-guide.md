@@ -556,8 +556,8 @@ Do not delete the persistent installer storage directory unless you intentionall
 | Installer cannot reach the API server | Confirm `kubectl get nodes` works from the provisioner machine.                         |
 | Harbor preload fails with SSH error   | Confirm SSH access works from the provisioner machine to the target cluster nodes.      |
 | Installer state unlock fails          | Confirm `PULUMI_CONFIG_PASSPHRASE` matches the passphrase used on the previous run.     |
-| Installer logs are needed             | Press `Ctrl+Y` in the TUI to save logs under `<STORAGE_PATH>/logs/`.                    |
-| `model manifest ... is not readable` | The manifest was not placed under `<STORAGE_PATH>/manifests/`, or `MODEL_MANIFEST_PATH` points elsewhere. |
+| Installer logs are needed             | Press `Ctrl+Y` in the TUI to save logs under `<STORAGE_PATH>/logs/`. The installer names the file relative to the storage directory, e.g. `logs/installer-logs-20260927-165610.log`. |
+| `model manifest ... does not exist` or `... is not readable` | The manifest was not placed under `<STORAGE_PATH>/manifests/`, or `MODEL_MANIFEST_PATH` points elsewhere. |
 | `/var/shaide-installer is not a mount point` | The storage bind mount is missing. The TUI may let you continue, but state and logs will not persist. |
 | `Hugging Face token was not set`      | `HF_TOKEN` is required during bootstrap.                                               |
 | Image pull failures in the artifact stage | The provisioning machine cannot reach the registry named by an entry's `source`.   |
