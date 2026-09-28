@@ -28,6 +28,10 @@ type Model struct {
 	// StorageClass pins the model's volume to a class. Empty uses
 	// Options.ModelStorageClass.
 	StorageClass string
+
+	// NodeSelector names the node labels the model's pods require, for
+	// example its own pool's. Empty uses the stack's default GPU pool.
+	NodeSelector map[string]string
 }
 
 // ModelVolume is the PersistentVolumeClaim holding a model's weights.
@@ -116,6 +120,20 @@ func ModelVolumes(projectDir string, models []Model) ([]ModelVolume, error) {
 // on the GPU pool, with its weights under hub/<ID> in its volume. A model with
 // no packaged values is dropped rather than guessed at: serving it from the
 // wrong values directory would deploy the wrong runtime.
+// nodeSelector is the model's own selector, or the default GPU pool's.
+func nodeSelector(model Model) map[string]string {
+	if len(model.NodeSelector) == 0 {
+		return servingconfig.DefaultInferenceNodeSelector()
+	}
+
+	selector := make(map[string]string, len(model.NodeSelector))
+	for key, value := range model.NodeSelector {
+		selector[key] = value
+	}
+
+	return selector
+}
+
 func modelsInput(projectDir string, models []Model, logf func(format string, args ...any)) servingconfig.ModelsInput {
 	var input servingconfig.ModelsInput
 
@@ -131,7 +149,7 @@ func modelsInput(projectDir string, models []Model, logf func(format string, arg
 		entry := servingconfig.ModelInput{
 			Name:         model.Name,
 			Enabled:      true,
-			NodeSelector: servingconfig.DefaultInferenceNodeSelector(),
+			NodeSelector: nodeSelector(model),
 			ModelSource: &servingconfig.ModelSourceInput{
 				HarborRef:    model.HarborRef,
 				ModelUri:     path.Join("hub", model.ID),

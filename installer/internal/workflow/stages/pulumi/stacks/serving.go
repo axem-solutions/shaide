@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/axem-solutions/ai_platform/installer/internal/iac"
+	"github.com/axem-solutions/ai_platform/installer/internal/placement"
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/core"
 	"github.com/axem-solutions/ai_platform/pkg/iac/serving"
 	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
@@ -126,7 +127,8 @@ func destroyAppServing(rt *core.Runtime, workDir string, platform cluster.Provid
 }
 
 // selectedModels maps the models to serve onto the stack's model list. The
-// Harbor reference is derived from where the artifact stage put each model.
+// Harbor reference is derived from where the artifact stage put each model,
+// and each model runs on the pool the node assignment stage labelled for it.
 func selectedModels(rt *core.Runtime) []serving.Model {
 	registry := harborRegistryHostname(rt)
 
@@ -139,7 +141,8 @@ func selectedModels(rt *core.Runtime) []serving.Model {
 				"%s/%s/%s:%s",
 				registry, model.HarborProject, model.HarborName, model.HarborTag,
 			),
-			StorageSize: model.StorageSize,
+			StorageSize:  model.StorageSize,
+			NodeSelector: placement.ModelSelector(model),
 		})
 	}
 

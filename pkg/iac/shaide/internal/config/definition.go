@@ -129,6 +129,11 @@ const (
 type Sources struct {
 	GatewayHostname string
 
+	// NodeSelectorKey and NodeSelector name the node label the components
+	// prefer to run on. The installer sets them to the CPU pool's label.
+	NodeSelectorKey string
+	NodeSelector    string
+
 	// Images maps an upstream image name to the reference the cluster pulls
 	// it from. It may hold images other stacks deploy; only the ones named
 	// above are read.
@@ -203,6 +208,20 @@ func runtimeEntries(opts stack.Options, sources Sources) []stackconfig.Entry[Val
 			Source: stackconfig.Source{Value: optionalSource(sources.GatewayHostname)},
 			Setter: func(cfg *Values, root *pulumiconfig.Config) {
 				cfg.Routing.GatewayHostname = root.Get(KeyGatewayHostname.String())
+			},
+		},
+		{
+			Key:    KeyNodeSelectorKey,
+			Source: stackconfig.Source{Value: optionalSource(sources.NodeSelectorKey)},
+			Setter: func(cfg *Values, root *pulumiconfig.Config) {
+				cfg.NodeSelectorKey = root.Get(KeyNodeSelectorKey.String())
+			},
+		},
+		{
+			Key:    KeyNodeSelector,
+			Source: stackconfig.Source{Value: optionalSource(sources.NodeSelector)},
+			Setter: func(cfg *Values, root *pulumiconfig.Config) {
+				cfg.NodeSelector = root.Get(KeyNodeSelector.String())
 			},
 		},
 		{
@@ -388,8 +407,6 @@ func optionalEntries() []stackconfig.Entry[Values] {
 		set func(*Values, string)
 	}{
 		{KeyInfraStackRef, func(c *Values, v string) { c.Routing.InfraStackRef = v }},
-		{KeyNodeSelectorKey, func(c *Values, v string) { c.NodeSelectorKey = v }},
-		{KeyNodeSelector, func(c *Values, v string) { c.NodeSelector = v }},
 		{KeyNodeSelectorShaide, func(c *Values, v string) { c.NodeSelectorShaide = v }},
 		{KeyNodeSelectorControlPanel, func(c *Values, v string) { c.NodeSelectorControlPanel = v }},
 		{KeyNodeSelectorWebapp, func(c *Values, v string) { c.NodeSelectorWebApp = v }},

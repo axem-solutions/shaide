@@ -112,6 +112,7 @@ The installation has two parts:
 | `Bootstrap`           | Validate storage, installer state, and the manifests.       |
 | `Kubernetes`          | Load kubeconfig and connect to the target cluster.          |
 | `Select models`       | Choose which supported models to install, keep or uninstall. |
+| `Assign nodes`        | Assign every node to a model's pool, to CPU work, or to nothing, and label it. |
 | `Discovery`           | Discover Harbor and determine the installation type.         |
 | `Populate Harbor`     | Upload images and selected model artifacts.                 |
 | `Deploy platform`     | Deploy Gateway Provider, App-Serving, App-Shaide, and Monitoring. |
@@ -293,6 +294,62 @@ Face repository and revision are shown below the table.
 Uninstalling a model removes it from the serving stack, which deletes its volume and the
 weights on it, and deletes its artifact from Harbor. Uninstalling the last served model
 destroys the serving stack.
+
+### `Assign nodes` stage
+
+This stage decides which nodes each workload runs on. Every model to serve gets its own
+pool of nodes; the platform itself (app-shaide, app-mcp) runs on the CPU only nodes.
+
+During this stage, the installer:
+
+- lists the cluster's nodes with their GPU, CPU and memory, as the NVIDIA GPU Operator and
+  the node report them
+- leaves out nodes reserved by a taint shaide does not tolerate, such as a control plane
+  or a system pool; GPU nodes tainted `nvidia.com/gpu` are listed
+- shows the nodes grouped by pool: one group per selected model, `CPU only` and
+  `Unassigned`
+- labels the nodes once you confirm the changes
+
+A node starts in the group its labels already put it in, so a rerun that changes nothing
+is a single confirm. On a first run, nodes without a GPU start in `CPU only` and GPU nodes
+in `Unassigned`.
+
+| Rule | Why |
+|---|---|
+| Every model's pool has at least one node | The model has nowhere to run otherwise |
+| A pool has one GPU type (`nvidia.com/gpu.product`) | A model is tuned for one GPU |
+| Every node in a pool has at least the GPUs one pod of the model needs | The pod would never schedule |
+| At least one node is `CPU only` | The platform itself runs there |
+
+Each group header shows whether its pool is valid, and `Continue` is blocked until every
+pool is. A node without a GPU cannot join a model's pool.
+
+| Key | Action |
+|---|---|
+| `j` / `k`, arrow keys | Move between nodes |
+| `1`-`9` | Move the node, or the selected nodes, to that group |
+| `enter` / `space` | Open the "move to" dropdown, or confirm on `Continue` |
+| `V` | Start or end selecting several nodes |
+| `x` | Move the node to `Unassigned` |
+| `u` | Put the node back where it started |
+| `?` | Show all keys |
+
+The labels the installer sets are booleans set to `"true"`:
+
+| Group | Labels |
+|---|---|
+| A model's pool | `axem.dev/model-<slug>`, and `axem.dev/workload-generative` or `axem.dev/workload-embedding` |
+| `CPU only` | `axem.dev/workload-cpu` |
+| `Unassigned` | none |
+
+Any other `axem.dev/model-*` or `axem.dev/workload-*` label on a listed node is removed,
+which also clears the pools of uninstalled models. Before applying, the installer logs
+every change and asks to confirm; `Back to assignment` returns to the view with the edits
+kept.
+
+> [!NOTE]
+> On a cloud cluster, labels set here are lost when the node pool replaces a node. Set the
+> same labels on the node pool as well.
 
 ### `Discovery` stage
 

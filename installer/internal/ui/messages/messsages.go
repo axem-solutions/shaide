@@ -1,6 +1,9 @@
 package messages
 
-import tea "charm.land/bubbletea/v2"
+import (
+	tea "charm.land/bubbletea/v2"
+	"github.com/axem-solutions/ai_platform/installer/internal/workflow/core"
+)
 
 type LogMessage struct {
 	Entries []LogEntry
@@ -49,17 +52,8 @@ type PromptMultiSelectMessage struct {
 // PromptChoiceMessage asks for one option per table row. The reply carries
 // the chosen option of every row, in row order.
 type PromptChoiceMessage struct {
-	Title   string
-	Columns []string
-	Rows    []ChoiceRow
+	Prompt  core.ChoicePrompt
 	ReplyCh chan<- PromptReply
-}
-
-type ChoiceRow struct {
-	Cells   []string
-	Detail  string
-	Options []string
-	Current string
 }
 
 type PromptReply struct {
