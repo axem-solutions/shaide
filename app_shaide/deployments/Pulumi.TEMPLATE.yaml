@@ -34,7 +34,6 @@
 #     rustfsNotifyWebhookQueueDirShaide        — RustFS → shaide-server event webhook
 #
 #   Secrets (set via `pulumi config set --secret <key> <value>`):
-#     ghcrToken     — GHCR PAT (read:packages) or Harbor robot secret (see harborHostname below)
 #     adminAuthKey  — shaide-server admin auth key
 #     s3Password    — RustFS S3 credential (paired with s3User above)
 #     jwtSecret     — shaide-server JWT signing secret; random string, at least 32 characters
@@ -61,12 +60,6 @@
 #   shaidePVSize, rustfsPVSize, qdrantPVSize
 #                     — PV/PVC size per component; default: 5Gi each
 #
-#   lbAnnotations              — map of annotations applied to the shaide-server Service when
-#                                 it is type LoadBalancer (i.e. neither infraStackRef nor
-#                                 gatewayHostname is set). Cloud-specific, e.g.:
-#                                   GCP:      cloud.google.com/load-balancer-type: External
-#                                   AWS:      service.beta.kubernetes.io/aws-load-balancer-type: external
-#                                   MetalLB:  metallb.universe.tf/address-pool: <pool-name>
 #   serviceAccountAnnotations  — map of annotations on the shaide-server ServiceAccount, for
 #                                 workload-identity bindings. Cloud-specific, e.g.:
 #                                   GCP:   iam.gke.io/gcp-service-account: <gsa-email>
@@ -76,8 +69,9 @@
 #
 #   infraStackRef      — Pulumi StackReference (<org>/<project>/<stack>) to an infra stack that
 #                        exports "gatewayHostname". When set (or when gatewayHostname is set
-#                        directly below), the shaide-server Service becomes ClusterIP and an
-#                        HTTPRoute is created to the shared Gateway instead of a LoadBalancer.
+#                        directly below), an HTTPRoute attaches the shaide-server Service to the
+#                        shared Gateway. The Service is always ClusterIP; without either key it
+#                        is reachable only from inside the cluster (e.g. kubectl port-forward).
 #   gatewayHostname    — direct hostname for the shared Gateway; alternative to infraStackRef
 #                        for on-prem stacks that have no infra StackReference to read from.
 #                        infraStackRef and gatewayHostname are mutually exclusive in practice —
@@ -85,12 +79,6 @@
 #   gatewayName        — name of the shared Gateway the HTTPRoute binds to; default: shared-gateway
 #   gatewayNamespace   — namespace of the shared Gateway; default: gateway-system
 #
-#   harborHostname     — internal Harbor registry hostname (on-prem air-gap only). When set,
-#                        the ghcr-creds pull secret authenticates against Harbor
-#                        (http://<harborHostname>) using ghcrUser/ghcrToken instead of ghcr.io.
-#   ghcrUser           — registry username; default: axem-solutions (only meaningful for the
-#                        ghcr.io default — override to the Harbor robot account name on-prem,
-#                        e.g. robot$k8s-puller)
 #   busyboxImage       — init-container image used by rustfs for permission fixup; default: busybox:1.37
 #
 #   mcpNamespace       — namespace where the app_mcp stack is deployed (e.g. mcp-gateway).
@@ -110,7 +98,6 @@
 # To create a new stack:
 #   cd app_shaide/deployments
 #   pulumi stack init <stack-name>
-#   pulumi config set --secret ghcrToken <token-or-harbor-robot-secret>
 #   pulumi config set --secret adminAuthKey <value>
 #   pulumi config set --secret s3Password <value>
 #   pulumi config set --secret jwtSecret <random-string-at-least-32-chars>
@@ -136,8 +123,6 @@ config:
   # app-shaide:qdrantPVSize: 5Gi
 
   # --- Networking / exposure ---
-  # app-shaide:lbAnnotations:
-  #   cloud.google.com/load-balancer-type: External
   # app-shaide:serviceAccountAnnotations:
   #   iam.gke.io/gcp-service-account: <gsa-email>
   # app-shaide:infraStackRef: <org>/<infra-project>/<stack>
@@ -145,11 +130,7 @@ config:
   # app-shaide:gatewayName: shared-gateway
   # app-shaide:gatewayNamespace: gateway-system
 
-  # --- Registry / images ---
-  # app-shaide:harborHostname: harbor.harbor.svc.cluster.local
-  app-shaide:ghcrUser: axem-solutions
-  app-shaide:ghcrToken:
-    secure: <run `pulumi config set --secret ghcrToken <token>`>
+  # --- Images (pulled anonymously; no pull secret is created) ---
   app-shaide:shaideServerImage: "ghcr.io/axem-solutions/shaide_server:<tag>"
   app-shaide:controlPanelImage: "ghcr.io/axem-solutions/shaide_control_panel:<tag>"
   app-shaide:webappImage: "ghcr.io/axem-solutions/shaide-webapp:<tag>"

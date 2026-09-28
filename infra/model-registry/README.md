@@ -21,8 +21,6 @@ model-registry/
 ├── images/
 │   ├── downloader/              # Dockerfile for huggingface-cli container
 │   └── inferencer/              # Dockerfile + infer.py for model verification
-├── documentation/
-│   └── MODEL-REGISTRY-GUIDE.md  # HF vs Harbor comparison, cache layout, on-prem guide
 ├── logs/                        # Script logs (gitignored)
 ├── model-cache/                 # Downloaded model files (gitignored)
 ├── model-download.sh            # Download models from HuggingFace to local cache
@@ -227,7 +225,7 @@ All scripts write timestamped logs to `logs/`:
 
 ## Further Reading
 
-See `documentation/MODEL-REGISTRY-GUIDE.md` for:
+See [Model registry](../../docs/operations/model-registry.md) for:
 - HuggingFace vs Harbor workload comparison with diagrams
 - HF hub cache layout vs Harbor pull (symlinks, disk usage)
 - On-prem hostPath storage and RWX considerations

@@ -20,9 +20,6 @@ const (
 	KeyContext        stackconfig.Key = "context"
 	KeyNamespace      stackconfig.Key = "namespace"
 	KeyServiceAccount stackconfig.Key = "shaideServiceAccountName"
-	KeyHarborHostname stackconfig.Key = "harborHostname"
-	KeyGHCRUser       stackconfig.Key = "ghcrUser"
-	KeyGHCRToken      stackconfig.Key = "ghcrToken"
 
 	KeyShaideServerImage stackconfig.Key = "shaideServerImage"
 	KeyControlPanelImage stackconfig.Key = "controlPanelImage"
@@ -79,7 +76,6 @@ const (
 	KeyRustfsPVSize           stackconfig.Key = "rustfsPVSize"
 	KeyQdrantPVSize           stackconfig.Key = "qdrantPVSize"
 	KeyKnowledgeCenterEnabled stackconfig.Key = "knowledgeCenterEnabled"
-	KeyLBAnnotations          stackconfig.Key = "lbAnnotations"
 	KeySAAnnotations          stackconfig.Key = "serviceAccountAnnotations"
 )
 
@@ -115,27 +111,28 @@ const (
 	DefaultRustLibBacktrace = "1"
 	DefaultRustSpantrace    = "0"
 	DefaultTrial            = "FALSE"
+)
 
-	DefaultGHCRUser = "axem-solutions"
+// Upstream names of the images app-shaide deploys, as the image manifest lists
+// them. They key Sources.Images.
+const (
+	ShaideServerImageName = "axem-solutions/shaide_server"
+	ControlPanelImageName = "axem-solutions/shaide_control_panel"
+	WebappImageName       = "axem-solutions/shaide-webapp"
+	RustfsImageName       = "rustfs/rustfs"
+	QdrantImageName       = "qdrant/qdrant"
+	BusyboxImageName      = "busybox"
 )
 
 // Sources are app-shaide values the installer already knows. An empty value is
 // not written, so a Pulumi stack value set by hand is left intact.
-//
-// Images are resolved from the image manifest rather than asked for: the
-// installer mirrored them and therefore knows where they now live.
 type Sources struct {
-	HarborHostname  string
-	RegistryUser    string
-	RegistryToken   string
 	GatewayHostname string
 
-	ShaideServerImage string
-	ControlPanelImage string
-	WebappImage       string
-	RustfsImage       string
-	QdrantImage       string
-	BusyboxImage      string
+	// Images maps an upstream image name to the reference the cluster pulls
+	// it from. It may hold images other stacks deploy; only the ones named
+	// above are read.
+	Images map[string]string
 }
 
 type Config struct {
@@ -202,37 +199,6 @@ func runtimeEntries(opts stack.Options, sources Sources) []stackconfig.Entry[Val
 			},
 		},
 		{
-			// Set when the images were mirrored into Harbor. It selects the
-			// registry the pull secret authenticates against; empty leaves the
-			// secret pointing at ghcr.io.
-			Key:    KeyHarborHostname,
-			Source: stackconfig.Source{Value: optionalSource(sources.HarborHostname)},
-			Setter: func(cfg *Values, root *pulumiconfig.Config) {
-				cfg.HarborHostname = root.Get(KeyHarborHostname.String())
-			},
-		},
-		{
-			Key: KeyGHCRUser,
-			Source: stackconfig.Source{
-				Value:   optionalSource(sources.RegistryUser),
-				Default: DefaultGHCRUser,
-			},
-			Setter: func(cfg *Values, root *pulumiconfig.Config) {
-				cfg.Registry.GHCRUser = root.Get(KeyGHCRUser.String())
-			},
-		},
-		{
-			// The credential must match the registry the pull secret targets:
-			// the Harbor robot password when harborHostname is set, a GHCR
-			// token otherwise. The installer decides which and passes it here.
-			Key:    KeyGHCRToken,
-			Source: stackconfig.Source{Value: optionalSource(sources.RegistryToken)},
-			Policy: stackconfig.Policy{Required: true, Secret: true},
-			Setter: func(cfg *Values, root *pulumiconfig.Config) {
-				cfg.Registry.GHCRToken = root.RequireSecret(KeyGHCRToken.String())
-			},
-		},
-		{
 			Key:    KeyGatewayHostname,
 			Source: stackconfig.Source{Value: optionalSource(sources.GatewayHostname)},
 			Setter: func(cfg *Values, root *pulumiconfig.Config) {
@@ -260,11 +226,13 @@ func runtimeEntries(opts stack.Options, sources Sources) []stackconfig.Entry[Val
 
 // imageEntries come from the image manifest the installer mirrored, so the
 // deployment pulls what was actually published rather than a hand-copied tag.
+// A required image missing from the manifest fails at resolve time. The images
+// are pulled anonymously, so no pull secret goes with them.
 func imageEntries(sources Sources) []stackconfig.Entry[Values] {
 	return []stackconfig.Entry[Values]{
 		{
 			Key:    KeyShaideServerImage,
-			Source: stackconfig.Source{Value: optionalSource(sources.ShaideServerImage)},
+			Source: stackconfig.Source{Value: optionalSource(sources.Images[ShaideServerImageName])},
 			Policy: stackconfig.Policy{Required: true},
 			Setter: func(cfg *Values, root *pulumiconfig.Config) {
 				cfg.Images.ShaideServer = root.Get(KeyShaideServerImage.String())
@@ -272,7 +240,7 @@ func imageEntries(sources Sources) []stackconfig.Entry[Values] {
 		},
 		{
 			Key:    KeyControlPanelImage,
-			Source: stackconfig.Source{Value: optionalSource(sources.ControlPanelImage)},
+			Source: stackconfig.Source{Value: optionalSource(sources.Images[ControlPanelImageName])},
 			Policy: stackconfig.Policy{Required: true},
 			Setter: func(cfg *Values, root *pulumiconfig.Config) {
 				cfg.Images.ControlPanel = root.Get(KeyControlPanelImage.String())
@@ -280,7 +248,7 @@ func imageEntries(sources Sources) []stackconfig.Entry[Values] {
 		},
 		{
 			Key:    KeyWebappImage,
-			Source: stackconfig.Source{Value: optionalSource(sources.WebappImage)},
+			Source: stackconfig.Source{Value: optionalSource(sources.Images[WebappImageName])},
 			Policy: stackconfig.Policy{Required: true},
 			Setter: func(cfg *Values, root *pulumiconfig.Config) {
 				cfg.Images.WebApp = root.Get(KeyWebappImage.String())
@@ -288,7 +256,7 @@ func imageEntries(sources Sources) []stackconfig.Entry[Values] {
 		},
 		{
 			Key:    KeyRustfsImage,
-			Source: stackconfig.Source{Value: optionalSource(sources.RustfsImage)},
+			Source: stackconfig.Source{Value: optionalSource(sources.Images[RustfsImageName])},
 			Policy: stackconfig.Policy{Required: true},
 			Setter: func(cfg *Values, root *pulumiconfig.Config) {
 				cfg.Images.Rustfs = root.Get(KeyRustfsImage.String())
@@ -296,7 +264,7 @@ func imageEntries(sources Sources) []stackconfig.Entry[Values] {
 		},
 		{
 			Key:    KeyQdrantImage,
-			Source: stackconfig.Source{Value: optionalSource(sources.QdrantImage)},
+			Source: stackconfig.Source{Value: optionalSource(sources.Images[QdrantImageName])},
 			Policy: stackconfig.Policy{Required: true},
 			Setter: func(cfg *Values, root *pulumiconfig.Config) {
 				cfg.Images.Qdrant = root.Get(KeyQdrantImage.String())
@@ -304,7 +272,7 @@ func imageEntries(sources Sources) []stackconfig.Entry[Values] {
 		},
 		{
 			Key:    KeyBusyboxImage,
-			Source: stackconfig.Source{Value: optionalSource(sources.BusyboxImage)},
+			Source: stackconfig.Source{Value: optionalSource(sources.Images[BusyboxImageName])},
 			Setter: func(cfg *Values, root *pulumiconfig.Config) {
 				cfg.Images.Busybox = root.Get(KeyBusyboxImage.String())
 			},
@@ -453,12 +421,6 @@ func optionalEntries() []stackconfig.Entry[Values] {
 			Key: KeyRustfsConsoleEnabled,
 			Setter: func(cfg *Values, root *pulumiconfig.Config) {
 				cfg.RustEnv.ConsoleEnabled = root.GetBool(KeyRustfsConsoleEnabled.String())
-			},
-		},
-		stackconfig.Entry[Values]{
-			Key: KeyLBAnnotations,
-			Setter: func(cfg *Values, root *pulumiconfig.Config) {
-				root.GetObject(KeyLBAnnotations.String(), &cfg.LBAnnotations)
 			},
 		},
 		stackconfig.Entry[Values]{

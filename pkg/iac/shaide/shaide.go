@@ -52,12 +52,6 @@ func deployAppShaide(ctx *pulumi.Context, stackConfig appconfig.Config) error {
 	}
 	nsOpt := pulumi.DependsOn([]pulumi.Resource{ns})
 
-	// --- GHCR Registry Secret (for private shaide-server image) ---
-	registrySecret, err := platform.CreateGHCRSecret(ctx, appConfig, providerOpt, nsOpt)
-	if err != nil {
-		return err
-	}
-
 	// --- ConfigMap and Secret ---
 	shaideConfig, shaideSecrets, err := platform.CreateAppShaideConfig(ctx, appConfig, providerOpt, nsOpt)
 	if err != nil {
@@ -80,9 +74,7 @@ func deployAppShaide(ctx *pulumi.Context, stackConfig appconfig.Config) error {
 		providerOpt,
 		nsOpt,
 		pulumi.DependsOn([]pulumi.Resource{shaideConfig, shaideSecrets}),
-		pulumi.DependsOn([]pulumi.Resource{shaideConfig, shaideSecrets, registrySecret}),
 		pulumi.DependsOn(serviceAccountDeps),
-		"ghcr-creds",
 	)
 
 	// --- Cloud provider (selects cloud-specific resource implementations) ---

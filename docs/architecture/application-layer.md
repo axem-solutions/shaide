@@ -25,9 +25,8 @@ pkg/iac/shaide/
     ├── runtime/context.go                  # DeploymentContext — shared labels + dependency options
     ├── platform/
     │   ├── k8s-serviceaccount.go           # shaide-server ServiceAccount (+ workload-identity annotations)
-    │   ├── k8s-rbac.go                     # ClusterRole/ClusterRoleBinding — cluster-wide pod watch
-    │   ├── configmap.go                    # shaide-config ConfigMap + shaide-secrets Secret
-    │   └── secret.go                       # ghcr-creds pull secret (ghcr.io or Harbor)
+    │   ├── k8s-rbac.go                     # ClusterRole/ClusterRoleBinding — cluster-wide pod/service/namespace read
+    │   └── configmap.go                    # shaide-config ConfigMap + shaide-secrets Secret
     ├── components/
     │   ├── shaide/deploy.go                # shaide-server StatefulSet + Service (+ HTTPRoute)
     │   ├── controlpanel/deploy.go          # control-panel Deployment + Service
@@ -50,8 +49,9 @@ The stack orchestrator and dependency coordinator:
 - Loads Pulumi config via `appconfig.Load(ctx)`.
 - Creates the Kubernetes provider used by all resources in this stack.
 - Creates the namespace first, so all subsequent resources are scoped correctly.
-- Creates shared prerequisites: GHCR/Harbor pull secret, `shaide-config` ConfigMap,
-  `shaide-secrets` Secret, ServiceAccount, and cluster-wide RBAC.
+- Creates shared prerequisites: `shaide-config` ConfigMap, `shaide-secrets` Secret,
+  ServiceAccount, and cluster-wide RBAC. Images are pulled anonymously, so no pull
+  secret is created.
 - Selects a `cloudprovider.Provider` (see below) and calls `ProvisionStorage` before any
   StatefulSet is created.
 - Calls per-component `Deploy` functions in a stable order: `shaide`, `controlpanel`,
@@ -66,25 +66,28 @@ The stack orchestrator and dependency coordinator:
   `serviceAccountAnnotations` — a generic map, so the same code handles GKE Workload
   Identity, AKS Workload Identity, EKS IRSA, or nothing at all (on-prem/generic).
 - `k8s-rbac.go`: Creates a cluster-scoped `ClusterRole`/`ClusterRoleBinding` granting
-  `shaide-server`'s ServiceAccount `get`/`list`/`watch` on `pods` **cluster-wide** — this
-  is what lets Shaide observe pod state across every namespace it needs to (its own,
-  `app_serving`'s per-model namespaces, `app_mcp`'s namespace, etc.), not just its own namespace.
+  `shaide-server`'s ServiceAccount `get`/`list`/`watch` on `pods`, `services`, and
+  `namespaces` **cluster-wide** — this is what lets Shaide observe pod state and discover
+  installed-model topology across every namespace it needs to (its own, `app_serving`'s
+  per-model namespaces, `app_mcp`'s namespace, etc.), not just its own namespace. See
+  [Installed Model Discovery](#installed-model-discovery) below.
 - `configmap.go`: Creates the shared `shaide-config` ConfigMap (non-secret runtime
-  settings, service discovery) and `shaide-secrets` Secret (`adminAuthKey`, `s3Password`).
-- `secret.go`: Creates `ghcr-creds` (`kubernetes.io/dockerconfigjson`). Authenticates
-  against `ghcr.io` using `ghcrUser`/`ghcrToken` — or, when `harborHostname` is set,
-  against that internal Harbor registry instead, using the same two config keys.
+  settings, service discovery) and `shaide-secrets` Secret (`adminAuthKey`, `s3Password`, `jwtSecret`, `sessionSecret`).
 
 ### `pkg/iac/shaide/internal/components/`
 
 - `shaide/deploy.go`: Deploys `shaide-server` as a StatefulSet with a PVC mounted at
-  `/root/.config` for SQLite persistence, and exposes a Service. The Service is
-  `ClusterIP` (paired with an HTTPRoute to a shared Gateway) whenever `infraStackRef` or
-  `gatewayHostname` is set; otherwise it's a `LoadBalancer` with annotations from
-  `lbAnnotations`. Delegates cloud-specific post-deploy resources to the active
-  `cloudprovider.Provider`.
+  `/root/.config` for SQLite persistence, and exposes it through a `ClusterIP` Service. When
+  `infraStackRef` or `gatewayHostname` is set, an HTTPRoute attaches the Service to the shared
+  Gateway. shaide-server is never a `LoadBalancer` of its own. Delegates cloud-specific
+  post-deploy resources to the active `cloudprovider.Provider`.
 - `controlpanel/deploy.go`: Deploys the control panel as a Deployment (single replica,
-  no persistence) with a `ClusterIP` Service on port `3000`.
+  no persistence) with a `ClusterIP` Service on port `3000`. Receives `SESSION_SECRET`
+  from the shared `shaide-secrets` Secret, and `KNOWLEDGE_CENTER_ENABLED`
+  (`"true"`/`"false"`, from `knowledgeCenterEnabled`; default: false) indicating whether
+  the Knowledge Center feature is present. It has no direct knowledge of installed
+  models — it consumes shaide-server's own model API. See
+  [Installed Model Discovery](#installed-model-discovery) below.
 - `webapp/deploy.go`: Deploys the end-user facing web application as a Deployment
   (single replica, no persistence) with a `ClusterIP` Service on port `8787`. Same shape
   as the control panel — internal-only, points at `shaide-server` via
@@ -106,7 +109,7 @@ the informational `cloudProvider` config value:
 | `gcp` | no-op (GKE `pd.csi.storage.gke.io` dynamic provisioner) | Creates a GKE `HealthCheckPolicy` targeting `/v1/health` |
 | `azure` | no-op (AKS `disk.csi.azure.com` dynamic provisioner) | no-op (Workload Identity pod label is applied directly in `shaide/deploy.go`) |
 | `aws` | no-op (EBS CSI dynamic provisioner) | no-op |
-| `on-prem` | Creates one static, pre-bound hostPath `PersistentVolume` per stateful component (shaide-server, rustfs, qdrant), pinned to `pvNodeHostname` — only when `storageClassName` is `hostpath` | no-op (MetalLB handles LB via the `lbAnnotations` Service annotation) |
+| `on-prem` | Creates one static, pre-bound hostPath `PersistentVolume` per stateful component (shaide-server, rustfs, qdrant), pinned to `pvNodeHostname` — only when `storageClassName` is `hostpath` | no-op (MetalLB gives the shared Gateway its address; shaide-server stays `ClusterIP`) |
 | anything else | no-op | no-op |
 
 Any unrecognized `cloudProvider` value falls back to the generic no-op provider — useful
@@ -117,7 +120,7 @@ LoadBalancer at all.
 
 | Component | Service Name | Ports | Scope |
 | --- | --- | --- | --- |
-| Shaide server | `shaide-server` | `80` -> `8080` | External (LoadBalancer) or internal (Gateway/HTTPRoute) |
+| Shaide server | `shaide-server` | `80` -> `8080` | External only through the shared Gateway (HTTPRoute) |
 | Control panel | `control-panel` | `3000` | Internal only |
 | Web app | `webapp` | `8787` | Internal only |
 | RustFS | `rustfs` | `9000` (`9001` when `app_shaide:rustfsConsoleEnabled=true`) | Internal only |
@@ -135,6 +138,29 @@ before the main container starts:
 
 This matches RustFS expectations (`0o755`) and avoids runtime permission errors.
 
+## Installed Model Discovery
+
+This stack does not hand the Control Panel a model list. Responsibilities
+are kept with their actual sources:
+
+- **Kubernetes / `app_serving`**: topology and routing. Each model's
+  routable Service (`llmd-gateway-<slug>` for generative,
+  `ms-<slug>-embeddings` for embedders) is labeled with
+  `axem.dev/model-slug`, `axem.dev/model-category`, and
+  `app.kubernetes.io/part-of=app-serving` — see `Model.MetaLabels()` in
+  `pkg/iac/serving/internal/config/naming.go`.
+- **vLLM**: model-owned metadata (name, context size, ...), served by each
+  model's own `/server-info` endpoint.
+- **shaide-server**: combines the two at runtime — discovers model Services
+  cluster-wide via the labels above (`k8s-rbac.go` grants the `services`/
+  `namespaces` read access this needs) and queries each one's `/server-info`
+  — and exposes a stable model API.
+- **Control Panel**: consumes that API only; it has no model-related config
+  or mount of its own.
+
+This stack's only job for installed models, then, is granting shaide-server
+the RBAC to discover them (`k8s-rbac.go`) — it carries no model list.
+
 ## Configuration Source of Truth
 
 All parameters are defined in the active stack's `deployments/Pulumi.<stack>.yaml`. Each stack config is the authoritative list of settings for that deployment target, including:
@@ -146,7 +172,7 @@ All parameters are defined in the active stack's `deployments/Pulumi.<stack>.yam
   `TRIAL` env var — only the `trial` stack sets it to `TRUE`).
 - RustFS console exposure (`rustfsConsoleEnabled`).
 - MCP integration (`mcpNamespace`, optional — see [MCP Integration](#mcp-integration-optional)).
-- Secrets (`ghcrToken`, `adminAuthKey`, `s3Password`).
+- Secrets (`adminAuthKey`, `s3Password`, `jwtSecret`, `sessionSecret`).
 
 The `nodeSelector` value is rendered as a soft (preferred, not required) `nodeAffinity` for a
 `nodegroup` label on the target node pool (e.g. `shaide-nodepool`) — components prefer a
@@ -157,7 +183,7 @@ a soft `podAntiAffinity` spreading its own replicas across nodes.
 
 - Kubernetes context points to the target cluster.
 - Pulumi stack is selected for this project.
-- Required secrets are set (`ghcrToken`, `adminAuthKey`, `s3Password`).
+- Required secrets are set (`adminAuthKey`, `s3Password`, `jwtSecret`, `sessionSecret`).
 
 ## Workload Identity
 
@@ -190,7 +216,8 @@ stack is deployed (e.g. `mcp-gateway`). It is optional:
 ## Security Notes
 
 - Sensitive values live in the `shaide-secrets` Kubernetes Secret created by Pulumi.
-- The GHCR token must have `read:packages` to pull the private Shaide image.
+- Every image registry (the in-cluster Harbor mirror and the upstream registries) allows
+  anonymous pulls, so the stack holds no registry credentials.
 - Avoid committing plaintext secrets into stack config; use `pulumi config set --secret`.
 
 ## Resource Ownership
@@ -206,13 +233,28 @@ Persistent storage is provided by PVCs for Shaide SQLite (`/root/.config`), Rust
 
 ## Gateway Mode
 
-Routing mode is cloud-agnostic — it depends only on whether a Gateway hostname is
-available, not on `cloudProvider`. When either `infraStackRef` (a StackReference to an
-infra stack that exports `gatewayHostname`) **or** `gatewayHostname` (set directly) is
-non-empty, the Shaide Service becomes `ClusterIP` and an HTTPRoute is created to attach
-it to the shared Gateway. When neither is set, Shaide is exposed directly via a
-`LoadBalancer` Service with annotations from `lbAnnotations`. The two are mutually
-exclusive in practice — set one or the other, not both.
+The shaide-server Service is always `ClusterIP`. External traffic reaches it only through
+the shared Gateway, whose load balancer the platform provides: a cloud load balancer, or
+MetalLB on-prem (see [Gateway and routing](gateway.md) and
+[On-prem RKE2](../cluster-setup/on-prem-rke2.md#8-load-balancing-metallb)).
+
+When either `infraStackRef` (a StackReference to an infra stack that exports
+`gatewayHostname`) **or** `gatewayHostname` (set directly) is non-empty, an HTTPRoute
+attaches shaide-server to the shared Gateway. The two are mutually exclusive in practice:
+set one or the other, not both. When neither is set, no HTTPRoute is created and
+shaide-server is reachable only from inside the cluster.
+
+### Local access for development
+
+To reach shaide-server without a Gateway, for example on a development cluster without a
+load balancer, forward a local port to its Service:
+
+```bash
+kubectl -n app-shaide port-forward svc/shaide-server 8080:80
+```
+
+shaide-server is then served at `http://localhost:8080`. The forward lasts as long as the
+command runs. This is for development only; the installer does not set it up.
 
 ## Config Changes
 
@@ -256,8 +298,8 @@ kubectl logs -n app-shaide rustfs-0
 ## Troubleshooting
 
 - `ImagePullBackOff` for shaide-server:
-  - Confirm `ghcr-creds` exists in `app-shaide` and contains valid `ghcrUser`/`ghcrToken`.
-  - Re-set the token with `pulumi config set --secret ghcrToken <token>` and `pulumi up`.
+  - Confirm the image reference in `shaideServerImage` exists in the registry it points at.
+  - For a Harbor mirror, confirm the project is public (the Harbor stack creates them public).
 
 - RustFS fails with permission errors:
   - Ensure the `fix-permissions` initContainer ran and set `/data` and `/logs` to `0755` with `10001:10001`.

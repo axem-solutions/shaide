@@ -24,7 +24,7 @@
 #                          (Harbor registry token service requirement).
 #   harbor:chartPath      — path to the Harbor Helm chart tarball; default:
 #                          ./charts/harbor-1.18.2.tgz. The chart is NOT committed to the
-#                          repo — download it first, see README.md Step 0.
+#                          repo — download it first, see docs/architecture/platform-services.md Step 0.
 #   harbor:nodeHostname   — pins all Harbor pods to a specific node
 #                          (kubernetes.io/hostname); omit to let Kubernetes schedule freely
 #                          (the default on cloud, which uses dynamic PVCs from the cluster's

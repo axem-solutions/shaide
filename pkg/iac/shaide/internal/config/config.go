@@ -64,11 +64,6 @@ type Routing struct {
 	GatewayNamespace string
 }
 
-type Registry struct {
-	GHCRUser  string
-	GHCRToken pulumi.StringOutput
-}
-
 type AppEnv struct {
 	ShaideServerUiFQDN       string
 	ShaideServerUiPort       string
@@ -112,7 +107,6 @@ type Values struct {
 	CloudProvider            string // informational only — identifies the target platform (e.g. "gcp", "aws", "on-prem")
 	StorageClassName         string // optional — if empty, PVCs use the cluster default StorageClass
 	PVNodeHostname           string // optional — node hostname for hostPath PV nodeAffinity (on-prem only)
-	HarborHostname           string // optional — internal Harbor registry hostname (on-prem only, e.g. harbor.internal.lan)
 	Kubeconfig               string // optional — path to kubeconfig file; empty = use KUBECONFIG env / ~/.kube/config
 	Context                  string // optional — kubeconfig context to deploy to; empty = the kubeconfig's current-context
 	ShaidePVSize             string // optional — shaide-server PV/PVC size (default: 5Gi)
@@ -120,10 +114,8 @@ type Values struct {
 	QdrantPVSize             string // optional — qdrant PV/PVC size (default: 5Gi)
 	KnowledgeCenterEnabled   bool   // optional — presence of the Knowledge Center feature; injected into control-panel as KNOWLEDGE_CENTER_ENABLED; default: false
 
-	LBAnnotations             map[string]string
 	ServiceAccountAnnotations map[string]string
 	ServiceAccountName        string
-	Registry                  Registry
 	Services                  ServiceNames
 	Images                    Images
 	Routing                   Routing

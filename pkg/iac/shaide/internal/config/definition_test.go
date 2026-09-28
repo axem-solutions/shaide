@@ -56,16 +56,18 @@ func resolve(t *testing.T, sources Sources) (map[string]string, map[string]bool,
 
 func completeSources() Sources {
 	return Sources{
-		HarborHostname:    "harbor.harbor.svc.cluster.local",
-		RegistryUser:      "robot$k8s-harbor-sa",
-		RegistryToken:     "robot-password",
-		GatewayHostname:   "shaide.example.com",
-		ShaideServerImage: "harbor.harbor.svc.cluster.local/shaide/axem-solutions/shaide_server:v0.11.0",
-		ControlPanelImage: "harbor.harbor.svc.cluster.local/shaide/axem-solutions/control_panel:v0.4.0",
-		WebappImage:       "harbor.harbor.svc.cluster.local/shaide/axem-solutions/shaide-webapp:v0.1.1",
-		RustfsImage:       "harbor.harbor.svc.cluster.local/shaide/rustfs/rustfs:1.0.0-alpha.92",
-		QdrantImage:       "harbor.harbor.svc.cluster.local/shaide/qdrant/qdrant:v1.17",
-		BusyboxImage:      "harbor.harbor.svc.cluster.local/shaide/busybox:1.37",
+		GatewayHostname: "shaide.example.com",
+		Images: map[string]string{
+			ShaideServerImageName: "harbor.harbor.svc.cluster.local/shaide/axem-solutions/shaide_server:v0.11.0",
+			ControlPanelImageName: "harbor.harbor.svc.cluster.local/shaide/axem-solutions/shaide_control_panel:v0.4.0",
+			WebappImageName:       "harbor.harbor.svc.cluster.local/shaide/axem-solutions/shaide-webapp:v0.1.1",
+			RustfsImageName:       "harbor.harbor.svc.cluster.local/shaide/rustfs/rustfs:1.0.0-alpha.92",
+			QdrantImageName:       "harbor.harbor.svc.cluster.local/shaide/qdrant/qdrant:v1.17",
+			BusyboxImageName:      "harbor.harbor.svc.cluster.local/shaide/busybox:1.37",
+
+			// Mirrored for another stack; app-shaide must ignore it.
+			"istio/pilot": "harbor.harbor.svc.cluster.local/services/istio/pilot:1.28.1",
+		},
 	}
 }
 
@@ -106,7 +108,6 @@ func TestSecretsAreMarkedSecret(t *testing.T) {
 		"app-shaide:s3Password",
 		"app-shaide:jwtSecret",
 		"app-shaide:sessionSecret",
-		"app-shaide:ghcrToken",
 	} {
 		if !secret[key] {
 			t.Errorf("%s was written without the secret flag", key)
@@ -121,23 +122,32 @@ func TestImagesComeFromTheInstaller(t *testing.T) {
 	values, _, _ := resolve(t, sources)
 
 	for key, want := range map[string]string{
-		"app-shaide:shaideServerImage": sources.ShaideServerImage,
-		"app-shaide:controlPanelImage": sources.ControlPanelImage,
-		"app-shaide:webappImage":       sources.WebappImage,
-		"app-shaide:rustfsImage":       sources.RustfsImage,
-		"app-shaide:qdrantImage":       sources.QdrantImage,
-		"app-shaide:busyboxImage":      sources.BusyboxImage,
+		"app-shaide:shaideServerImage": sources.Images[ShaideServerImageName],
+		"app-shaide:controlPanelImage": sources.Images[ControlPanelImageName],
+		"app-shaide:webappImage":       sources.Images[WebappImageName],
+		"app-shaide:rustfsImage":       sources.Images[RustfsImageName],
+		"app-shaide:qdrantImage":       sources.Images[QdrantImageName],
+		"app-shaide:busyboxImage":      sources.Images[BusyboxImageName],
 	} {
 		if values[key] != want {
 			t.Errorf("%s = %q, want %q", key, values[key], want)
 		}
 	}
+}
 
-	if got := values["app-shaide:harborHostname"]; got != sources.HarborHostname {
-		t.Errorf("harborHostname = %q, want %q", got, sources.HarborHostname)
-	}
-	if got := values["app-shaide:ghcrUser"]; got != sources.RegistryUser {
-		t.Errorf("ghcrUser = %q, want the Harbor robot %q", got, sources.RegistryUser)
+// Every registry the images come from allows anonymous pulls, so the stack
+// carries no pull credentials.
+func TestNoRegistryCredentialsAreWritten(t *testing.T) {
+	values, _, _ := resolve(t, completeSources())
+
+	for _, key := range []string{
+		"app-shaide:harborHostname",
+		"app-shaide:ghcrUser",
+		"app-shaide:ghcrToken",
+	} {
+		if _, ok := values[key]; ok {
+			t.Errorf("%s was written; app-shaide pulls its images anonymously", key)
+		}
 	}
 }
 
@@ -155,7 +165,7 @@ func TestSelectedContextIsWritten(t *testing.T) {
 // not deep inside the Pulumi program with a bare "missing configuration".
 func TestMissingImageIsRejected(t *testing.T) {
 	sources := completeSources()
-	sources.ShaideServerImage = ""
+	delete(sources.Images, ShaideServerImageName)
 
 	cfg := New("/projects/app-shaide", stack.Options{Platform: cluster.Azure}, sources)
 	if _, err := cfg.Resolve(&stubPrompter{}); err == nil {
@@ -173,7 +183,6 @@ func TestOptionalEntriesAreNotWritten(t *testing.T) {
 		"app-shaide:nodeSelector",
 		"app-shaide:storageClassName",
 		"app-shaide:pvNodeHostname",
-		"app-shaide:lbAnnotations",
 		"app-shaide:serviceAccountAnnotations",
 	} {
 		if _, ok := values[key]; ok {

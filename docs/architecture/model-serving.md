@@ -410,6 +410,26 @@ The code validates that:
 
 Mismatches (e.g. `gaie-alma-pro` + `ms-amla-pro`) will produce a clear error at `pulumi preview` time.
 
+## Exposing Installed Models
+
+app_serving does not export a model list. Instead, each model's routable Service is labeled
+with `axem.dev/model-slug`, `axem.dev/model-category` (`generative`/`embedder`), and
+`app.kubernetes.io/part-of=app-serving` (see `Model.MetaLabels()` in
+`pkg/iac/serving/internal/config/naming.go`): the generative path's `llmd-gateway-<slug>`
+ExternalName Service and the embedder path's `ms-<slug>-embeddings` ClusterIP Service.
+
+app-shaide grants shaide-server cluster-wide read access to `services` and `namespaces` (see
+`pkg/iac/shaide/internal/platform/k8s-rbac.go`), so it discovers this topology by label
+selector at runtime and pairs each Service with the model-owned metadata (name, context size,
+...) served by vLLM's own `/server-info` endpoint. `values.yaml` configures the model's
+deployment; it is not read to describe the model. See
+[Installed Model Discovery](application-layer.md#installed-model-discovery).
+
+Two enabled models resolving to the same slug collide on the Kubernetes objects they would
+create (same `llm-d-<slug>` namespace, same release names), so the deploy fails at apply
+time. Nothing in the stacks detects two different slugs serving the same model name; that
+check belongs with shaide-server, which aggregates `/server-info` across models.
+
 ## Dependencies
 
 The project uses:
@@ -461,7 +481,7 @@ cd infra/on-prem/ansible
 ansible-playbook setup/hostpath_dirs.yml -i inventory-dev --limit <node>
 ```
 
-See [MODEL_STORAGE.md](model-storage.md) for full details on the artifact layout and
+See [Model storage](model-storage.md) for full details on the artifact layout and
 Job failure recovery.
 
 ## Troubleshooting
@@ -471,7 +491,7 @@ Job failure recovery.
 2. **Missing models**: Ensure `models` (with `generative` and/or `embedder` lists) is set in the stack config.
 3. **Namespace Issues**: Verify target namespace exists or will be created.
 4. **Gateway Provider Dependencies**: Check that Gateway CRDs and Istio control plane are installed via `infra/gateway-provider`.
-5. **ORAS Job failed**: Check `kubectl logs -n <ns> job/<slug>-model-pull`. After fixing root cause, delete the Job and PVC manually then re-run `pulumi up`. See [MODEL_STORAGE.md](model-storage.md) for recovery steps.
+5. **ORAS Job failed**: Check `kubectl logs -n <ns> job/<slug>-model-pull`. After fixing root cause, delete the Job and PVC manually then re-run `pulumi up`. See [Model storage](model-storage.md) for recovery steps.
 6. **Pod starts with empty PVC**: The ORAS Job may have not finished or the ModelService chart was deployed without `DependsOn` the Job. Ensure the Job completed successfully before the pod starts.
 7. **Port conflict in decode pod**: The routing-proxy init container binds port 8000. The inference server (`vllmServe` or `custom` modelCommand) must listen on port **8200** for decode pods. With `modelCommand: vllmServe` the chart handles this automatically; with `modelCommand: custom` set `--port 8200` explicitly.
 8. **Embeddings endpoint via gateway returns 400**: The inference gateway (EPP) only validates chat-completion requests. For embedding models, access the inference server directly via pod port-forward on port 8200 or add a separate ClusterIP service pointing to port 8200.

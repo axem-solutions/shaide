@@ -6,21 +6,15 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
-// Options contains values known by the installer but specific to app-shaide.
-// Empty values are not written, allowing an existing Pulumi stack value to be
-// retained.
+// Options contains values known by the installer. Empty values are not
+// written, allowing an existing Pulumi stack value to be retained.
 type Options struct {
-	HarborHostname  string
-	RegistryUser    string
-	RegistryToken   string
 	GatewayHostname string
 
-	ShaideServerImage string
-	ControlPanelImage string
-	WebappImage       string
-	RustfsImage       string
-	QdrantImage       string
-	BusyboxImage      string
+	// Images maps an upstream image name, as the image manifest lists it
+	// (e.g. "qdrant/qdrant"), to the reference the cluster pulls it from. The
+	// stack picks the images it deploys and ignores the rest.
+	Images map[string]string
 }
 
 type Stack struct {
@@ -37,17 +31,8 @@ func NewStack(projectDir string, common stackpkg.Options, options ...Options) *S
 		projectDir,
 		common,
 		appconfig.Sources{
-			HarborHostname:  shaideOptions.HarborHostname,
-			RegistryUser:    shaideOptions.RegistryUser,
-			RegistryToken:   shaideOptions.RegistryToken,
 			GatewayHostname: shaideOptions.GatewayHostname,
-
-			ShaideServerImage: shaideOptions.ShaideServerImage,
-			ControlPanelImage: shaideOptions.ControlPanelImage,
-			WebappImage:       shaideOptions.WebappImage,
-			RustfsImage:       shaideOptions.RustfsImage,
-			QdrantImage:       shaideOptions.QdrantImage,
-			BusyboxImage:      shaideOptions.BusyboxImage,
+			Images:          shaideOptions.Images,
 		},
 	)}
 }
