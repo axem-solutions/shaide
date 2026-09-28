@@ -2,6 +2,12 @@
 # Creates the resources for Qwen/Qwen3-Coder-30B-A3B-Instruct
 # The upstream model card suggests reducing context length when OOM occurs; we
 # start with 32K here to keep the BF16 checkpoint practical on a single 96 GB GPU.
+
+# Read by the shaide installer and ignored by the chart. The revision pins the
+# Hugging Face commit to download and derives the Harbor tag of the artifact.
+shaide:
+  revision: "b2cff646eb4bb1d68355c01b18ae02e7cf42d120"
+
 multinode: false
 
 modelArtifacts:

@@ -18,87 +18,46 @@ Use this page after completing the [Prerequisites](../getting-started/provisioni
 
 ## What the installer needs
 
-The installer image is self-contained: the Pulumi projects, Helm charts, CRDs and the
-image list all ship inside it. Container images are copied into the internal registry
-from their origin registries at install time.
-
-The one input you supply is the **model manifest**, which lists the models to download
-from Hugging Face and publish into the registry. See
-[Model manifest](#model-manifest) below.
+The installer image is self-contained: the Pulumi projects, Helm charts, CRDs, the
+image list and the supported models all ship inside it. Container images are copied into
+the internal registry from their origin registries at install time, and the models you
+select are downloaded from Hugging Face. See [Supported models](#supported-models) below.
 
 The container expects:
 
 | Input | Required | Container path or env | Purpose |
 | --- | --- | --- | --- |
 | Kubeconfig | Yes | `/.kube/config` by default | Context selection and cluster access |
-| Model manifest | Yes | `<STORAGE_PATH>/manifests/models.yaml`, or `MODEL_MANIFEST_PATH` | Models to publish into the registry |
 | Persistent storage | Yes | `/var/shaide-installer` | Model cache, upload state, Pulumi state, logs |
 | Hugging Face token | Yes | `HF_TOKEN` | Downloads selected model snapshots |
 | Registry credentials | Optional | `GHCR_TOKEN`, `DOCKERHUB_PASSWORD` | Private images and rate limits |
 | SSH private key | On-prem Harbor install | `PRIVATE_KEY_PATH` | Path inside the container, for Harbor image preload |
 
-## Model manifest
+## Supported models
 
-> [!IMPORTANT]
-> Supplying `models.yaml` by hand is a temporary step. Model selection moves into the
-> installer in the next release, and this file will no longer be required.
+The installer offers every model packaged under `app_serving/deployments/models/` in the
+installer image. You choose which ones to serve in the `Select models` stage; there is
+nothing to prepare beforehand.
 
-The manifest is a `models` list. Each entry names a Hugging Face repository, a pinned
-revision, and where the artifact lands in the internal registry:
-
-```yaml
-models:
-  - id: "openai/gpt-oss-20b"
-    revision: "6cee5e81ee83917806bbde320786a8fb61efebee"
-    harbor_project: "ai-models"
-    harbor_name: "gpt-oss-20b"
-    harbor_tag: "1.0.0"
-```
+A model directory is `<category>/<Name>/`, where the category is `generative` or
+`embedder`, and it holds a `ms-<slug>/values.yaml` (the llm-d-modelservice chart values)
+and a `gaie-<slug>/values.yaml`. The installer reads what it needs from the `ms-*` file:
 
 | Field | Meaning |
 | --- | --- |
-| `id` | Hugging Face model repository ID |
-| `revision` | Commit to download. Pin it for reproducibility |
-| `harbor_project` | Registry project the artifact is published to |
-| `harbor_name` | Repository name inside that project |
-| `harbor_tag` | Tag used to detect and publish the artifact |
-| `dependencies` | Optional extra Hugging Face repos fetched alongside the model |
-| `serving` | Optional. Present to run the model on this cluster; absent to publish it only |
+| `shaide.revision` | Hugging Face commit to download. Required; a full commit sha |
+| `shaide.dependencies` | Optional extra Hugging Face repos (`id`, `revision`) fetched alongside the model |
+| `modelArtifacts.name` | Hugging Face model repository ID |
+| `modelArtifacts.size` | Size of the volume holding the weights |
+| `decode.containers[0].resources.limits["nvidia.com/gpu"]` | GPUs per pod, shown in the selector |
 
-The entry above is published as
-`<registry-host>/ai-models/gpt-oss-20b:1.0.0`, as an OCI artifact of type
-`application/vnd.cnai.model`.
+The `shaide` block is ignored by the chart. A directory without a pinned revision is not
+offered, and the reason is logged at the start of the `Select models` stage.
 
-### Serving a model
-
-Publishing a model and running it are separate choices. A model is deployed only
-when its entry carries a `serving` block, so a cluster that mirrors models for
-another consumer simply leaves it out:
-
-```yaml
-models:
-  - id: "openai/gpt-oss-20b"
-    revision: "6cee5e81ee83917806bbde320786a8fb61efebee"
-    harbor_project: "ai-models"
-    harbor_name: "gpt-oss-20b"
-    harbor_tag: "1.0.0"
-    serving:
-      name: "GPT-OSS-20B"
-      node_selector: "generative"
-      storage_size: "70Gi"
-```
-
-| Field | Meaning |
-| --- | --- |
-| `name` | Model directory shipped in the installer image. It also decides whether the model is generative or an embedder |
-| `node_selector` | Value of the `nodegroup` label on the pool to run on. Omit to schedule anywhere |
-| `storage_size` | Size of the volume holding the weights |
-| `storage_class` | Optional. Overrides the cluster default for this model's volume |
-
-Everything else is derived: the registry reference comes from the `harbor_*`
-fields above, and the path inside the volume from `id`. Naming a model the
-installer image does not ship is skipped with a message, rather than deploying
-the wrong runtime.
+Each model is published to the internal registry as
+`<registry-host>/ai-models/<slug>:<first 12 characters of the revision>`, as an OCI
+artifact of type `application/vnd.cnai.model`. Because the tag follows the revision,
+pinning a new revision publishes and serves the new weights on the next run.
 
 ### Transfer resources
 
@@ -130,25 +89,6 @@ the installer cannot limit its own cgroup:
 docker run --rm -it --cpus=4 --memory=6g ...
 ```
 
-### Supplying it
-
-Either drop it into the storage mount, where the installer looks by default:
-
-```bash
-mkdir -p "${STORAGE_PATH}/manifests"
-cp models.yaml "${STORAGE_PATH}/manifests/models.yaml"
-```
-
-Or keep it elsewhere and mount it, pointing `MODEL_MANIFEST_PATH` at the container path:
-
-```bash
--e MODEL_MANIFEST_PATH=/manifests/models.yaml \
--v /tmp/manifests/models.yaml:/manifests/models.yaml:ro \
-```
-
-The installer fails at bootstrap with a message naming the expected path if the manifest
-is missing.
-
 ## Overview
 
 The installation has two parts:
@@ -162,8 +102,7 @@ The installation has two parts:
 |-------------------------------|----------------------------------------------------------------------------------------------------|
 | **Prepare installer storage** | Create persistent local storage for the model cache, deployment state, and logs.                   |
 | **Configure credentials**     | Export the tokens and passphrases required by the installer.                                       |
-| **Write the model manifest**  | List the models to publish into the internal registry.                                             |
-| **Define run paths**          | Set the kubeconfig, model manifest, and installer storage paths used by the run command.           |
+| **Define run paths**          | Set the kubeconfig and installer storage paths used by the run command.                            |
 | **Start the installer**       | Run the installer container with the required mounts, environment variables, and cluster access.   |
 
 ### Installer Workflow Stages
@@ -172,6 +111,7 @@ The installation has two parts:
 |-----------------------|-------------------------------------------------------------|
 | `Bootstrap`           | Validate storage, installer state, and the manifests.       |
 | `Kubernetes`          | Load kubeconfig and connect to the target cluster.          |
+| `Select models`       | Choose which supported models to install, keep or uninstall. |
 | `Discovery`           | Discover Harbor and determine the installation type.         |
 | `Populate Harbor`     | Upload images and selected model artifacts.                 |
 | `Deploy platform`     | Deploy Gateway Provider, App-Serving, App-Shaide, and Monitoring. |
@@ -226,7 +166,6 @@ for during the run.
 | `GHCR_USERNAME` / `GHCR_TOKEN` | Credentials for private GitHub Container Registry images |
 | `DOCKERHUB_USERNAME` / `DOCKERHUB_PASSWORD` | Credentials for Docker Hub, and to avoid anonymous rate limits |
 | `KUBECONFIG` | Kubeconfig path inside the container. Default `/.kube/config` |
-| `MODEL_MANIFEST_PATH` | Model manifest path inside the container. Default `<STORAGE_PATH>/manifests/models.yaml` |
 | `PRIVATE_KEY_PATH` | SSH key inside the container, for Harbor image preload on on-prem |
 | `RESOURCE_CPU_PERCENT` | Share of available CPUs a model transfer may use. Default 50 |
 | `RESOURCE_MEMORY_PERCENT` | Share of available memory a model transfer may use. Default 50 |
@@ -238,7 +177,6 @@ Set shell variables for the local files and directories used by the installer co
 
 ```bash
 HOST_KUBECONFIG="$HOME/.kube/config"
-MODEL_MANIFEST="$PWD/models.yaml"
 STORAGE_PATH="/var/lib/shaide-installer"
 ```
 
@@ -252,7 +190,6 @@ Verify the required paths exist:
 
 ```bash
 ls -lh "$HOST_KUBECONFIG"
-ls -lh "$MODEL_MANIFEST"
 ls -ld "$STORAGE_PATH"
 ```
 
@@ -264,9 +201,7 @@ docker run --rm -it \
   -e HF_TOKEN \
   -e PULUMI_CONFIG_PASSPHRASE \
   -e PRIVATE_KEY_PATH \
-  -e MODEL_MANIFEST_PATH=/manifests/models.yaml \
   -v "${HOST_KUBECONFIG}:/.kube/config:ro" \
-  -v "${MODEL_MANIFEST}:/manifests/models.yaml:ro" \
   --mount "type=bind,src=${STORAGE_PATH},dst=/var/shaide-installer" \
   ghcr.io/axem-solutions/shaide/installer:oss
 ```
@@ -297,7 +232,7 @@ During this stage, it:
 - verifies that the installer is running in an interactive terminal
 - checks that persistent storage is mounted
 - prepares the installer storage directories
-- validates the model and image manifests
+- loads the image manifest and the supported models
 - loads the required runtime configuration
 
 | Prompt                                                                      | Options     | Recommended |
@@ -324,6 +259,40 @@ During this stage, the installer:
 
 - Select the context that points to the target shaide cluster.
 - Do not continue with a context for a different cluster.
+
+### `Select models` stage
+
+This stage decides which models the platform serves after this run.
+
+During this stage, the installer:
+
+- detects which supported models already run on the cluster
+- shows every supported model in a table with its type, GPUs per pod, volume size and status
+- asks for an action per model
+
+| Status | Actions |
+|---|---|
+| `Available` | `-` (leave it out), `install` |
+| `Installed` | `keep`, `uninstall` |
+
+Every row starts at the action that changes nothing, so an update run that keeps the same
+models is a single confirm. Changed rows are marked with `●`, and the focused row's Hugging
+Face repository and revision are shown below the table.
+
+| Key | Action |
+|---|---|
+| `j` / `k`, arrow keys | Move between rows |
+| `g` / `G` | Jump to the first row / to `Continue` |
+| `ctrl+d` / `ctrl+u` | Move half a page |
+| `h` / `l` | Switch the row's action without opening the dropdown |
+| `enter` / `space` | Open the row's dropdown, or confirm on `Continue` |
+| `u` | Reset the row to its starting action |
+| `?` | Show all keys |
+| `esc` | Close the dropdown, or cancel |
+
+Uninstalling a model removes it from the serving stack, which deletes its volume and the
+weights on it, and deletes its artifact from Harbor. Uninstalling the last served model
+destroys the serving stack.
 
 ### `Discovery` stage
 
@@ -387,21 +356,16 @@ This stage uploads the artifacts required by the shaide AI Platform.
 
 During this stage, the installer:
 
-- checks which model artifacts already exist in Harbor
-- asks which missing models should be downloaded
-- checks available installer storage
-- downloads selected models from Hugging Face
+- checks which models to serve are already in Harbor
+- checks available installer storage for the missing ones
+- downloads them from Hugging Face
 - uploads model artifacts to Harbor
 - copies container images from their origin registries into Harbor
-- optionally deletes selected model repositories from Harbor
+- deletes the artifacts of uninstalled models from Harbor
 
 
 | Prompt                                                   | Options / Input                                                                     |
 |---------------------------------------------------------|--------------------------------------------------------------------------------------|
-| `Select models to download from manifest`               | Models listed in the model manifest                                                  |
-| `No model selected. Are you sure you want to continue?` | `No`, `Yes`                                                                          |
-| `Do you want to delete models from Harbor?`             | `No`, `Yes`                                                                          |
-| `Select models to delete from Harbor`                   | Existing model repositories in Harbor                                                |
 | `Harbor model check failed. <reason>`                   | `Enter new credentials`, `Retry`, `Abort`                                            |
 | `Harbor username`                                       | Harbor username                                                                      |
 | `Harbor password`                                       | Harbor password                                                                      |
@@ -412,28 +376,22 @@ During this stage, the installer:
 
 #### Recommended Actions
 
-- Select all models required for the installation.
-- Select `No` if asked to continue without selecting models, unless model download is intentionally skipped.
-- Select `No` when asked whether to delete models from Harbor during a normal installation.
 - Use `Retry` only after fixing a temporary issue, such as network access, Harbor access, or storage availability.
 - Use `Enter new credentials` only when the Harbor credentials are incorrect.
 - Use `Enter new token` only when the Hugging Face token is invalid or does not have model access.
-- Use `Abort` when the cause is unclear or the model manifest needs correction.
+- Use `Abort` when the cause is unclear.
 - Use `Clear upload state and retry` only if advised by support or if normal retry does not resolve an inconsistent upload state.
 
 #### Expected Behavior
 
 | Step                    | Action                                                       |
 |-------------------------|--------------------------------------------------------------|
-| Check model artifacts   | Existing models in Harbor are detected and skipped.          |
-| Select models           | Missing models from the model manifest are shown.            |
+| Check model artifacts   | Models to serve that are already in Harbor are skipped.      |
 | Check storage           | Installer storage is checked before downloading models.      |
-| Download models         | Selected models are downloaded into the installer cache.     |
+| Download models         | Missing models are downloaded into the installer cache.      |
 | Upload models           | Downloaded model artifacts are uploaded to Harbor.           |
 | Upload images           | Container images are copied from their origin registries into Harbor. |
-| Delete models           | Optional cleanup for intentionally removed model artifacts.  |
-
-Normal installations should select the required models, avoid deleting existing models, and continue only after storage checks pass.
+| Delete uninstalled models | Artifacts of uninstalled models are deleted from Harbor. A missing artifact counts as deleted. |
 
 ### `Deploy Platform` stage
 
@@ -557,7 +515,6 @@ Do not delete the persistent installer storage directory unless you intentionall
 | Harbor preload fails with SSH error   | Confirm SSH access works from the provisioner machine to the target cluster nodes.      |
 | Installer state unlock fails          | Confirm `PULUMI_CONFIG_PASSPHRASE` matches the passphrase used on the previous run.     |
 | Installer logs are needed             | Press `Ctrl+Y` in the TUI to save logs under `<STORAGE_PATH>/logs/`. The installer names the file relative to the storage directory, e.g. `logs/installer-logs-20260927-165610.log`. |
-| `model manifest ... does not exist` or `... is not readable` | The manifest was not placed under `<STORAGE_PATH>/manifests/`, or `MODEL_MANIFEST_PATH` points elsewhere. |
 | `/var/shaide-installer is not a mount point` | The storage bind mount is missing. The TUI may let you continue, but state and logs will not persist. |
 | `Hugging Face token was not set`      | `HF_TOKEN` is required during bootstrap.                                               |
 | Image pull failures in the artifact stage | The provisioning machine cannot reach the registry named by an entry's `source`.   |

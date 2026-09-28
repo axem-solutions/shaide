@@ -12,7 +12,7 @@ weight: 50
 | --- | --- |
 | Terminal errors | Add `-it` - the installer is interactive |
 | Permission denied on Docker | Add the user to the `docker` group |
-| Cannot find the model manifest | Check the mount path and `MODEL_MANIFEST_PATH` |
+| A model is missing from the selector | The log at the start of `Select models` names each skipped model directory and why, usually a missing `shaide.revision` |
 
 ## State
 

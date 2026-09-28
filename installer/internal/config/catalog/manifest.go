@@ -9,36 +9,33 @@ import (
 	"go.yaml.in/yaml/v2"
 )
 
+// Model is a supported model packaged with the installer, read from its
+// deployments/models/<category>/<Name>/ms-<slug>/values.yaml.
 type Model struct {
-	ID            string       `yaml:"id"`
-	Revision      string       `yaml:"revision"`
-	HarborProject string       `yaml:"harbor_project"`
-	HarborName    string       `yaml:"harbor_name"`
-	HarborTag     string       `yaml:"harbor_tag"`
-	Dependencies  []Dependency `yaml:"dependencies,omitempty"`
+	// Name is the model's directory, for example "GPT-OSS-20B".
+	Name string
+	// Category is the directory above it: CategoryGenerative or
+	// CategoryEmbedder.
+	Category string
+	// Slug is the ms-<slug> suffix. app-serving names the model's namespace,
+	// releases and pod labels after it.
+	Slug string
 
-	// Serving describes how to run the model on the cluster. A model without
-	// it is published to Harbor but not deployed, which is what a cluster that
-	// mirrors models for another consumer wants.
-	Serving *Serving `yaml:"serving,omitempty"`
-}
-
-// Serving holds what the model manifest cannot derive: which packaged values
-// directory to deploy, and the two facts that depend on the target cluster.
-type Serving struct {
-	// Name is the directory under deployments/models/<category>/, for example
-	// "GPT-OSS-20B". It also decides the category, since the installer looks
-	// the name up among the packaged model directories.
-	Name string `yaml:"name"`
-
-	// NodeSelector is the nodegroup label value of the pool to run on.
-	NodeSelector string `yaml:"node_selector"`
+	// ID and Revision pin the Hugging Face repository to download.
+	ID           string
+	Revision     string
+	Dependencies []Dependency
 
 	// StorageSize is the model volume size, for example "70Gi".
-	StorageSize string `yaml:"storage_size"`
+	StorageSize string
+	// GPUsPerPod and Replicas describe what serving the model needs.
+	GPUsPerPod int
+	Replicas   int
 
-	// StorageClass overrides the cluster default for this model's volume.
-	StorageClass string `yaml:"storage_class,omitempty"`
+	// Where the model artifact lives in Harbor, derived from Slug and Revision.
+	HarborProject string
+	HarborName    string
+	HarborTag     string
 }
 
 type Dependency struct {
@@ -68,10 +65,6 @@ type Image struct {
 type imageManifest struct {
 	Services []Image `yaml:"harbor_upload_images"`
 	Harbor   []Image `yaml:"goharbor_images"`
-}
-
-type modelManifest struct {
-	Models []Model `yaml:"models"`
 }
 
 func readManifest[T any](path string) (T, error) {

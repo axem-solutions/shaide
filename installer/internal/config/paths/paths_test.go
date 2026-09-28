@@ -8,9 +8,9 @@ func TestDescribe(t *testing.T) {
 	tests := map[string]string{
 		// Under the mount: relative, as the operator finds it on the host.
 		p.Logs + "/installer-logs-20260927-165610.log": "logs/installer-logs-20260927-165610.log in the storage directory",
-		p.ModelManifestPath:                            "manifests/models.yaml in the storage directory",
-		// Outside the mount, e.g. MODEL_MANIFEST_PATH: unchanged.
-		"/manifests/models.yaml": "/manifests/models.yaml",
+		p.ProjectsDir + "/app-serving":                 "projects/app-serving in the storage directory",
+		// Outside the mount, e.g. the image's own files: unchanged.
+		"/opt/shaide-installer/projects": "/opt/shaide-installer/projects",
 		// The root itself, and a sibling sharing its prefix, are not under it.
 		"/var/shaide-installer":       "/var/shaide-installer",
 		"/var/shaide-installer-other": "/var/shaide-installer-other",

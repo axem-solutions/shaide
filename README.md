@@ -85,24 +85,9 @@ shaide installs onto an **existing** Kubernetes cluster. Check it against the pr
 
 ### 2. Choose your models
 
-The installer ships with everything it deploys. The one input you supply is a **model
-manifest** listing the models to publish into the internal registry.
-
-> [!IMPORTANT]
-> Supplying `models.yaml` by hand is a temporary step. Model selection moves into the
-> installer in the next release, and this file will no longer be required.
-
-```bash
-mkdir -p /tmp/manifests
-cat > /tmp/manifests/models.yaml <<'YAML'
-models:
-  - id: "openai/gpt-oss-20b"
-    revision: "6cee5e81ee83917806bbde320786a8fb61efebee"
-    harbor_project: "ai-models"
-    harbor_name: "gpt-oss-20b"
-    harbor_tag: "1.0.0"
-YAML
-```
+The installer ships with everything it deploys, including the supported models. You pick
+which ones to serve in the installer itself, from a table of every supported model, once it
+has connected to your cluster. Nothing to prepare beforehand.
 
 ### 3. Run the installer
 
@@ -119,9 +104,7 @@ docker run --rm -it \
   --network host \
   -e PULUMI_CONFIG_PASSPHRASE \
   -e HF_TOKEN \
-  -e MODEL_MANIFEST_PATH=/manifests/models.yaml \
   -v "$HOME/.kube/config:/.kube/config:ro" \
-  -v /tmp/manifests/models.yaml:/manifests/models.yaml:ro \
   --mount "type=bind,src=${STORAGE_PATH},dst=/var/shaide-installer" \
   ghcr.io/axem-solutions/shaide/installer:oss
 ```

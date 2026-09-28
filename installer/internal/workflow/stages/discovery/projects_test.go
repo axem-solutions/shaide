@@ -92,6 +92,8 @@ type promptRecorder struct {
 	asked   int
 }
 
+func (*promptRecorder) Choose(core.ChoicePrompt) ([]string, error) { return nil, nil }
+
 func (p *promptRecorder) Input(string, string, string) (string, error) {
 	answer := ""
 	if p.asked < len(p.answers) {

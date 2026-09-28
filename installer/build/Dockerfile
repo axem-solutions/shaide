@@ -168,6 +168,8 @@ COPY app_serving/deployments/Pulumi.yaml \
     /opt/shaide-installer/projects/app-serving/Pulumi.yaml
 # app-serving resolves model values as <project>/deployments/models/<category>/<name>
 # (config.go resolveModelPaths), so the deployments/ level must be preserved.
+# The installer offers these directories as the supported models; see
+# Dockerfile.dockerignore for the variants left out.
 COPY app_serving/deployments/models/ \
     /opt/shaide-installer/projects/app-serving/deployments/models/
 COPY app_serving/charts/ \
@@ -205,7 +207,8 @@ COPY --from=chart-downloader \
     /opt/shaide-installer/projects/monitoring/charts/
 
 # Manifests
-# Only the image manifest is copied, the models are provided at runtime.
+# Only the image manifest is copied. The supported models are the app-serving
+# model directories above.
 COPY installer/build/manifests/images.yaml \
     /opt/shaide-installer/manifests/images.yaml
 

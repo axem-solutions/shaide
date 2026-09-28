@@ -21,6 +21,8 @@ func (r *templateConfigReporter) MultiSelect(string, []string) ([]string, error)
 	return r.multiValues, nil
 }
 
+func (*templateConfigReporter) Choose(core.ChoicePrompt) ([]string, error) { return nil, nil }
+
 func (r *templateConfigReporter) Input(string, string, string) (string, error) {
 	return r.inputValue, nil
 }

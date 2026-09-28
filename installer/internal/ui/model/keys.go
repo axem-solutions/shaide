@@ -28,6 +28,8 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handleSelectKey(msg)
 	case ModeMultiSelect:
 		return m.handleMultiSelectKey(msg)
+	case ModeChoice:
+		return m.handleChoiceKey(msg)
 	case ModeDone:
 		return m.handleDoneKey(msg)
 	default:
@@ -75,6 +77,22 @@ func (m Model) handleInputKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	m.Input, cmd = m.Input.Update(msg)
 	return m, cmd
+}
+
+func (m Model) handleChoiceKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	var outcome choiceOutcome
+	m.Choice, outcome = m.Choice.update(msg, m.choiceHeight())
+
+	switch outcome {
+	case choiceSubmitted:
+		m.sendPromptReply(messages.PromptReply{Values: m.Choice.values()})
+		m = m.clearPrompt()
+	case choiceCancelled:
+		m.sendPromptReply(messages.PromptReply{Err: events.ErrPromptCancelled})
+		m = m.clearPrompt()
+	}
+
+	return m, nil
 }
 
 func (m Model) handleSelectKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {

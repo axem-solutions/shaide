@@ -42,13 +42,30 @@ func (m Model) startMultiSelectPrompt(msg messages.PromptMultiSelectMessage) Mod
 	m.Mode = ModeMultiSelect
 	m.ReplyCh = msg.ReplyCh
 	m.PromptTitle = msg.Title
-	m.SelectWidth = multiSelectPromptWidth(msg.Options)
 	m.Input.Blur()
 	l.SetSize(m.selectListWidth(), m.selectListHeight())
 	m.List = l
 	m.resizeComponents()
 
 	return m
+}
+
+func (m Model) startChoicePrompt(msg messages.PromptChoiceMessage) Model {
+	m = m.clearProgress()
+
+	m.Mode = ModeChoice
+	m.ReplyCh = msg.ReplyCh
+	m.PromptTitle = msg.Title
+	m.Choice = newChoiceModel(msg, m.HasDarkBackground)
+	m.Input.Blur()
+	m.resizeComponents()
+
+	return m
+}
+
+// choiceHeight is how many lines the choice table may use below the title.
+func (m Model) choiceHeight() int {
+	return maxInt(m.leftContentHeight()-m.promptTitleHeight()-1, 5)
 }
 
 func (m Model) startSelectPrompt(msg messages.PromptSelectMessage) Model {
@@ -73,7 +90,6 @@ func (m Model) startSelectPrompt(msg messages.PromptSelectMessage) Model {
 	m.Mode = ModeSelect
 	m.ReplyCh = msg.ReplyCh
 	m.PromptTitle = msg.Title
-	m.SelectWidth = selectPromptWidth(msg.Options)
 	m.Input.Blur()
 	l.SetSize(m.selectListWidth(), m.selectListHeight())
 	m.List = l
@@ -88,6 +104,9 @@ func (m Model) applyTerminalBackground(isDark bool) Model {
 
 	if m.Mode == ModeSelect || m.Mode == ModeMultiSelect {
 		applyPromptListStyles(&m.List, isDark)
+	}
+	if m.Mode == ModeChoice {
+		m.Choice.setDark(isDark)
 	}
 
 	return m
@@ -147,22 +166,6 @@ func (m Model) selectListWidth() int {
 	return w
 }
 
-func selectPromptWidth(options []string) int {
-	width := 0
-	for _, option := range options {
-		if optionWidth := lipgloss.Width(option); optionWidth > width {
-			width = optionWidth
-		}
-	}
-
-	// Account for list item padding and the selected row cursor/border.
-	return width + 4
-}
-
-func multiSelectPromptWidth(options []string) int {
-	return selectPromptWidth(options) + 4
-}
-
 func multiSelectShortHelpKeys() []key.Binding {
 	return []key.Binding{
 		key.NewBinding(
@@ -193,7 +196,6 @@ func (m Model) clearPrompt() Model {
 	m.ReplyCh = nil
 	m.PromptTitle = ""
 	m.PromptPlaceholder = ""
-	m.SelectWidth = 0
 	m.Input.SetValue("")
 	m.Input.Blur()
 	m.resizeComponents()

@@ -1,6 +1,12 @@
 # EmbeddingGemma 300M ModelService Configuration
 # Serves google/embeddinggemma-300m through the OpenAI-compatible /v1/embeddings API
 # Tuned for 1x NVIDIA L4 node (g2-standard-8-l4)
+
+# Read by the shaide installer and ignored by the chart. The revision pins the
+# Hugging Face commit to download and derives the Harbor tag of the artifact.
+shaide:
+  revision: "57c266a740f537b4dc058e1b0cda161fd15afa75"
+
 multinode: false
 
 modelArtifacts:

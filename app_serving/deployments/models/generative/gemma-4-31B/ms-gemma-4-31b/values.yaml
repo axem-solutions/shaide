@@ -1,6 +1,12 @@
 # Gemma 4 31B-IT ModelService Configuration
 # Weights loaded from Harbor via ORAS pull job into PVC gemma-4-31b-model.
 # modelArtifacts.uri is overridden at deploy time to pvc+hf://gemma-4-31b-model/hub/google/gemma-4-31B
+
+# Read by the shaide installer and ignored by the chart. The revision pins the
+# Hugging Face commit to download and derives the Harbor tag of the artifact.
+shaide:
+  revision: "5bbc2fb1c1b2c611d06e3d9f23c170ba21659d89"
+
 multinode: false
 
 modelArtifacts:

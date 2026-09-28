@@ -53,28 +53,28 @@ func runtimeWith(t *testing.T, projectsDir string, models []catalog.Model) *core
 	rt.Bootstrap.Config.Paths = paths.Paths{ProjectsDir: projectsDir}
 	rt.Bootstrap.Config.Harbor.Service = "harbor"
 	rt.Bootstrap.Config.Harbor.Namespace = "harbor"
-	rt.Bootstrap.Catalog.Models = models
+	rt.Models.Serve = models
 
 	return rt
 }
 
 func gptOSS() catalog.Model {
 	return catalog.Model{
+		Name:          "GPT-OSS-20B",
+		Category:      catalog.CategoryGenerative,
+		Slug:          "gpt-oss-20b",
 		ID:            "openai/gpt-oss-20b",
+		Revision:      "6cee5e81ee83917806bbde320786a8fb61efebee",
+		StorageSize:   "70Gi",
 		HarborProject: "ai-models",
 		HarborName:    "gpt-oss-20b",
-		HarborTag:     "1.0.0",
-		Serving: &catalog.Serving{
-			Name:         "GPT-OSS-20B",
-			NodeSelector: "generative",
-			StorageSize:  "70Gi",
-		},
+		HarborTag:     "6cee5e81ee83",
 	}
 }
 
-// The manifest already records where a model was mirrored and which
+// The catalog already records where a model was mirrored and which
 // repository it is, so the installer passes both; the stack derives the rest.
-func TestSelectedModelsCarryTheManifest(t *testing.T) {
+func TestSelectedModelsCarryTheCatalog(t *testing.T) {
 	projects := packagedModels(t, map[string]string{"GPT-OSS-20B": "generative"})
 	rt := runtimeWith(t, projects, []catalog.Model{gptOSS()})
 
@@ -86,7 +86,7 @@ func TestSelectedModelsCarryTheManifest(t *testing.T) {
 	want := serving.Model{
 		Name:        "GPT-OSS-20B",
 		ID:          "openai/gpt-oss-20b",
-		HarborRef:   "harbor.harbor.svc.cluster.local/ai-models/gpt-oss-20b:1.0.0",
+		HarborRef:   "harbor.harbor.svc.cluster.local/ai-models/gpt-oss-20b:6cee5e81ee83",
 		StorageSize: "70Gi",
 	}
 	if models[0] != want {
@@ -94,13 +94,13 @@ func TestSelectedModelsCarryTheManifest(t *testing.T) {
 	}
 }
 
-// A model without a serving block is mirrored into Harbor but not deployed,
-// which is what a cluster that publishes models for another consumer wants.
-func TestModelsWithoutServingAreNotDeployed(t *testing.T) {
+// Only the models chosen to serve reach the stack; the rest of the catalog
+// does not.
+func TestOnlyModelsToServeAreDeployed(t *testing.T) {
 	projects := packagedModels(t, map[string]string{"GPT-OSS-20B": "generative"})
-	mirrorOnly := catalog.Model{ID: "nomic-ai/nomic-embed-text-v1.5", HarborName: "nomic"}
 
-	rt := runtimeWith(t, projects, []catalog.Model{mirrorOnly})
+	rt := runtimeWith(t, projects, nil)
+	rt.Bootstrap.Catalog.Models = []catalog.Model{gptOSS()}
 
 	if models := selectedModels(rt); len(models) != 0 {
 		t.Errorf("selected %v, want nothing to deploy", models)
@@ -190,7 +190,7 @@ func TestModelStorageAsksAgainWhenRecreating(t *testing.T) {
 	}
 }
 
-// A class the manifest pins is used as is.
+// A class already set on a model is used as is.
 func TestModelStorageLeavesPinnedClasses(t *testing.T) {
 	reporter := &storageReporter{}
 	rt, workDir := servingStorageRuntime(t, reporter)

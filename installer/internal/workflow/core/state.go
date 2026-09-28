@@ -15,6 +15,7 @@ type GlobalState struct {
 	Discovery DiscoveryState
 	Cluster   ClusterState
 	Bootstrap BootstrapState
+	Models    ModelsState
 	Artifact  ArtifactState
 	Pulumi    PulumiState
 }
@@ -38,13 +39,24 @@ type DiscoveryState struct {
 	AdminPassword string
 }
 
-type ArtifactState struct {
-	SelectedModels []catalog.Model
-	ModelOptions   []ModelOption
+// ModelsState is the operator's model selection for this run.
+type ModelsState struct {
+	// Installed holds the slugs of the catalog models already served on the
+	// cluster.
+	Installed map[string]bool
+
+	// Serve is every model app-serving runs after this run: the installed
+	// models that are kept plus the ones being installed.
+	Serve []catalog.Model
+
+	// Uninstall is the installed models being removed, from app-serving and
+	// from Harbor.
+	Uninstall []catalog.Model
 }
-type ModelOption struct {
-	Label string
-	Model catalog.Model
+
+type ArtifactState struct {
+	// ToUpload is the models to serve whose artifact is not in Harbor yet.
+	ToUpload []catalog.Model
 }
 
 type BootstrapState struct {

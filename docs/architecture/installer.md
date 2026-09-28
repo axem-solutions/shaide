@@ -21,15 +21,12 @@ docker build -f installer/build/Dockerfile -t installer:local .
 ```
 
 Rebuild the image after changing installer code, Pulumi projects, charts, CRDs, the
-image manifest, or deployment values — all of them ship inside it. The model manifest is
-the exception: it is supplied at runtime and needs no rebuild.
+image manifest, the supported models, or deployment values: all of them ship inside it.
 
 ## How it works
 
-The installer has two separate moving parts:
-
-- the installer container image, built from `installer/build/Dockerfile`;
-- the model manifest, supplied at runtime under the storage mount.
+Everything the installer deploys ships in the installer container image, built from
+`installer/build/Dockerfile`.
 
 At runtime the installer:
 
@@ -37,19 +34,20 @@ At runtime the installer:
 2. verifies and prepares persistent installer storage;
 3. copies the packaged Pulumi projects from `/opt/shaide-installer/projects` into
    `/var/shaide-installer/projects` and validates them;
-4. reads the packaged image manifest and the supplied model manifest;
+4. reads the packaged image manifest and the supported models from the app-serving
+   project's `deployments/models`;
 5. reads the mounted kubeconfig and lets the user select a context;
-6. discovers whether Harbor already exists in the selected cluster;
-7. deploys or configures Harbor when needed;
-8. downloads selected Hugging Face models and uploads model/image artifacts to
+6. lets the user choose which models to install, keep or uninstall;
+7. discovers whether Harbor already exists in the selected cluster;
+8. deploys or configures Harbor when needed;
+9. downloads the selected Hugging Face models that Harbor lacks and uploads model/image artifacts to
    Harbor through ORAS;
-9. runs the Pulumi projects through the Pulumi Automation API;
-10. writes runtime-generated stack config, secrets, cache files, upload state,
+10. runs the Pulumi projects through the Pulumi Automation API;
+11. writes runtime-generated stack config, secrets, cache files, upload state,
     Pulumi state, and logs under `/var/shaide-installer`.
 
 The installation payload ships inside the installer image, so the image version pins the
-platform version. Only the model manifest is external, which is what lets a model be
-added without an image rebuild.
+platform version, including which models it can serve.
 
 ## Workflow Stages
 
@@ -59,8 +57,9 @@ The default workflow is defined in `installer/internal/workflow/workflow.go`.
 | --- | --- |
 | `bootstrap` | Check terminal/storage, prepare the Pulumi projects, load manifests, require `HF_TOKEN`, and read `GHCR_TOKEN`. |
 | `initK8s` | Load kubeconfig, prompt for a Kubernetes context, and build the Kubernetes client. |
+| `select models` | Detect installed models from their pods' `axem.dev/model-slug` label and ask for an action per supported model. |
 | `discovery` | Find or deploy Harbor, create Harbor projects and robot credentials, and open a local port-forward. |
-| `populate Harbor` | Check model artifacts, download selected models, upload models, upload service images, and optionally delete models. |
+| `populate Harbor` | Check model artifacts, download and upload the models to serve that Harbor lacks, upload service images, and delete uninstalled models. |
 | `deploy AI platform` | Deploy `app-serving`, `gateway-provider`, and `app-shaide` Pulumi stacks. |
 
 Harbor discovery uses these defaults from `installer/internal/config/config.go`:
@@ -85,7 +84,7 @@ resource name, continue an update flow, or abort.
 | `installer/cmd/installer` | Installer entrypoint. |
 | `installer/internal/config` | Runtime defaults, project preparation, manifest parsing, and storage paths. |
 | `installer/internal/workflow` | Stage runner, recovery behavior, and workflow state. |
-| `installer/internal/workflow/stages` | Bootstrap, Kubernetes, discovery, artifact, and Pulumi stages. |
+| `installer/internal/workflow/stages` | Bootstrap, Kubernetes, model selection, discovery, artifact, and Pulumi stages. |
 | `installer/internal/ui` | Bubble Tea terminal UI. |
 | `installer/internal/harbor` | Harbor auth and API helpers. |
 | `installer/internal/huggingface` | Hugging Face download integration. |
@@ -107,7 +106,6 @@ host under `shaide-installer-data`.
 | `/.kube/config` | Mounted kubeconfig. |
 | `/var/shaide-installer` | Persistent installer storage root. |
 | `/var/shaide-installer/projects` | Pulumi projects, re-seeded from the image on every run. |
-| `/var/shaide-installer/manifests` | Where the supplied model manifest is read from by default. |
 | `/var/shaide-installer/model-cache` | Hugging Face model cache. |
 | `/var/shaide-installer/upload-state` | ORAS upload state for resumable uploads. |
 | `/var/shaide-installer/artifact-cache` | OCI artifact cache used by model uploads. |
@@ -133,6 +131,24 @@ host path of its bind mount.
 3. Rebuild the installer image.
 4. Rebuild the image; the projects are re-seeded from it on the next run.
 
+### Add A Model
+
+1. Add `app_serving/deployments/models/<generative|embedder>/<Name>/` with
+   `ms-<slug>/values.yaml` and `gaie-<slug>/values.yaml`.
+2. Pin the Hugging Face commit in the `ms-*` values file:
+
+   ```yaml
+   shaide:
+     revision: "<full commit sha>"
+   ```
+
+3. Rebuild the installer image. The model is offered in the `select models` stage and
+   published as `ai-models/<slug>:<first 12 characters of the revision>`.
+
+Bumping `shaide.revision` changes the Harbor tag, so the next run uploads and serves the
+new weights. Directories matching the variant patterns in
+`installer/build/Dockerfile.dockerignore` never reach the image.
+
 ### Add A Service Image
 
 1. Add an entry under `harbor_upload_images` in `installer/build/manifests/images.yaml`.
@@ -156,25 +172,6 @@ The current preloader options in `discovery.preloadHarbor` include
 environment-specific host, user, SSH key, node, containerd socket, and `ctr`
 path values. Treat those as developer-local wiring until they are moved into
 runtime config.
-
-### Add A Model Artifact
-
-1. Add the model to your `models.yaml`.
-2. Set `id`, `harbor_project`, `harbor_name`, `harbor_tag`, and a pinned
-   `revision`.
-3. Add `dependencies` when the model requires additional Hugging Face repos.
-4. Run the installer and select the model when prompted — no image rebuild needed.
-
-### Add Or Modify An App-Serving Deployment
-
-1. Add or update a folder under
-   `deployments/app-serving/deployments/models/<category>/<model-name>/`.
-2. Ensure the folder has one `gaie-*` directory and one `ms-*` directory.
-3. Ensure both contain `values.yaml`.
-4. Ensure the `gaie-*` and `ms-*` slugs match.
-5. Add or update the matching entry in `Pulumi.serving.yaml`.
-6. If the deployment uses a Harbor model artifact, point `modelSource.harborRef`
-   at the manifest artifact destination.
 
 ### Refresh Pulumi Deployment Assets
 

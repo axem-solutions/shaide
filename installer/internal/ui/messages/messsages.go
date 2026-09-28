@@ -46,6 +46,22 @@ type PromptMultiSelectMessage struct {
 	ReplyCh chan<- PromptReply
 }
 
+// PromptChoiceMessage asks for one option per table row. The reply carries
+// the chosen option of every row, in row order.
+type PromptChoiceMessage struct {
+	Title   string
+	Columns []string
+	Rows    []ChoiceRow
+	ReplyCh chan<- PromptReply
+}
+
+type ChoiceRow struct {
+	Cells   []string
+	Detail  string
+	Options []string
+	Current string
+}
+
 type PromptReply struct {
 	Values []string
 	Err    error

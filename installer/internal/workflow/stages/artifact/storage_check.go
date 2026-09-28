@@ -12,7 +12,7 @@ import (
 const modelStorageMultiplier = 3
 
 func reportModelStorage(rt *core.Runtime) error {
-	models := rt.Artifact.SelectedModels
+	models := rt.Artifact.ToUpload
 
 	var totalRequiredBytes int64
 	for _, model := range models {

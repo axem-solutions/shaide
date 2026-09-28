@@ -1,6 +1,12 @@
 # Jina Embeddings v5 Text Small Retrieval ModelService Configuration
 # Serves jinaai/jina-embeddings-v5-text-small-retrieval through the OpenAI-compatible /v1/embeddings API
 # Retrieval-tuned model for RAG. Callers should distinguish query vs document text upstream.
+
+# Read by the shaide installer and ignored by the chart. The revision pins the
+# Hugging Face commit to download and derives the Harbor tag of the artifact.
+shaide:
+  revision: "6856e76bb72982e58de0620458a4e8b3614da340"
+
 multinode: false
 
 modelArtifacts:

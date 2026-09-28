@@ -27,7 +27,6 @@ registries and Hugging Face, and pushes what it fetches into the internal regist
 | Item | Detail |
 | --- | --- |
 | Provisioning machine | Reachable: origin registries and Hugging Face |
-| Model manifest | `models.yaml` listing the models to publish |
 | Registry trust | Nodes must trust the internal registry's CA |
 | Storage | Capacity for all images and model weights |
 | Credentials | `HF_TOKEN`, plus registry tokens for any private images |

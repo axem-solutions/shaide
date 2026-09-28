@@ -2,6 +2,7 @@ package artifact
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,8 @@ import (
 	"github.com/axem-solutions/ai_platform/installer/internal/config/resources"
 	"github.com/axem-solutions/ai_platform/installer/internal/config/storage"
 	harborapi "github.com/axem-solutions/ai_platform/installer/internal/harbor/api"
+	harborerrors "github.com/axem-solutions/ai_platform/installer/internal/harbor/errors"
+	"github.com/axem-solutions/ai_platform/installer/internal/httpapi"
 	"github.com/axem-solutions/ai_platform/installer/internal/huggingface"
 	"github.com/axem-solutions/ai_platform/installer/internal/oras"
 	orasapi "github.com/axem-solutions/ai_platform/installer/internal/oras/client"
@@ -27,10 +30,6 @@ func Stage() core.Stage {
 				Name:    "check model artifacts",
 				Run:     checkModelArtifacts,
 				Recover: recoverCheckModelArtifacts,
-			},
-			{
-				Name: "Select models to download",
-				Run:  selectModelsToDownload,
 			},
 			{
 				Name: "report model storage",
@@ -52,8 +51,9 @@ func Stage() core.Stage {
 				Recover: recoverArtifactUpload,
 			},
 			{
-				Name:    "Delete models",
-				Run:     deleteModels,
+				Name:    "Delete uninstalled models",
+				When:    uninstallsModels,
+				Run:     deleteUninstalledModels,
 				Recover: recoverDeleteModels,
 			},
 		},
@@ -61,9 +61,13 @@ func Stage() core.Stage {
 	}
 }
 
-// STEP 1 - check models in Harbor
+// STEP 1 - check which models to serve are missing from Harbor
 func checkModelArtifacts(rt *core.Runtime) error {
-	rt.Artifact.ModelOptions = nil
+	rt.Artifact.ToUpload = nil
+
+	if len(rt.Models.Serve) == 0 {
+		return nil
+	}
 
 	if err := discovery.RefreshPortForward(rt); err != nil {
 		return err
@@ -75,7 +79,7 @@ func checkModelArtifacts(rt *core.Runtime) error {
 	}
 	client := orasapi.NewClient(clientOptions)
 
-	for _, model := range rt.Bootstrap.Catalog.Models {
+	for _, model := range rt.Models.Serve {
 		found, err := modelExistsInHarbor(context.Background(), client, model, rt.Bootstrap.Config.Paths.UploadState)
 		if err != nil {
 			return err
@@ -90,79 +94,19 @@ func checkModelArtifacts(rt *core.Runtime) error {
 			continue
 		}
 
-		label := modelOptionLabel(model)
-		rt.Artifact.ModelOptions = append(rt.Artifact.ModelOptions, core.ModelOption{
-			Label: label,
-			Model: model,
-		})
+		rt.Artifact.ToUpload = append(rt.Artifact.ToUpload, model)
+	}
+
+	if len(rt.Artifact.ToUpload) == 0 {
+		rt.Detailf("every model to serve is already in Harbor")
 	}
 
 	return nil
 }
 
-// STEP 2 - UserInput: ai-models
-func selectModelsToDownload(rt *core.Runtime) error {
-	if len(rt.Artifact.ModelOptions) == 0 {
-		rt.Detailf("all manifest models already exist in Harbor")
-		return nil
-	}
-
-	options := make([]string, 0, len(rt.Artifact.ModelOptions))
-	for _, option := range rt.Artifact.ModelOptions {
-		options = append(options, option.Label)
-	}
-
-	var selected []string
-	for {
-		var err error
-		selected, err = rt.Reporter.MultiSelect(
-			"Select models to download from manifest",
-			options,
-		)
-		if err != nil {
-			return err
-		}
-
-		if len(selected) > 0 {
-			break
-		}
-
-		confirm, err := rt.Reporter.Select(
-			"No model selected. Are you sure you want to continue?",
-			"No",
-			[]string{"No", "Yes"},
-		)
-		if err != nil {
-			return err
-		}
-
-		if confirm == "Yes" {
-			break
-		}
-	}
-
-	selectedSet := make(map[string]struct{}, len(selected))
-	for _, label := range selected {
-		selectedSet[label] = struct{}{}
-	}
-
-	for _, option := range rt.Artifact.ModelOptions {
-		if _, ok := selectedSet[option.Label]; !ok {
-			continue
-		}
-
-		rt.Artifact.SelectedModels = append(rt.Artifact.SelectedModels, option.Model)
-	}
-	if len(rt.Artifact.SelectedModels) == 0 {
-		rt.Detailf("no models selected for download")
-	}
-
-	return nil
-}
-
-// STEP 3 - Download models from HuggingFace
+// STEP 2 - Download models from HuggingFace
 func downloadModels(rt *core.Runtime) error {
-	if len(rt.Artifact.SelectedModels) == 0 {
+	if len(rt.Artifact.ToUpload) == 0 {
 		return nil
 	}
 
@@ -206,7 +150,7 @@ func downloadModels(rt *core.Runtime) error {
 		return err
 	}
 
-	for _, model := range rt.Artifact.SelectedModels {
+	for _, model := range rt.Artifact.ToUpload {
 		err := downloader.DownloadModel(context.Background(), huggingFaceModel(model))
 		if err != nil {
 			return err
@@ -217,9 +161,9 @@ func downloadModels(rt *core.Runtime) error {
 	return nil
 }
 
-// STEP 4 - Upload models to Harbor via oras
+// STEP 3 - Upload models to Harbor via oras
 func uploadModels(rt *core.Runtime) error {
-	if len(rt.Artifact.SelectedModels) == 0 {
+	if len(rt.Artifact.ToUpload) == 0 {
 		return nil
 	}
 	if err := discovery.RefreshPortForward(rt); err != nil {
@@ -236,11 +180,11 @@ func uploadModels(rt *core.Runtime) error {
 	return uploader.UploadModels(
 		context.Background(),
 		hubDir,
-		rt.Artifact.SelectedModels,
+		rt.Artifact.ToUpload,
 	)
 }
 
-// STEP 5 - Upload images to Harbor via oras
+// STEP 4 - Upload images to Harbor via oras
 func uploadImages(rt *core.Runtime) error {
 	if err := discovery.RefreshPortForward(rt); err != nil {
 		return err
@@ -335,79 +279,43 @@ func remoteSourceCredentials(rt *core.Runtime) map[string]orasapi.Credential {
 	return credentials
 }
 
-// STEP 6 - Delete models from Harbor
-func deleteModels(rt *core.Runtime) error {
-	shouldDelete, err := rt.Reporter.Select(
-		"Do you want to delete models from Harbor?",
-		"No",
-		[]string{"No", "Yes"},
-	)
-	if err != nil {
-		return err
-	}
-	if shouldDelete != "Yes" {
-		rt.Detailf("skipping Harbor model deletion")
-		return nil
-	}
+func uninstallsModels(rt *core.Runtime) bool {
+	return len(rt.Models.Uninstall) > 0
+}
 
-	client := rt.Discovery.Client
-
-	repositories, err := harborapi.ListRepositories(context.Background(), client, "ai-models")
-	if err != nil {
+// STEP 5 - Delete the artifacts of uninstalled models from Harbor
+//
+// A repository that is already gone counts as deleted, so a run that failed
+// after this step can uninstall the same model again.
+func deleteUninstalledModels(rt *core.Runtime) error {
+	if err := discovery.RefreshPortForward(rt); err != nil {
 		return err
 	}
 
-	for _, repo := range repositories {
-		rt.Detailf("%s", repo.Name)
-	}
-
-	options := make([]string, 0, len(repositories))
-	for _, model := range repositories {
-		options = append(options, model.Name)
-	}
-
-	if len(options) == 0 {
-		rt.Detailf("No models available in Harbor")
-		return nil
-	}
-
-	selected, err := rt.Reporter.MultiSelect(
-		"Select models to delete from Harbor",
-		options,
-	)
-	if err != nil {
-		return err
-	}
-	if len(selected) == 0 {
-		rt.Detailf("no models selected for deletion")
-		return nil
-	}
-
-	selectedSet := make(map[string]struct{}, len(selected))
-	for _, label := range selected {
-		selectedSet[label] = struct{}{}
-	}
-
-	for _, repo := range repositories {
-		if _, ok := selectedSet[repo.Name]; !ok {
+	for _, model := range rt.Models.Uninstall {
+		err := harborapi.DeleteRepository(
+			context.Background(),
+			rt.Discovery.Client,
+			model.HarborProject,
+			model.HarborName,
+		)
+		if isNotFound(err) {
+			rt.Detailf("Harbor has no %s/%s to delete", model.HarborProject, model.HarborName)
 			continue
 		}
-
-		parts := strings.Split(repo.Name, "/")
-
-		if err := harborapi.DeleteRepository(
-			context.Background(),
-			client,
-			parts[0],
-			parts[1],
-		); err != nil {
-			return fmt.Errorf("delete Harbor model %s: %w", repo.Name, err)
+		if err != nil {
+			return fmt.Errorf("delete Harbor model %s/%s: %w", model.HarborProject, model.HarborName, err)
 		}
 
-		rt.Detailf("deleted Harbor model repository %s/%s", "ai-models", repo.Name)
+		rt.Detailf("deleted Harbor model repository %s/%s", model.HarborProject, model.HarborName)
 	}
 
 	return nil
+}
+
+func isNotFound(err error) bool {
+	var harborErr *harborerrors.Error
+	return errors.As(err, &harborErr) && harborErr.Kind == httpapi.ErrNotFound
 }
 
 func modelExistsInHarbor(ctx context.Context, client *orasapi.Client, model catalog.Model, uploadDir string) (bool, error) {
@@ -449,13 +357,6 @@ func huggingFaceModel(model catalog.Model) huggingface.Model {
 		Revision:     model.Revision,
 		Dependencies: deps,
 	}
-}
-
-func modelOptionLabel(model catalog.Model) string {
-	return fmt.Sprintf("%s:%s",
-		model.HarborName,
-		model.HarborTag,
-	)
 }
 
 func ClosePortForward(rt *core.Runtime) error {

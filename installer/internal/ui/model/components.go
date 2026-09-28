@@ -54,6 +54,14 @@ func (m Model) renderLeftPanel() string {
 			m.renderPromptHelp(),
 		)
 
+	case ModeChoice:
+		body = lipgloss.JoinVertical(
+			lipgloss.Left,
+			m.renderPromptTitle(),
+			"",
+			m.Choice.view(m.leftContentWidth(), m.choiceHeight()),
+		)
+
 	case ModeDone:
 		text := "Workflow complete."
 		if m.Err != nil {
@@ -151,7 +159,7 @@ func (m Model) renderProgressLine() string {
 		progressHeader(status, progressPercentText(m.ProgressPercent), width),
 	}
 	if detail != "" {
-		lines = append(lines, progressDetailStyle.Render(detail))
+		lines = append(lines, progressDetailStyle.Render(wrapText(detail, width)))
 	}
 	lines = append(lines, bar.ViewAs(percent))
 

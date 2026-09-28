@@ -14,6 +14,16 @@
 !app_serving/deployments/Pulumi.yaml
 !app_serving/deployments/models/
 !app_serving/deployments/models/**
+# Per-cluster variants and simulators are not supported models. Keeping them
+# out of the image keeps them out of the installer's model selector.
+app_serving/deployments/models/sim
+app_serving/deployments/models/sim/**
+app_serving/deployments/models/*/sim-*
+app_serving/deployments/models/*/sim-*/**
+app_serving/deployments/models/*/*-rke2
+app_serving/deployments/models/*/*-rke2/**
+app_serving/deployments/models/*/*-janosmurai
+app_serving/deployments/models/*/*-janosmurai/**
 !app_serving/charts/
 !app_serving/charts/**
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/axem-solutions/ai_platform/installer/internal/iac"
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/core"
 	"github.com/axem-solutions/ai_platform/pkg/iac/serving"
 	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
@@ -18,24 +19,25 @@ const (
 	servingModeRecreate = "Recreate — destroy the stack, deleting model volumes"
 )
 
-// ServesModels reports whether anything is selected to serve on the cluster.
+// ServesModels reports whether app-serving has anything to do: models to
+// serve, or installed models to remove.
 //
 // An empty selection is a valid deployment, not a misconfiguration: a cluster
 // with no GPU nodes that reaches third-party providers only needs the rest of
-// the platform and no serving stack. The stack itself refuses to configure
-// without at least one model ("models must be non-empty"), and that failure is
-// unrecoverable, so the whole install used to stop here rather than skipping a
-// stack it had nothing to put in.
-//
-// The model manifest stands in for the model selection UI: it lists the models
-// the operator would have picked, so its being empty is the selection.
+// the platform and no serving stack.
 func ServesModels(rt *core.Runtime) bool {
-	return len(rt.Bootstrap.Catalog.Models) > 0
+	return len(rt.Models.Serve) > 0 || len(rt.Models.Uninstall) > 0
 }
 
 func DeployAppServing(rt *core.Runtime) error {
 	workDir := filepath.Join(rt.Bootstrap.Config.Paths.ProjectsDir, projectAppServing)
 	platform := cluster.Provider(rt.Bootstrap.Provider)
+
+	// The stack refuses an empty model list, so uninstalling the last model
+	// tears the stack down instead of updating it.
+	if len(rt.Models.Serve) == 0 {
+		return destroyAppServing(rt, workDir, platform)
+	}
 
 	// Recreating tears the stack down before deploying it again, which deletes
 	// the model PersistentVolumeClaims along with it — the weights have to be
@@ -90,27 +92,54 @@ func DeployAppServing(rt *core.Runtime) error {
 	return nil
 }
 
-// selectedModels maps the model manifest onto the stack's model list. Only a
-// model carrying a serving block is deployed: the rest are published to
-// Harbor for another consumer to pull.
+func destroyAppServing(rt *core.Runtime, workDir string, platform cluster.Provider) error {
+	servingStack := serving.NewStack(
+		workDir,
+		stackpkg.Options{
+			Platform:   platform,
+			Kubeconfig: rt.Cluster.ConfigPath,
+			Context:    rt.Cluster.SelectedContext,
+		},
+		serving.Options{Logf: rt.Detailf},
+	)
+	config := servingStack.Config()
+
+	deployer, err := iac.NewDeployer(iac.DeployerOptions{
+		ProjectName: config.ProjectName(),
+		StackName:   config.StackName(),
+		WorkDir:     config.ProjectDir(),
+		StateDir:    rt.Bootstrap.Config.Paths.PulumiState,
+		Passphrase:  rt.Bootstrap.Config.Pulumi.ConfigPassphrase,
+		Logger:      rt.Logger.Writer(),
+		Confirmer:   rt.Reporter,
+		Target: &iac.ClusterTarget{
+			KubeconfigPath: rt.Cluster.ConfigPath,
+			Context:        rt.Cluster.SelectedContext,
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	rt.Detailf("no models left to serve; destroying app-serving")
+	return deployer.DestroyOnly(context.Background(), servingStack.Deploy)
+}
+
+// selectedModels maps the models to serve onto the stack's model list. The
+// Harbor reference is derived from where the artifact stage put each model.
 func selectedModels(rt *core.Runtime) []serving.Model {
 	registry := harborRegistryHostname(rt)
 
-	var models []serving.Model
-	for _, model := range rt.Bootstrap.Catalog.Models {
-		if model.Serving == nil {
-			continue
-		}
-
+	models := make([]serving.Model, 0, len(rt.Models.Serve))
+	for _, model := range rt.Models.Serve {
 		models = append(models, serving.Model{
-			Name: model.Serving.Name,
+			Name: model.Name,
 			ID:   model.ID,
 			HarborRef: fmt.Sprintf(
 				"%s/%s/%s:%s",
 				registry, model.HarborProject, model.HarborName, model.HarborTag,
 			),
-			StorageSize:  model.Serving.StorageSize,
-			StorageClass: model.Serving.StorageClass,
+			StorageSize: model.StorageSize,
 		})
 	}
 
@@ -124,8 +153,8 @@ func selectedModels(rt *core.Runtime) []serving.Model {
 // models without a volume, or for all of them when recreating, with the class
 // already in use pre-selected. The answer is set on those models only: as the
 // stack-wide default it would also reach an existing volume created without a
-// class, which cannot take one. A class the manifest pins is left alone, and
-// on-prem nothing is asked, since the stack puts every model volume on the
+// class, which cannot take one. A class already set on a model is left alone,
+// and on-prem nothing is asked, since the stack puts every model volume on the
 // hostpath class there.
 func modelStorageClasses(
 	rt *core.Runtime,

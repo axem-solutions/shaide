@@ -121,6 +121,23 @@ func (d *Deployer) Deploy(ctx context.Context, deployment func(ctx *pulumi.Conte
 	return d.up(ctx, stack)
 }
 
+// DestroyOnly tears the stack down without deploying it again, for a stack
+// that has nothing left to run. Its config is not resolved: a stack whose
+// inputs are now empty can have config that would no longer validate.
+func (d *Deployer) DestroyOnly(ctx context.Context, deployment func(ctx *pulumi.Context) error) error {
+	stack, err := d.prepareStack(ctx, deployment)
+	if err != nil {
+		return err
+	}
+
+	if err := d.checkClusterTarget(ctx, stack); err != nil {
+		return err
+	}
+
+	_, err = d.destroy(ctx, stack)
+	return err
+}
+
 func (d *Deployer) prepareStack(ctx context.Context, deployment func(ctx *pulumi.Context) error) (auto.Stack, error) {
 	if err := os.MkdirAll(d.StateDir, 0o755); err != nil {
 		return auto.Stack{}, fmt.Errorf("create pulumi state dir: %w", err)

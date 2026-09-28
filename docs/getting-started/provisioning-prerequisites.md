@@ -33,10 +33,9 @@ This must be preserved across re-runs and upgrades - it holds installer state.
 
 | File | Purpose |
 | --- | --- |
-| `models.yaml` | Models to publish into the internal registry |
-| Installer image | Pulled from `ghcr.io` |
+| Installer image | Pulled from `ghcr.io`. It ships the supported models; you pick them in the installer |
 
-See [Model manifest](../installation/installer-guide.md#model-manifest).
+See [Supported models](../installation/installer-guide.md#supported-models).
 
 ## Credentials
 

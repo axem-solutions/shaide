@@ -34,6 +34,8 @@ func (r *storageReporter) Select(_ string, current string, options []string) (st
 
 func (*storageReporter) MultiSelect(string, []string) ([]string, error) { return nil, nil }
 
+func (*storageReporter) Choose(core.ChoicePrompt) ([]string, error) { return nil, nil }
+
 func (*storageReporter) Input(string, string, string) (string, error) { return "", nil }
 
 func (*storageReporter) ProgressModel(core.ModelProgress) {}
