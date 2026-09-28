@@ -20,43 +20,44 @@ func stepNamed(t *testing.T, name string) core.Step {
 	return core.Step{}
 }
 
-func runtimeWithModels(models []catalog.Model) *core.Runtime {
+func runtimeWithSelection(serve, uninstall []catalog.Model) *core.Runtime {
 	rt := &core.Runtime{
 		GlobalState:      core.NewGlobalState(),
 		ActiveStageState: core.NewActiveStageState(),
 	}
-	rt.Bootstrap.Catalog.Models = models
+	rt.Models.Serve = serve
+	rt.Models.Uninstall = uninstall
 
 	return rt
 }
 
-// A cluster that serves no models must not reach the app-serving stack: it
-// refuses to configure without one, and that failure ends the whole run before
-// App-Shaide and Monitoring are deployed.
-func TestAppServingIsSkippedWithoutModels(t *testing.T) {
+// A cluster that serves no models, and has none to remove, must not reach the
+// app-serving stack: it refuses to configure without one, and that failure
+// ends the whole run before App-Shaide and Monitoring are deployed.
+func TestAppServingRunsOnlyWithSomethingToDo(t *testing.T) {
 	step := stepNamed(t, "Deploy App-Serving ")
 
 	if step.When == nil {
 		t.Fatal("the app-serving step has no condition; it would run with nothing to serve")
 	}
 
+	model := catalog.Model{ID: "nomic-ai/nomic-embed-text-v1.5"}
+
 	tests := []struct {
-		name   string
-		models []catalog.Model
-		want   bool
+		name      string
+		serve     []catalog.Model
+		uninstall []catalog.Model
+		want      bool
 	}{
-		{name: "no models selected", models: nil, want: false},
-		{name: "empty selection", models: []catalog.Model{}, want: false},
-		{
-			name:   "one model selected",
-			models: []catalog.Model{{ID: "nomic-ai/nomic-embed-text-v1.5"}},
-			want:   true,
-		},
+		{name: "nothing selected", want: false},
+		{name: "empty selection", serve: []catalog.Model{}, uninstall: []catalog.Model{}, want: false},
+		{name: "one model to serve", serve: []catalog.Model{model}, want: true},
+		{name: "last model uninstalled", uninstall: []catalog.Model{model}, want: true},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if got := step.When(runtimeWithModels(test.models)); got != test.want {
+			if got := step.When(runtimeWithSelection(test.serve, test.uninstall)); got != test.want {
 				t.Errorf("When() = %v, want %v", got, test.want)
 			}
 		})

@@ -2,6 +2,7 @@ package model
 
 import (
 	"errors"
+	"fmt"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/axem-solutions/ai_platform/installer/internal/ui/messages"
@@ -9,6 +10,22 @@ import (
 
 var ErrPromptAlreadyActive = errors.New("another prompt is already active")
 var ErrNoSelectOptions = errors.New("select prompt has no options")
+
+// validateChoiceRows rejects a choice prompt the table cannot show: every row
+// needs an option to be set to.
+func validateChoiceRows(rows []messages.ChoiceRow) error {
+	if len(rows) == 0 {
+		return ErrNoSelectOptions
+	}
+
+	for i, row := range rows {
+		if len(row.Options) == 0 {
+			return fmt.Errorf("choice row %d: %w", i+1, ErrNoSelectOptions)
+		}
+	}
+
+	return nil
+}
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -73,6 +90,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		m = m.startMultiSelectPrompt(msg)
+		return m, nil
+
+	case messages.PromptChoiceMessage:
+		if m.ReplyCh != nil {
+			msg.ReplyCh <- messages.PromptReply{Err: ErrPromptAlreadyActive}
+			return m, nil
+		}
+
+		if err := validateChoiceRows(msg.Rows); err != nil {
+			msg.ReplyCh <- messages.PromptReply{Err: err}
+			return m, nil
+		}
+
+		m = m.startChoicePrompt(msg)
 		return m, nil
 
 	case messages.WorkflowDoneMessage:

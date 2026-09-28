@@ -6,6 +6,12 @@
 # bundles. v0.7.0 is also the first llm-d-cuda compiled for Ampere
 # (TORCH_CUDA_ARCH_LIST=8.0;8.6;8.9;9.0;9.0a;10.0;12.0+PTX); v0.4.0 targeted
 # only 9.0a;10.0 and has no sm_86 kernel, so it cannot run on an A10.
+
+# Read by the shaide installer and ignored by the chart. The revision pins the
+# Hugging Face commit to download and derives the Harbor tag of the artifact.
+shaide:
+  revision: "6cee5e81ee83917806bbde320786a8fb61efebee"
+
 multinode: false
 
 modelArtifacts:

@@ -55,7 +55,7 @@ shaide - see [Compute](../cluster-requirements/compute.md).
 | Symptom | Cause |
 | --- | --- |
 | Cannot read previous state | Wrong passphrase or state directory |
-| Model manifest does not exist or is not readable | Place `models.yaml` under `<STORAGE_PATH>/manifests/`, or set `MODEL_MANIFEST_PATH` |
+| A model is missing from the selector | The log at the start of `Select models` names each skipped model directory and why |
 | Requires a terminal | Missing `-it` on `docker run` |
 | Times out reaching cluster | kubeconfig or network path |
 

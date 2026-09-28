@@ -31,6 +31,8 @@ func (r *fakeReporter) MultiSelect(string, []string) ([]string, error) { return 
 
 func (r *fakeReporter) ProgressModel(core.ModelProgress) {}
 
+func (*fakeReporter) Choose(core.ChoicePrompt) ([]string, error) { return nil, nil }
+
 func (r *fakeReporter) Input(title string, _ string, _ string) (string, error) {
 	r.inputTitles = append(r.inputTitles, title)
 	if len(r.inputAnswers) == 0 {

@@ -108,9 +108,9 @@ func prepareAssets(rt *core.Runtime) error {
 	loadedCatalog, err := catalog.Load(
 		catalog.LoadOptions{
 			ImageManifestPath: paths.ImageManifestPath,
-			ModelManifestPath: paths.ModelManifestPath,
 			ImagesDir:         paths.ImagesDir,
 			Describe:          paths.Describe,
+			ModelsDir:         projects.ModelsDir(paths.ProjectsDir),
 		})
 	if err != nil {
 		return fmt.Errorf("load catalog: %w", err)

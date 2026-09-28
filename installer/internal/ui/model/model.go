@@ -15,6 +15,7 @@ const (
 	ModeInput
 	ModeSelect
 	ModeMultiSelect
+	ModeChoice
 	ModeDone
 )
 
@@ -32,13 +33,13 @@ type Model struct {
 	LogViewport viewport.Model
 	Input       textinput.Model
 	List        list.Model
+	Choice      choiceModel
 
 	Width  int
 	Height int
 
 	PromptTitle       string
 	PromptPlaceholder string
-	SelectWidth       int
 
 	Progress        progress.Model
 	ProgressActive  bool

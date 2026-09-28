@@ -1,6 +1,12 @@
 # Nomic Embed Text v1.5 ModelService Configuration
 # Serves nomic-ai/nomic-embed-text-v1.5 through the OpenAI-compatible /v1/embeddings API
 # Tuned for a single-GPU embedder deployment using vLLM pooling runner.
+
+# Read by the shaide installer and ignored by the chart. The revision pins the
+# Hugging Face commit to download and derives the Harbor tag of the artifact.
+shaide:
+  revision: "e9b6763023c676ca8431644204f50c2b100d9aab"
+
 multinode: false
 
 modelArtifacts:

@@ -26,6 +26,12 @@ func (opts PrepareOptions) Validate() error {
 	return nil
 }
 
+// ModelsDir is where the app-serving project keeps the supported models, one
+// deployments/models/<category>/<Name>/ directory each.
+func ModelsDir(projectsDir string) string {
+	return filepath.Join(projectsDir, "app-serving", "deployments", "models")
+}
+
 // Prepare replaces the runtime Pulumi projects with the projects packaged
 // in the installer image, then validates the expected files.
 func Prepare(opts PrepareOptions) error {

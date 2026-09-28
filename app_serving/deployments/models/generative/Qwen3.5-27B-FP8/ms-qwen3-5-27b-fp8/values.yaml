@@ -3,6 +3,12 @@
 # The upstream vLLM recipe targets TP=8 and the full 262K context window. We
 # use a conservative single-GPU text-only profile so the model remains practical
 # on 1x 48 GB cards while still supporting reasoning and tool calls.
+
+# Read by the shaide installer and ignored by the chart. The revision pins the
+# Hugging Face commit to download and derives the Harbor tag of the artifact.
+shaide:
+  revision: "97f5941bf617e31c5e237364a8602ce3f03a551a"
+
 multinode: false
 
 modelArtifacts:

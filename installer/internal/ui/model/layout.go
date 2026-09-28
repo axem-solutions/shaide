@@ -7,11 +7,9 @@ import (
 )
 
 const (
-	minLeftWidth       = 32
-	preferredLeftWidth = 42
-	minRightWidth      = 40
-	minLogWidth        = 24
-	panelGap           = 1
+	minLeftWidth = 44
+	minLogWidth  = 24
+	panelGap     = 1
 )
 
 func (m *Model) resizeComponents() {
@@ -29,23 +27,12 @@ func (m *Model) resizeComponents() {
 	}
 }
 
+// leftPanelWidth gives the prompt panel a third of the terminal and the logs
+// the rest. Below minLeftWidth the prompts stop being usable, so the logs
+// shrink first.
 func (m Model) leftPanelWidth() int {
-	preferred := preferredLeftWidth
-
-	if titleWidth := m.promptTitlePanelWidth(); titleWidth > preferred {
-		preferred = titleWidth
-	}
-
-	if (m.Mode == ModeSelect || m.Mode == ModeMultiSelect) && m.SelectWidth > 0 {
-		preferred = maxInt(preferred, m.SelectWidth+6)
-	}
-
-	if progressWidth := m.progressPanelWidth(); progressWidth > preferred {
-		preferred = progressWidth
-	}
-
 	if m.Width <= 0 {
-		return preferred
+		return minLeftWidth
 	}
 
 	maxLeft := m.Width - minLogWidth - panelGap
@@ -56,22 +43,7 @@ func (m Model) leftPanelWidth() int {
 		return minLeftWidth
 	}
 
-	if preferred > maxLeft {
-		return maxLeft
-	}
-	if (m.Mode == ModeSelect || m.Mode == ModeMultiSelect) && m.SelectWidth > 0 {
-		return preferred
-	}
-
-	if m.Width < preferredLeftWidth+minRightWidth+panelGap {
-		w := m.Width / 2
-		if w < minLeftWidth {
-			return minLeftWidth
-		}
-		return w
-	}
-
-	return preferred
+	return minInt(maxInt(m.Width/3, minLeftWidth), maxLeft)
 }
 
 func (m Model) rightPanelWidth() int {
@@ -111,30 +83,6 @@ func (m Model) leftContentHeight() int {
 
 func (m Model) inputWidth() int {
 	return m.leftContentWidth()
-}
-
-func (m Model) promptTitlePanelWidth() int {
-	if m.PromptTitle == "" {
-		return 0
-	}
-
-	return lipgloss.Width(m.PromptTitle) + leftPanelStyle.GetHorizontalFrameSize()
-}
-
-func (m Model) progressPanelWidth() int {
-	if !m.ProgressActive {
-		return 0
-	}
-
-	status, detail := progressLabelParts(m.ProgressID)
-	headerWidth := lipgloss.Width(m.progressStatusText(status)) + 1 + lipgloss.Width(progressPercentText(m.ProgressPercent))
-	detailWidth := lipgloss.Width(detail)
-	contentWidth := maxInt(headerWidth, detailWidth)
-	if contentWidth == 0 {
-		return 0
-	}
-
-	return contentWidth + leftPanelStyle.GetHorizontalFrameSize()
 }
 
 func (m Model) promptTitleHeight() int {

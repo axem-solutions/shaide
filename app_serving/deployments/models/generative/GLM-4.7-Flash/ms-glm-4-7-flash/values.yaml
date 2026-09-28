@@ -1,6 +1,12 @@
 # GLM-4.7-Flash ModelService Configuration
 # Creates the resources for zai-org/GLM-4.7-Flash
 # Uses the official TP=4 vLLM serving shape from the model card.
+
+# Read by the shaide installer and ignored by the chart. The revision pins the
+# Hugging Face commit to download and derives the Harbor tag of the artifact.
+shaide:
+  revision: "7dd20894a642a0aa287e9827cb1a1f7f91386b67"
+
 multinode: false
 
 modelArtifacts:

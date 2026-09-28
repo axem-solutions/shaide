@@ -30,6 +30,11 @@
 # Expected Harbor model artifact:
 #   harbor.harbor.svc.cluster.local/ai-models/gemma-4-31b-it:1.0.0
 
+# Read by the shaide installer and ignored by the chart. The revision pins the
+# Hugging Face commit to download and derives the Harbor tag of the artifact.
+shaide:
+  revision: "842da3794eaa0b77d5f08bae87a17459d91ff475"
+
 multinode: false
 
 modelArtifacts:

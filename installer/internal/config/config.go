@@ -14,12 +14,7 @@ const (
 	KubeconfigPathEnv = "KUBECONFIG"
 	PrivateKeyPathEnv = "PRIVATE_KEY_PATH"
 
-	// ModelManifestPathEnv overrides where the model manifest is read from.
-	// The manifest is supplied at runtime rather than baked into the image, so
-	// this is the escape hatch for keeping it somewhere other than the default
-	// path under the storage mount.
-	ModelManifestPathEnv = "MODEL_MANIFEST_PATH"
-	HFTokenEnv           = "HF_TOKEN"
+	HFTokenEnv = "HF_TOKEN"
 
 	GHCRUserEnv  = "GHCR_USERNAME"
 	GHCRTokenEnv = "GHCR_TOKEN"
@@ -123,10 +118,6 @@ func Load() Config {
 
 	if value := env(KubeconfigPathEnv); value != "" {
 		paths.Kubeconfig = filepath.Clean(value)
-	}
-
-	if value := env(ModelManifestPathEnv); value != "" {
-		paths.ModelManifestPath = filepath.Clean(value)
 	}
 
 	hfToken := env(HFTokenEnv)

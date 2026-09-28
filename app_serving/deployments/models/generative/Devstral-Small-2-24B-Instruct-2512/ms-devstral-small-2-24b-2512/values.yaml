@@ -3,6 +3,12 @@
 # The model ships in FP8 and the upstream vLLM example uses TP=2 for the full
 # 256K context window. We start with a conservative single-GPU profile so the
 # model stays practical on 1x 48 GB cards.
+
+# Read by the shaide installer and ignored by the chart. The revision pins the
+# Hugging Face commit to download and derives the Harbor tag of the artifact.
+shaide:
+  revision: "55c5b41e98c2dbd21b0c8afffc540dcfc9eb5128"
+
 multinode: false
 
 modelArtifacts:

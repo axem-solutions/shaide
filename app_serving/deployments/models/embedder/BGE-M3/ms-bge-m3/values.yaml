@@ -1,6 +1,12 @@
 # BGE-ME ModelService Configuration
 # Serves BAAI/bge-m3 through the OpenAI-compatible /v1/embeddings API
 # Tuned for 1x NVIDIA L4 node (g2-standard-8-l4)
+
+# Read by the shaide installer and ignored by the chart. The revision pins the
+# Hugging Face commit to download and derives the Harbor tag of the artifact.
+shaide:
+  revision: "5617a9f61b028005a4858fdac845db406aefb181"
+
 multinode: false
 
 modelArtifacts:

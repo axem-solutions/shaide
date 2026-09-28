@@ -1,6 +1,12 @@
 # DeepSeek Coder V2 Lite Instruct ModelService Configuration
 # Creates the resources for DeepSeek-Coder-V2-Lite-Instruct
 # Optimized for 1x g5.24xlarge node (4x NVIDIA A10G GPUs)
+
+# Read by the shaide installer and ignored by the chart. The revision pins the
+# Hugging Face commit to download and derives the Harbor tag of the artifact.
+shaide:
+  revision: "e434a23f91ba5b4923cf6c9d9a238eb4a08e3a11"
+
 multinode: false
 
 modelArtifacts:
