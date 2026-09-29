@@ -56,6 +56,8 @@ func (u *Uploader) prepareModelArtifact(ctx context.Context, hubdir string, mode
 		SourceRef:   ref,
 		SpoolChunks: false,
 
+		PlatformIndependent: true,
+
 		Project: model.HarborProject,
 		Name:    model.HarborName,
 		Tag:     model.HarborTag,

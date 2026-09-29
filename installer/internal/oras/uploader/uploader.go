@@ -102,6 +102,11 @@ type Artifact struct {
 	// against the target registry. Local artifacts can be reopened directly.
 	SpoolChunks bool
 
+	// PlatformIndependent copies the artifact whole instead of selecting the
+	// cluster's platform. A model artifact has no platform: its config is the
+	// OCI empty descriptor, which a platform selection cannot read.
+	PlatformIndependent bool
+
 	Project string
 	Name    string
 	Tag     string
@@ -159,7 +164,7 @@ func (u *Uploader) copy(ctx context.Context, artifact Artifact, target *reposito
 		artifact.SourceRef,
 		target,
 		artifact.Tag,
-		u.copyOptions(tracker),
+		u.copyOptions(artifact, tracker),
 	)
 	if err != nil {
 		return ocispec.Descriptor{}, fmt.Errorf("copy artifact to Harbor: %w", u.copyError(err))
@@ -172,7 +177,7 @@ func (u *Uploader) copy(ctx context.Context, artifact Artifact, target *reposito
 	return manifest, nil
 }
 
-func (u *Uploader) copyOptions(tracker *progress.Tracker) oras.CopyOptions {
+func (u *Uploader) copyOptions(artifact Artifact, tracker *progress.Tracker) oras.CopyOptions {
 	options := oras.CopyOptions{
 		CopyGraphOptions: oras.CopyGraphOptions{
 			Concurrency: 1,
@@ -186,7 +191,7 @@ func (u *Uploader) copyOptions(tracker *progress.Tracker) oras.CopyOptions {
 	// Without a target platform oras copies the whole graph, so every
 	// architecture in a manifest list is mirrored — for a multi-GB image that
 	// is most of the transfer spent on variants the cluster cannot schedule.
-	if u.platform.IsValid() {
+	if u.platform.IsValid() && !artifact.PlatformIndependent {
 		options.WithTargetPlatform(&ocispec.Platform{
 			OS:           u.platform.OS,
 			Architecture: u.platform.Arch,
