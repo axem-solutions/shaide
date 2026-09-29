@@ -156,7 +156,7 @@ func TestCopyOptionsSelectClusterPlatform(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			u := &Uploader{platform: test.platform, logf: func(string, ...any) {}}
 			target := memory.New()
-			root, err := oras.Copy(ctx, source, "multi", target, "copied", u.copyOptions(nil))
+			root, err := oras.Copy(ctx, source, "multi", target, "copied", u.copyOptions(Artifact{}, nil))
 			if test.wantErr {
 				if !errors.Is(err, oraserrdef.ErrNotFound) {
 					t.Fatalf("Copy() error = %v, want platform not found", err)
@@ -183,5 +183,46 @@ func TestCopyOptionsSelectClusterPlatform(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// A model artifact has no platform: its config is the OCI empty descriptor.
+// Selecting the cluster's platform on it fails the push, which is how every
+// model upload failed once images were mirrored for one platform only.
+func TestModelArtifactsAreCopiedWhole(t *testing.T) {
+	ctx := context.Background()
+	source := memory.New()
+
+	layerData := []byte("model weights")
+	layer := content.NewDescriptorFromBytes(ocispec.MediaTypeImageLayerGzip, layerData)
+	if err := source.Push(ctx, layer, bytes.NewReader(layerData)); err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := oras.PackManifest(ctx, source, oras.PackManifestVersion1_1, modelArtifactType, oras.PackManifestOptions{
+		Layers: []ocispec.Descriptor{layer},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := source.Tag(ctx, manifest, "model"); err != nil {
+		t.Fatal(err)
+	}
+
+	u := &Uploader{platform: cluster.Platform{OS: "linux", Arch: "amd64"}, logf: func(string, ...any) {}}
+
+	if _, err := oras.Copy(ctx, source, "model", memory.New(), "copied", u.copyOptions(Artifact{}, nil)); err == nil {
+		t.Fatal("copying a model artifact with a platform selection succeeded; the test no longer reproduces the failure")
+	}
+
+	target := memory.New()
+	root, err := oras.Copy(ctx, source, "model", target, "copied", u.copyOptions(Artifact{PlatformIndependent: true}, nil))
+	if err != nil {
+		t.Fatalf("Copy() error = %v, want the model artifact copied whole", err)
+	}
+	if root.Digest != manifest.Digest {
+		t.Errorf("copied root = %s, want %s", root.Digest, manifest.Digest)
+	}
+	if exists, err := target.Exists(ctx, layer); err != nil || !exists {
+		t.Errorf("layer copied = %v, err = %v, want the weights copied", exists, err)
 	}
 }
