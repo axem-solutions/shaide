@@ -57,7 +57,9 @@ offered, and the reason is logged at the start of the `Select models` stage.
 Each model is published to the internal registry as
 `<registry-host>/ai-models/<slug>:<first 12 characters of the revision>`, as an OCI
 artifact of type `application/vnd.cnai.model`. Because the tag follows the revision,
-pinning a new revision publishes and serves the new weights on the next run.
+pinning a new revision publishes and serves the new weights on the next run. The installer then
+removes the previous revision from its download cache and the previous artifact from its
+artifact cache, so the provisioning host keeps one copy of each model.
 
 ### Transfer resources
 

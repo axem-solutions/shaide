@@ -108,7 +108,7 @@ func NewDownloader(opts Options) (*Downloader, error) {
 		XetDirName:     xetDirName,
 		ModelDirPrefix: modelDirPrefix,
 		SentinelName:   sentinelName,
-		Revision:       defaultRevision,
+		RefName:        defaultRevision,
 	})
 
 	return &Downloader{
@@ -136,7 +136,7 @@ func (d *Downloader) DownloadModel(ctx context.Context, model Model) error {
 }
 
 func (d *Downloader) downloadRepository(ctx context.Context, repo Repository) error {
-	state, err := d.cache.Prepare(repo.ID)
+	state, err := d.cache.Prepare(repo.ID, normalizeRevision(repo.Revision))
 	if err != nil {
 		return &hferrors.Error{
 			Kind:   hferrors.ErrCache,
@@ -146,8 +146,8 @@ func (d *Downloader) downloadRepository(ctx context.Context, repo Repository) er
 		}
 	}
 	if state.Skip {
-		d.detailf("using cached model %s", repo.ID)
-		return nil
+		d.detailf("using cached model %s@%s", repo.ID, state.Revision)
+		return d.pruneOtherRevisions(repo, state)
 	}
 
 	size, err := d.fetchSizeInfo(ctx, repo)
@@ -197,6 +197,10 @@ func (d *Downloader) downloadRepository(ctx context.Context, repo Repository) er
 			RepoID: repo.ID,
 			Err:    err,
 		}
+	}
+
+	if err := d.pruneOtherRevisions(repo, state); err != nil {
+		return err
 	}
 
 	return nil
@@ -287,6 +291,26 @@ func (d *Downloader) runDownload(ctx context.Context, repo Repository, state cac
 	})
 
 	tracker.Finish()
+
+	return nil
+}
+
+// pruneOtherRevisions drops what earlier pins of the model left in the cache,
+// so it is not packed into the model artifact or kept on the provisioning
+// host.
+func (d *Downloader) pruneOtherRevisions(repo Repository, state cache.State) error {
+	freed, err := d.cache.PruneOtherRevisions(state)
+	if err != nil {
+		return &hferrors.Error{
+			Kind:   hferrors.ErrCache,
+			Op:     "prune superseded revisions",
+			RepoID: repo.ID,
+			Err:    err,
+		}
+	}
+	if freed > 0 {
+		d.detailf("removed superseded revisions of %s from the cache, freeing %s", repo.ID, storage.FormatBytes(freed))
+	}
 
 	return nil
 }
