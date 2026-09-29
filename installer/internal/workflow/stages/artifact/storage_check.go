@@ -23,14 +23,14 @@ func reportModelStorage(rt *core.Runtime) error {
 				huggingFaceModel(model),
 			})
 		if err != nil {
-			return fmt.Errorf("estimate model storage: %w", err)
+			return fmt.Errorf("estimate model storage on the provisioning host: %w", err)
 		}
 		modelBytes := estimate.TotalBytes
 		requiredBytes := modelBytes * modelStorageMultiplier
 		totalRequiredBytes += requiredBytes
 
 		rt.Detailf(
-			"model storage estimate: model=%s size=%s factor=%d required=%s",
+			"provisioning host storage estimate: model=%s size=%s factor=%d required=%s",
 			model.HarborName,
 			storage.FormatBytes(modelBytes),
 			modelStorageMultiplier,
@@ -39,7 +39,7 @@ func reportModelStorage(rt *core.Runtime) error {
 	}
 
 	if len(models) == 0 {
-		rt.Detailf("skipping model storage check: no models selected")
+		rt.Detailf("skipping provisioning host storage check: no models to download")
 		return nil
 	}
 
@@ -47,11 +47,11 @@ func reportModelStorage(rt *core.Runtime) error {
 
 	stats, err := storage.GetStats(mountPath)
 	if err != nil {
-		return fmt.Errorf("check available storage at %q: %w", mountPath, err)
+		return fmt.Errorf("check provisioning host storage at %q: %w", mountPath, err)
 	}
 
 	rt.Detailf(
-		"model storage report: selected=%d required=%s capacity=%s used=%s available=%s",
+		"provisioning host storage (installer storage directory): models=%d required=%s capacity=%s used=%s available=%s",
 		len(models),
 		storage.FormatBytes(totalRequiredBytes),
 		storage.FormatBytes(stats.Capacity),
