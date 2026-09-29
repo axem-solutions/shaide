@@ -79,12 +79,55 @@ func (u *Uploader) cacheArtifact(ctx context.Context, hubDir string, model catal
 
 	u.logf("cached model artifact %s not found; building", ref)
 
+	if err := u.pruneSupersededArtifacts(ctx, cache, model, ref); err != nil {
+		return nil, ocispec.Descriptor{}, err
+	}
+
 	manifest, err = u.buildCache(ctx, hubDir, model, cache, ref)
 	if err != nil {
 		return nil, ocispec.Descriptor{}, err
 	}
 
 	return cache, manifest, nil
+}
+
+// pruneSupersededArtifacts removes the cached artifacts of the model under
+// any other tag. The tag follows the pinned revision, so no run asks for those
+// again, and each holds a full copy of the model: removing them first is what
+// lets the build fit where the superseded copy stood.
+func (u *Uploader) pruneSupersededArtifacts(ctx context.Context, cache *oci.Store, model catalog.Model, ref string) error {
+	prefix := targetRef(model.HarborProject, model.HarborName, "")
+
+	var superseded []string
+	err := cache.Tags(ctx, "", func(tags []string) error {
+		for _, tag := range tags {
+			if strings.HasPrefix(tag, prefix) && tag != ref {
+				superseded = append(superseded, tag)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("list cached model artifacts: %w", err)
+	}
+	if len(superseded) == 0 {
+		return nil
+	}
+
+	for _, tag := range superseded {
+		if err := cache.Untag(ctx, tag); err != nil {
+			return fmt.Errorf("remove superseded cached model artifact %s: %w", tag, err)
+		}
+		u.logf("removing superseded cached model artifact %s", tag)
+	}
+
+	// Drops the blobs no remaining tag reaches, and nothing another model's
+	// artifact still uses.
+	if err := cache.GC(ctx); err != nil {
+		return fmt.Errorf("clean up the artifact cache: %w", err)
+	}
+
+	return nil
 }
 
 func (u *Uploader) resolveCache(ctx context.Context, ref string) (*oci.Store, ocispec.Descriptor, bool, error) {
