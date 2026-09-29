@@ -414,7 +414,7 @@ This stage uploads the artifacts required by the shaide AI Platform.
 During this stage, the installer:
 
 - checks which models to serve are already in Harbor
-- checks available installer storage for the missing ones
+- checks that the installer storage directory on the provisioning host has room for the missing ones
 - downloads them from Hugging Face
 - uploads model artifacts to Harbor
 - copies container images from their origin registries into Harbor
@@ -444,7 +444,7 @@ During this stage, the installer:
 | Step                    | Action                                                       |
 |-------------------------|--------------------------------------------------------------|
 | Check model artifacts   | Models to serve that are already in Harbor are skipped.      |
-| Check storage           | Installer storage is checked before downloading models.      |
+| Check storage           | The installer storage directory on the provisioning host is checked for free space before models are downloaded and packed. |
 | Download models         | Missing models are downloaded into the installer cache.      |
 | Upload models           | Downloaded model artifacts are uploaded to Harbor.           |
 | Upload images           | Container images are copied from their origin registries into Harbor. |

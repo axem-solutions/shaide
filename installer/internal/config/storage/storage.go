@@ -39,11 +39,11 @@ func NewChecker(path string, logf func(string, ...any)) Checker {
 
 		stats, err := GetStats(path)
 		if err != nil {
-			return fmt.Errorf("check storage before %s for %s: %w", requirement.Phase, requirement.Target, err)
+			return fmt.Errorf("check provisioning host storage before %s for %s: %w", requirement.Phase, requirement.Target, err)
 		}
 
 		logf(
-			"storage check: phase=%s target=%s capacity=%s used=%s available=%s expected=%s reusable=%s required=%s",
+			"provisioning host storage check (installer storage directory): phase=%s target=%s capacity=%s used=%s available=%s expected=%s reusable=%s required=%s",
 			requirement.Phase,
 			requirement.Target,
 			FormatBytes(stats.Capacity),
@@ -56,7 +56,7 @@ func NewChecker(path string, logf func(string, ...any)) Checker {
 
 		if stats.Available < required {
 			return fmt.Errorf(
-				"insufficient storage before %s for %s: available=%s required=%s",
+				"not enough free space on the provisioning host for %s of %s: the installer storage directory has %s available, %s required; free space there or mount a larger directory",
 				requirement.Phase,
 				requirement.Target,
 				FormatBytes(stats.Available),

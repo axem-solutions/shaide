@@ -32,7 +32,7 @@ func Stage() core.Stage {
 				Recover: recoverCheckModelArtifacts,
 			},
 			{
-				Name: "report model storage",
+				Name: "report provisioning host storage",
 				Run:  reportModelStorage,
 			},
 			{
