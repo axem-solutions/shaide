@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
@@ -272,5 +273,104 @@ func TestServingOptionsCarryTheRegistryAddress(t *testing.T) {
 	}
 	if !strings.HasPrefix(models[0].HarborRef, registry+"/") {
 		t.Errorf("HarborRef %q does not point at %q", models[0].HarborRef, registry)
+	}
+}
+
+// sizedPVC is an existing model volume that asked for request and was given
+// capacity.
+func sizedPVC(namespace, name, request, capacity string) *corev1.PersistentVolumeClaim {
+	pvc := modelPVC(namespace, name, "managed-csi")
+	pvc.Spec.Resources.Requests = corev1.ResourceList{corev1.ResourceStorage: resource.MustParse(request)}
+	if capacity != "" {
+		pvc.Status.Capacity = corev1.ResourceList{corev1.ResourceStorage: resource.MustParse(capacity)}
+	}
+	return pvc
+}
+
+func sizedModels() []serving.Model {
+	return []serving.Model{{Name: "GPT-OSS-20B", StorageSize: "60Gi"}, {Name: "BGE-M3", StorageSize: "10Gi"}}
+}
+
+// A volume created larger than the model now asks for keeps its size: asking
+// for less is rejected by the API server, since a volume cannot shrink.
+func TestModelStorageSizeNeverShrinksAVolume(t *testing.T) {
+	rt, workDir := servingStorageRuntime(t, &storageReporter{},
+		sizedPVC("llm-d-gpt-oss-20b", "gpt-oss-20b-model", "70Gi", "70Gi"),
+	)
+
+	models, err := modelStorageSizes(rt, workDir, sizedModels(), false)
+	if err != nil {
+		t.Fatalf("modelStorageSizes() error = %v", err)
+	}
+	if models[0].StorageSize != "70Gi" {
+		t.Errorf("GPT-OSS-20B size = %q, want the existing 70Gi kept", models[0].StorageSize)
+	}
+	if models[1].StorageSize != "10Gi" {
+		t.Errorf("BGE-M3 size = %q, want its configured 10Gi, as it has no volume", models[1].StorageSize)
+	}
+}
+
+// The capacity counts, not only the request: a provisioner may round a volume
+// up, and the request may not go below what it was given.
+func TestModelStorageSizeKeepsTheProvisionedCapacity(t *testing.T) {
+	rt, workDir := servingStorageRuntime(t, &storageReporter{},
+		sizedPVC("llm-d-gpt-oss-20b", "gpt-oss-20b-model", "60Gi", "64Gi"),
+	)
+
+	models, err := modelStorageSizes(rt, workDir, sizedModels(), false)
+	if err != nil {
+		t.Fatalf("modelStorageSizes() error = %v", err)
+	}
+	if models[0].StorageSize != "64Gi" {
+		t.Errorf("size = %q, want the provisioned 64Gi", models[0].StorageSize)
+	}
+}
+
+// A larger configured size still grows the volume.
+func TestModelStorageSizeGrowsAVolume(t *testing.T) {
+	rt, workDir := servingStorageRuntime(t, &storageReporter{},
+		sizedPVC("llm-d-gpt-oss-20b", "gpt-oss-20b-model", "50Gi", "50Gi"),
+	)
+
+	models, err := modelStorageSizes(rt, workDir, sizedModels(), false)
+	if err != nil {
+		t.Fatalf("modelStorageSizes() error = %v", err)
+	}
+	if models[0].StorageSize != "60Gi" {
+		t.Errorf("size = %q, want the configured 60Gi", models[0].StorageSize)
+	}
+}
+
+// Recreating deletes the volumes first, so the configured size applies.
+func TestModelStorageSizeIsConfiguredWhenRecreating(t *testing.T) {
+	rt, workDir := servingStorageRuntime(t, &storageReporter{},
+		sizedPVC("llm-d-gpt-oss-20b", "gpt-oss-20b-model", "70Gi", "70Gi"),
+	)
+
+	models, err := modelStorageSizes(rt, workDir, sizedModels(), true)
+	if err != nil {
+		t.Fatalf("modelStorageSizes() error = %v", err)
+	}
+	if models[0].StorageSize != "60Gi" {
+		t.Errorf("size = %q, want the configured 60Gi when recreating", models[0].StorageSize)
+	}
+}
+
+// A model without a configured size would get the stack default, which may be
+// smaller than its volume, so it keeps the volume's size too.
+func TestModelStorageSizeFillsAMissingSizeFromTheVolume(t *testing.T) {
+	rt, workDir := servingStorageRuntime(t, &storageReporter{},
+		sizedPVC("llm-d-gpt-oss-20b", "gpt-oss-20b-model", "70Gi", "70Gi"),
+	)
+
+	models := sizedModels()
+	models[0].StorageSize = ""
+
+	got, err := modelStorageSizes(rt, workDir, models, false)
+	if err != nil {
+		t.Fatalf("modelStorageSizes() error = %v", err)
+	}
+	if got[0].StorageSize != "70Gi" {
+		t.Errorf("size = %q, want the volume's 70Gi", got[0].StorageSize)
 	}
 }

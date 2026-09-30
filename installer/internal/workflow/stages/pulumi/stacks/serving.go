@@ -11,6 +11,7 @@ import (
 	"github.com/axem-solutions/ai_platform/pkg/iac/serving"
 	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
 	stackpkg "github.com/axem-solutions/ai_platform/pkg/stack"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 // Deployment modes offered for the app-serving stack. The labels are shown
@@ -56,6 +57,11 @@ func DeployAppServing(rt *core.Runtime) error {
 	destroy := mode == servingModeRecreate
 
 	models, err := modelStorageClasses(rt, workDir, platform, selectedModels(rt), destroy)
+	if err != nil {
+		return err
+	}
+
+	models, err = modelStorageSizes(rt, workDir, models, destroy)
 	if err != nil {
 		return err
 	}
@@ -147,6 +153,67 @@ func selectedModels(rt *core.Runtime) []serving.Model {
 	}
 
 	return models
+}
+
+// modelStorageSizes keeps an existing model volume from shrinking. A PVC can
+// grow but never shrink, so on an update a model whose volume is larger than
+// its configured size keeps the volume's size; a larger configured size still
+// grows it. Recreating deletes the volumes first, so the configured size
+// applies. Volumes created from the retired model manifest could be larger
+// than the size the model's values now ask for.
+func modelStorageSizes(rt *core.Runtime, workDir string, models []serving.Model, destroy bool) ([]serving.Model, error) {
+	if destroy {
+		return models, nil
+	}
+
+	volumes, err := serving.ModelVolumes(workDir, models)
+	if err != nil {
+		return nil, fmt.Errorf("name model volumes: %w", err)
+	}
+	volumeOf := make(map[string]serving.ModelVolume, len(volumes))
+	for _, volume := range volumes {
+		volumeOf[volume.Model] = volume
+	}
+
+	for i, model := range models {
+		volume, deployed := volumeOf[model.Name]
+		if !deployed {
+			continue
+		}
+
+		current, found, err := existingPVCSize(rt, volume.Namespace, volume.Claim)
+		if err != nil {
+			return nil, err
+		}
+		if !found || current.IsZero() {
+			continue
+		}
+
+		if model.StorageSize != "" {
+			wanted, err := resource.ParseQuantity(model.StorageSize)
+			if err != nil {
+				return nil, fmt.Errorf("storage size %q of model %s: %w", model.StorageSize, model.Name, err)
+			}
+			if wanted.Cmp(current) >= 0 {
+				continue
+			}
+		}
+
+		rt.Detailf(
+			"keeping size %s of existing PVC %s/%s: the model asks for %s, and a volume cannot shrink",
+			current.String(), volume.Namespace, volume.Claim, displayStorageSize(model.StorageSize),
+		)
+		models[i].StorageSize = current.String()
+	}
+
+	return models, nil
+}
+
+func displayStorageSize(size string) string {
+	if size == "" {
+		return "the default size"
+	}
+	return size
 }
 
 // modelStorageClasses settles the StorageClass of each model's volume.
