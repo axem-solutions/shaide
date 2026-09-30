@@ -7,7 +7,9 @@ import (
 	"time"
 
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/core"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -92,4 +94,27 @@ func existingPVCStorageClass(rt *core.Runtime, namespace, name string) (class st
 		return "", true, nil
 	}
 	return *pvc.Spec.StorageClassName, true, nil
+}
+
+// existingPVCSize returns the size an existing PVC may not go below: its
+// actual capacity, or its request when that is larger or the capacity is not
+// reported yet.
+func existingPVCSize(rt *core.Runtime, namespace, name string) (size resource.Quantity, found bool, err error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	pvc, err := rt.Cluster.Client.CoreV1().PersistentVolumeClaims(namespace).Get(ctx, name, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return resource.Quantity{}, false, nil
+	}
+	if err != nil {
+		return resource.Quantity{}, false, fmt.Errorf("read PVC %s/%s: %w", namespace, name, err)
+	}
+
+	size = pvc.Spec.Resources.Requests[corev1.ResourceStorage]
+	if capacity, ok := pvc.Status.Capacity[corev1.ResourceStorage]; ok && capacity.Cmp(size) > 0 {
+		size = capacity
+	}
+
+	return size, true, nil
 }
