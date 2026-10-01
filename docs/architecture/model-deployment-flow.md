@@ -394,7 +394,7 @@ app-serving:harborToken:
 | Harbor pull secret | Created as `harbor-creds` in each model namespace |
 | Model weights | Pulled from Harbor by ORAS Job into PVC (models with `modelSource`) |
 | Model PV | hostpath PV auto-created by Pulumi when `hostpathNode` is set; directory managed by `hostpath_dirs` Ansible role |
-| GPU scheduling | The installer passes each model's own pool, `axem.dev/model-<slug>` plus `axem.dev/workload-<class>`, labelled in the `Assign nodes` stage; without one the stack falls back to `nodegroup=generative`. Models tolerate `nvidia.com/gpu=present:NoSchedule`; the stack writes the toleration as `gpuToleration`, applied to model pods and the ORAS pull Job |
+| GPU scheduling | The installer passes each model's placement: the node pools assigned to it in the `Assign node pools` stage, matched on the pool label the platform maintains (e.g. `kubernetes.azure.com/agentpool`, or `nodegroup` on-prem), one `nodeSelectorTerm` per label. Without a placement the stack falls back to `nodegroup=generative`. Models tolerate `nvidia.com/gpu=present:NoSchedule`; the stack writes the toleration as `gpuToleration`, applied to model pods and the ORAS pull Job |
 | Images | Pulled from `harbor.harbor.svc.cluster.local/images-shaide/...` by cluster nodes (no internet) |
 | ORAS image | `harbor.harbor.svc.cluster.local/services/oras-project/oras:v1.3.1`, mirrored by the installer |
 | Helm charts | Downloaded from OCI / HTTP by Pulumi on provisioner laptop (has internet) |

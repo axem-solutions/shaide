@@ -2,6 +2,7 @@ package nodes
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"strings"
 	"testing"
@@ -9,6 +10,7 @@ import (
 	"github.com/axem-solutions/ai_platform/installer/internal/config/catalog"
 	"github.com/axem-solutions/ai_platform/installer/internal/kube"
 	"github.com/axem-solutions/ai_platform/installer/internal/logger"
+	"github.com/axem-solutions/ai_platform/installer/internal/placement"
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/core"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -16,10 +18,11 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
+const aksPool = "kubernetes.azure.com/agentpool"
+
 type scriptedReporter struct {
 	prompts []core.ChoicePrompt
 	choices [][]string
-	answers []string
 }
 
 func (r *scriptedReporter) Choose(prompt core.ChoicePrompt) ([]string, error) {
@@ -29,15 +32,9 @@ func (r *scriptedReporter) Choose(prompt core.ChoicePrompt) ([]string, error) {
 	return values, nil
 }
 
-func (r *scriptedReporter) Select(_ string, current string, _ []string) (string, error) {
-	if len(r.answers) == 0 {
-		return current, nil
-	}
-	answer := r.answers[0]
-	r.answers = r.answers[1:]
-	return answer, nil
+func (*scriptedReporter) Select(_ string, current string, _ []string) (string, error) {
+	return current, nil
 }
-
 func (*scriptedReporter) MultiSelect(string, []string) ([]string, error) { return nil, nil }
 func (*scriptedReporter) Input(string, string, string) (string, error)   { return "", nil }
 func (*scriptedReporter) ProgressModel(core.ModelProgress)               {}
@@ -51,7 +48,7 @@ func bgeM3() catalog.Model {
 }
 
 func node(name string, gpus int64, product string, labels map[string]string, taints ...corev1.Taint) *corev1.Node {
-	allLabels := map[string]string{}
+	allLabels := map[string]string{"kubernetes.io/hostname": name}
 	for key, value := range labels {
 		allLabels[key] = value
 	}
@@ -74,148 +71,33 @@ func node(name string, gpus int64, product string, labels map[string]string, tai
 	}
 }
 
-func info(n *corev1.Node) kube.NodeInfo {
+type kubeNode = kube.NodeInfo
+
+// info reads a node back through the inventory, as the stage sees it.
+func info(t *testing.T, n *corev1.Node) kube.NodeInfo {
+	t.Helper()
+
 	infos, err := kube.ListNodes(context.Background(), fake.NewClientset(n))
 	if err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
 	return infos[0]
+}
+
+func aks(poolName string) map[string]string {
+	return map[string]string{aksPool: poolName}
 }
 
 func newRuntime(reporter core.Reporter, client *fake.Clientset, models ...catalog.Model) *core.Runtime {
 	rt := core.NewContext(logger.NewWithWriter(io.Discard), reporter)
 	rt.Cluster.Client = client
-	rt.Bootstrap.Provider = "on-prem"
 	rt.Models.Serve = models
-	rt.Begin("assign nodes", &state{}, 3)
+	rt.Begin("assign node pools", &state{}, 3)
 	return rt
 }
 
-func TestListNodesHidesNodesReservedForSomethingElse(t *testing.T) {
-	client := fake.NewClientset(
-		node("cp", 0, "", nil, corev1.Taint{Key: "node-role.kubernetes.io/control-plane", Effect: corev1.TaintEffectNoSchedule}),
-		node("system", 0, "", nil, corev1.Taint{Key: "CriticalAddonsOnly", Value: "true", Effect: corev1.TaintEffectNoSchedule}),
-		node("gpu", 1, "NVIDIA-A10-24Q", nil, corev1.Taint{Key: "nvidia.com/gpu", Value: "present", Effect: corev1.TaintEffectNoSchedule}),
-		node("cordoned", 0, "", nil, corev1.Taint{Key: "node.kubernetes.io/unschedulable", Effect: corev1.TaintEffectNoSchedule}),
-		node("soft", 0, "", nil, corev1.Taint{Key: "dedicated", Effect: corev1.TaintEffectPreferNoSchedule}),
-	)
-	rt := newRuntime(&scriptedReporter{}, client)
-
-	if err := listNodes(rt); err != nil {
-		t.Fatalf("listNodes: %v", err)
-	}
-
-	var names []string
-	for _, n := range core.StageData[*state](rt).nodes {
-		names = append(names, n.Name)
-	}
-	if got := strings.Join(names, ","); got != "cordoned,gpu,soft" {
-		t.Errorf("listed %s, want the GPU node, the cordoned one and the soft-tainted one", got)
-	}
-}
-
-func TestInitialOption(t *testing.T) {
-	models := []catalog.Model{gptOSS(), bgeM3()}
-
-	tests := []struct {
-		name string
-		node *corev1.Node
-		want string
-	}{
-		{"model label", node("n", 1, "A10", map[string]string{"axem.dev/model-bge-m3": "true"}), "model:bge-m3"},
-		{"cpu label", node("n", 0, "", map[string]string{"axem.dev/workload-cpu": "true"}), OptionCPU},
-		{"pool class with one model", node("n", 1, "A10", map[string]string{"axem.dev/workload-embedding": "true"}), "model:bge-m3"},
-		{"first run, no GPU", node("n", 0, "", nil), OptionCPU},
-		{"first run, GPU", node("n", 1, "A10", nil), OptionUnassigned},
-		{"first run, control plane", node("n", 0, "", map[string]string{"node-role.kubernetes.io/control-plane": ""}), OptionUnassigned},
-		{"label of a model no longer served", node("n", 1, "A10", map[string]string{"axem.dev/model-gone": "true"}), OptionUnassigned},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			if got := initialOption(info(test.node), models); got != test.want {
-				t.Errorf("initialOption = %q, want %q", got, test.want)
-			}
-		})
-	}
-}
-
-func TestNodesWithoutGPUCannotJoinAModelPool(t *testing.T) {
-	options := nodeOptions(info(node("cpu", 0, "", nil)), []catalog.Model{gptOSS()})
-
-	if got := strings.Join(options, ","); got != "cpu,unassigned" {
-		t.Errorf("options = %s, want only cpu and unassigned", got)
-	}
-}
-
-func TestCheckAssignment(t *testing.T) {
-	a10a := info(node("a10-a", 1, "NVIDIA-A10-24Q", nil))
-	a10b := info(node("a10-b", 1, "NVIDIA-A10-24Q", nil))
-	h100 := info(node("h100", 1, "NVIDIA-H100-80GB-HBM3", nil))
-	cpu := info(node("cpu", 0, "", nil))
-	nodes := []kube.NodeInfo{a10a, a10b, h100, cpu}
-	models := []catalog.Model{gptOSS()}
-
-	check := checkAssignment(nodes, models, []string{"model:gpt-oss-20b", "model:gpt-oss-20b", OptionUnassigned, OptionCPU})
-	if check.Blocking != "" {
-		t.Fatalf("Blocking = %q, want a valid assignment", check.Blocking)
-	}
-	if got := check.Groups["model:gpt-oss-20b"]; !got.OK || got.Text != "A10-24Q ×2" {
-		t.Errorf("pool status = %+v, want ok with A10-24Q ×2", got)
-	}
-
-	mixed := checkAssignment(nodes, models, []string{"model:gpt-oss-20b", OptionUnassigned, "model:gpt-oss-20b", OptionCPU})
-	if !strings.Contains(mixed.Blocking, "mixes GPU types") {
-		t.Errorf("Blocking = %q, want the mixed GPU types reported", mixed.Blocking)
-	}
-
-	empty := checkAssignment(nodes, models, []string{OptionUnassigned, OptionUnassigned, OptionUnassigned, OptionCPU})
-	if !strings.Contains(empty.Blocking, "Assign at least one node to GPT-OSS-20B") {
-		t.Errorf("Blocking = %q, want the empty pool reported", empty.Blocking)
-	}
-
-	noCPU := checkAssignment(nodes, models, []string{"model:gpt-oss-20b", OptionUnassigned, OptionUnassigned, OptionUnassigned})
-	if !strings.Contains(noCPU.Blocking, "CPU only") {
-		t.Errorf("Blocking = %q, want the missing CPU node reported", noCPU.Blocking)
-	}
-}
-
-func TestLabelChangesReconcileManagedLabels(t *testing.T) {
-	nodes := []kube.NodeInfo{
-		info(node("gpu", 1, "A10", map[string]string{
-			"axem.dev/workload-generative": "true",
-			"axem.dev/model-gone":          "true",
-			"nodegroup":                    "generative",
-		})),
-		info(node("cpu", 0, "", map[string]string{"axem.dev/workload-cpu": "true"})),
-		info(node("spare", 0, "", map[string]string{"axem.dev/workload-cpu": "true"})),
-	}
-
-	changes := labelChanges(nodes, []catalog.Model{gptOSS()}, []string{"model:gpt-oss-20b", OptionCPU, OptionUnassigned})
-
-	var got []string
-	for _, change := range changes {
-		got = append(got, change.String())
-	}
-	want := []string{
-		"gpu: +axem.dev/model-gpt-oss-20b, -axem.dev/model-gone",
-		"spare: -axem.dev/workload-cpu",
-	}
-	if strings.Join(got, "\n") != strings.Join(want, "\n") {
-		t.Errorf("changes =\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
-	}
-}
-
-func TestAssignAndApplyLabelsTheNodes(t *testing.T) {
-	client := fake.NewClientset(
-		node("gpu", 1, "NVIDIA-A10-24Q", map[string]string{"axem.dev/model-gone": "true"}),
-		node("cpu", 0, "", nil),
-	)
-	reporter := &scriptedReporter{
-		choices: [][]string{{OptionCPU, "model:gpt-oss-20b"}},
-		answers: []string{confirmApply},
-	}
-	rt := newRuntime(reporter, client, gptOSS())
+func runStage(t *testing.T, rt *core.Runtime) {
+	t.Helper()
 
 	for _, step := range Stage().Steps {
 		if step.When != nil && !step.When(rt) {
@@ -225,78 +107,239 @@ func TestAssignAndApplyLabelsTheNodes(t *testing.T) {
 			t.Fatalf("%s: %v", step.Name, err)
 		}
 	}
+}
 
-	// Nodes are listed by name: cpu first, then gpu.
-	rows := reporter.prompts[0].Rows
-	if rows[0].Cells[0] != "cpu" || rows[0].Current != OptionCPU {
-		t.Errorf("first row = %+v, want cpu starting in CPU only", rows[0])
+func storedAssignment(t *testing.T, client *fake.Clientset) placement.Assignment {
+	t.Helper()
+
+	cm, err := client.CoreV1().ConfigMaps(assignmentNamespace).Get(context.Background(), assignmentName, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("read stored assignment: %v", err)
 	}
 
-	gpu, err := client.CoreV1().Nodes().Get(context.Background(), "gpu", metav1.GetOptions{})
+	var assignment placement.Assignment
+	if err := json.Unmarshal([]byte(cm.Data[assignmentDataKey]), &assignment); err != nil {
+		t.Fatal(err)
+	}
+	return assignment
+}
+
+func storeAssignment(t *testing.T, client *fake.Clientset, assignment placement.Assignment) {
+	t.Helper()
+
+	data, err := json.Marshal(assignment)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for key, want := range map[string]string{
-		"axem.dev/model-gpt-oss-20b":   "true",
-		"axem.dev/workload-generative": "true",
-		"nvidia.com/gpu.product":       "NVIDIA-A10-24Q",
-	} {
-		if gpu.Labels[key] != want {
-			t.Errorf("gpu label %s = %q, want %q", key, gpu.Labels[key], want)
+	if _, err := client.CoreV1().ConfigMaps(assignmentNamespace).Create(context.Background(), &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{Name: assignmentName, Namespace: assignmentNamespace},
+		Data:       map[string]string{assignmentDataKey: string(data)},
+	}, metav1.CreateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func poolNamesOf(rt *core.Runtime) []string {
+	var names []string
+	for _, p := range core.StageData[*state](rt).pools {
+		names = append(names, p.ID.String())
+	}
+	return names
+}
+
+// Nodes are grouped by the label naming their pool; a node without one is a
+// pool of its own, and nodes reserved by a taint are not offered.
+func TestListPoolsGroupsNodesByPool(t *testing.T) {
+	client := fake.NewClientset(
+		node("aks-gpu-1", 1, "NVIDIA-A10-24Q", aks("generative"), corev1.Taint{Key: "nvidia.com/gpu", Value: "present", Effect: corev1.TaintEffectNoSchedule}),
+		node("aks-gpu-2", 1, "NVIDIA-A10-24Q", aks("generative")),
+		node("aks-sys-1", 0, "", aks("system"), corev1.Taint{Key: "CriticalAddonsOnly", Value: "true", Effect: corev1.TaintEffectNoSchedule}),
+		node("server2", 0, "", map[string]string{"nodegroup": "no-gpu"}),
+		node("server4", 1, "NVIDIA-H100", nil),
+	)
+	rt := newRuntime(&scriptedReporter{}, client)
+
+	if err := listPools(rt); err != nil {
+		t.Fatalf("listPools: %v", err)
+	}
+
+	got := strings.Join(poolNamesOf(rt), ",")
+	want := "kubernetes.azure.com/agentpool=generative,nodegroup=no-gpu,kubernetes.io/hostname=server4"
+	if got != want {
+		t.Errorf("pools = %s, want %s", got, want)
+	}
+	if n := len(core.StageData[*state](rt).pools[0].Nodes); n != 2 {
+		t.Errorf("generative pool has %d nodes, want 2", n)
+	}
+}
+
+// A stored assignment is where pools start, so a rerun is a single confirm.
+func TestStoredAssignmentIsPreselected(t *testing.T) {
+	client := fake.NewClientset(
+		node("aks-gpu-1", 1, "NVIDIA-A10-24Q", aks("generative")),
+		node("aks-cpu-1", 0, "", aks("shaide")),
+	)
+	storeAssignment(t, client, placement.Assignment{
+		Models: map[string][]placement.Pool{"gpt-oss-20b": {{Key: aksPool, Name: "generative"}}},
+		CPU:    []placement.Pool{{Key: aksPool, Name: "shaide"}},
+	})
+	reporter := &scriptedReporter{choices: [][]string{{"model:gpt-oss-20b", OptionCPU}}}
+	rt := newRuntime(reporter, client, gptOSS())
+
+	runStage(t, rt)
+
+	rows := reporter.prompts[0].Rows
+	if rows[0].Cells[0] != "generative" || rows[0].Current != "model:gpt-oss-20b" {
+		t.Errorf("generative row = %+v, want it preselected for GPT-OSS-20B", rows[0])
+	}
+	if rows[1].Current != OptionCPU {
+		t.Errorf("shaide row starts at %q, want cpu", rows[1].Current)
+	}
+}
+
+// Without a stored assignment, the node labels an earlier installer wrote
+// place the pools, so an upgrade starts from the existing placement.
+func TestLegacyLabelsArePreselectedAndRemoved(t *testing.T) {
+	client := fake.NewClientset(
+		node("aks-gpu-1", 1, "NVIDIA-A10-24Q", map[string]string{
+			aksPool:                        "generative",
+			"axem.dev/model-gpt-oss-20b":   "true",
+			"axem.dev/workload-generative": "true",
+		}),
+		node("aks-cpu-1", 0, "", map[string]string{aksPool: "shaide", "axem.dev/workload-cpu": "true"}),
+	)
+	reporter := &scriptedReporter{choices: [][]string{{"model:gpt-oss-20b", OptionCPU}}}
+	rt := newRuntime(reporter, client, gptOSS())
+
+	runStage(t, rt)
+
+	rows := reporter.prompts[0].Rows
+	if rows[0].Current != "model:gpt-oss-20b" || rows[1].Current != OptionCPU {
+		t.Errorf("rows start at %q, %q, want the legacy placement", rows[0].Current, rows[1].Current)
+	}
+
+	for _, name := range []string{"aks-gpu-1", "aks-cpu-1"} {
+		n, err := client.CoreV1().Nodes().Get(context.Background(), name, metav1.GetOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for key := range n.Labels {
+			if placement.IsLegacyLabel(key) {
+				t.Errorf("node %s still has %s", name, key)
+			}
+		}
+		if n.Labels[aksPool] == "" {
+			t.Errorf("node %s lost its pool label", name)
 		}
 	}
-	if _, ok := gpu.Labels["axem.dev/model-gone"]; ok {
-		t.Error("the stale model label was not removed")
-	}
+}
 
-	cpu, _ := client.CoreV1().Nodes().Get(context.Background(), "cpu", metav1.GetOptions{})
-	if cpu.Labels["axem.dev/workload-cpu"] != "true" {
-		t.Errorf("cpu labels = %v, want axem.dev/workload-cpu", cpu.Labels)
+// On a first run, pools without a GPU run the platform and GPU pools wait
+// for the operator.
+func TestFirstRunGuess(t *testing.T) {
+	gpu := pool{ID: placement.Pool{Key: aksPool, Name: "generative"}, Nodes: []kubeNode{info(t, node("g", 1, "A10", nil))}}
+	cpu := pool{ID: placement.Pool{Key: aksPool, Name: "shaide"}, Nodes: []kubeNode{info(t, node("c", 0, "", nil))}}
+	cp := pool{ID: placement.Pool{Key: "kubernetes.io/hostname", Name: "cp"}, Nodes: []kubeNode{info(t, node("cp", 0, "", map[string]string{"node-role.kubernetes.io/control-plane": ""}))}}
+
+	models := []catalog.Model{gptOSS()}
+	for _, test := range []struct {
+		pool pool
+		want string
+	}{
+		{gpu, OptionUnassigned},
+		{cpu, OptionCPU},
+		{cp, OptionUnassigned},
+	} {
+		if got := initialOption(test.pool, models, placement.Assignment{}, false); got != test.want {
+			t.Errorf("%s starts at %q, want %q", test.pool.ID.Name, got, test.want)
+		}
 	}
 }
 
-// Going back from the confirmation keeps the edits made so far.
-func TestBackToAssignmentKeepsTheEdits(t *testing.T) {
-	client := fake.NewClientset(node("gpu", 1, "A10", nil), node("cpu", 0, "", nil))
-	reporter := &scriptedReporter{
-		choices: [][]string{
-			{OptionCPU, "model:gpt-oss-20b"},
-			{OptionCPU, "model:gpt-oss-20b"},
-		},
-		answers: []string{confirmBack, confirmApply},
-	}
-	rt := newRuntime(reporter, client, gptOSS())
-
-	if err := listNodes(rt); err != nil {
-		t.Fatal(err)
-	}
-	if err := assignNodes(rt); err != nil {
-		t.Fatal(err)
+// A pool without GPUs cannot serve a model, and one whose smallest node has
+// too few GPUs cannot serve a model that needs more.
+func TestPoolOptions(t *testing.T) {
+	cpu := pool{Nodes: []kubeNode{info(t, node("c", 0, "", nil))}}
+	if got := strings.Join(poolOptions(cpu, []catalog.Model{gptOSS()}), ","); got != "cpu,unassigned" {
+		t.Errorf("cpu pool options = %s, want cpu,unassigned", got)
 	}
 
-	if len(reporter.prompts) != 2 {
-		t.Fatalf("prompted %d times, want the view shown again after Back", len(reporter.prompts))
-	}
-	if got := reporter.prompts[1].Rows[1].Current; got != "model:gpt-oss-20b" {
-		t.Errorf("second view starts gpu at %q, want the edit kept", got)
+	big := gptOSS()
+	big.GPUsPerPod = 2
+	mixed := pool{Nodes: []kubeNode{info(t, node("a", 2, "A10", nil)), info(t, node("b", 1, "A10", nil))}}
+	if got := strings.Join(poolOptions(mixed, []catalog.Model{big}), ","); got != "cpu,unassigned" {
+		t.Errorf("options = %s, want the 2-GPU model left out", got)
 	}
 }
 
-func TestNothingToApplyWhenLabelsMatch(t *testing.T) {
+func TestCheckAssignment(t *testing.T) {
+	a10 := pool{ID: placement.Pool{Key: aksPool, Name: "a10"}, Nodes: []kubeNode{info(t, node("a", 1, "NVIDIA-A10-24Q", nil)), info(t, node("b", 1, "NVIDIA-A10-24Q", nil))}}
+	h100 := pool{ID: placement.Pool{Key: aksPool, Name: "h100"}, Nodes: []kubeNode{info(t, node("h", 1, "NVIDIA-H100", nil))}}
+	both := pool{ID: placement.Pool{Key: "nodegroup", Name: "both"}, Nodes: []kubeNode{info(t, node("x", 1, "NVIDIA-A10-24Q", nil)), info(t, node("y", 1, "NVIDIA-H100", nil))}}
+	cpu := pool{ID: placement.Pool{Key: aksPool, Name: "shaide"}, Nodes: []kubeNode{info(t, node("c", 0, "", nil))}}
+	pools := []pool{a10, h100, both, cpu}
+	models := []catalog.Model{gptOSS()}
+
+	ok := checkAssignment(pools, models, []string{"model:gpt-oss-20b", OptionUnassigned, OptionUnassigned, OptionCPU})
+	if ok.Blocking != "" {
+		t.Fatalf("Blocking = %q, want a valid assignment", ok.Blocking)
+	}
+	if got := ok.Groups["model:gpt-oss-20b"]; !got.OK || got.Text != "A10-24Q, 2 nodes" {
+		t.Errorf("model status = %+v", got)
+	}
+
+	for name, test := range map[string]struct {
+		values []string
+		want   string
+	}{
+		"no pools":            {[]string{OptionUnassigned, OptionUnassigned, OptionUnassigned, OptionCPU}, "Assign at least one node pool to GPT-OSS-20B"},
+		"pools differ":        {[]string{"model:gpt-oss-20b", "model:gpt-oss-20b", OptionUnassigned, OptionCPU}, "different GPU types"},
+		"pool mixes products": {[]string{OptionUnassigned, OptionUnassigned, "model:gpt-oss-20b", OptionCPU}, "both mixes GPU types"},
+		"no cpu pool":         {[]string{"model:gpt-oss-20b", OptionUnassigned, OptionUnassigned, OptionUnassigned}, "CPU only"},
+	} {
+		got := checkAssignment(pools, models, test.values).Blocking
+		if !strings.Contains(got, test.want) {
+			t.Errorf("%s: Blocking = %q, want it to mention %q", name, got, test.want)
+		}
+	}
+}
+
+// The assignment is stored in the cluster and set for the deploy stage; an
+// unchanged assignment is not written again.
+func TestAssignmentIsStoredAndExposed(t *testing.T) {
 	client := fake.NewClientset(
-		node("gpu", 1, "A10", map[string]string{"axem.dev/model-gpt-oss-20b": "true", "axem.dev/workload-generative": "true"}),
-		node("cpu", 0, "", map[string]string{"axem.dev/workload-cpu": "true"}),
+		node("aks-gpu-1", 1, "NVIDIA-A10-24Q", aks("generative")),
+		node("aks-emb-1", 1, "NVIDIA-A10-24Q", aks("embedding")),
+		node("aks-cpu-1", 0, "", aks("shaide")),
 	)
-	reporter := &scriptedReporter{choices: [][]string{{OptionCPU, "model:gpt-oss-20b"}}}
-	rt := newRuntime(reporter, client, gptOSS())
+	reporter := &scriptedReporter{choices: [][]string{{"model:bge-m3", "model:gpt-oss-20b", OptionCPU}}}
+	rt := newRuntime(reporter, client, gptOSS(), bgeM3())
 
-	if err := listNodes(rt); err != nil {
-		t.Fatal(err)
+	runStage(t, rt)
+
+	want := placement.Assignment{
+		Models: map[string][]placement.Pool{
+			"gpt-oss-20b": {{Key: aksPool, Name: "generative"}},
+			"bge-m3":      {{Key: aksPool, Name: "embedding"}},
+		},
+		CPU: []placement.Pool{{Key: aksPool, Name: "shaide"}},
 	}
-	if err := assignNodes(rt); err != nil {
-		t.Fatal(err)
+	if !sameAssignment(rt.Placement, want) {
+		t.Errorf("rt.Placement = %+v, want %+v", rt.Placement, want)
 	}
-	if hasChanges(rt) {
-		t.Errorf("changes = %v, want none", core.StageData[*state](rt).changes)
+	if got := storedAssignment(t, client); !sameAssignment(got, want) {
+		t.Errorf("stored = %+v, want %+v", got, want)
+	}
+
+	// A rerun with the same choices finds it stored and leaves it.
+	reporter.choices = [][]string{{"model:bge-m3", "model:gpt-oss-20b", OptionCPU}}
+	client.ClearActions()
+	rt2 := newRuntime(reporter, client, gptOSS(), bgeM3())
+	runStage(t, rt2)
+
+	for _, action := range client.Actions() {
+		if action.GetResource().Resource == "configmaps" && action.GetVerb() != "get" {
+			t.Errorf("unchanged assignment was written again: %s", action.GetVerb())
+		}
 	}
 }

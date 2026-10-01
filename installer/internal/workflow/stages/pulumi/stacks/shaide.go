@@ -11,6 +11,20 @@ import (
 	stackpkg "github.com/axem-solutions/ai_platform/pkg/stack"
 )
 
+func shaidePlacement(pools []placement.Pool) []shaide.PlacementTerm {
+	terms := placement.Terms(pools)
+	if len(terms) == 0 {
+		return nil
+	}
+
+	out := make([]shaide.PlacementTerm, 0, len(terms))
+	for _, term := range terms {
+		out = append(out, shaide.PlacementTerm{Key: term.Key, Values: term.Values})
+	}
+
+	return out
+}
+
 func DeployAppShaide(rt *core.Runtime) error {
 	shaideStack := shaide.NewStack(
 		filepath.Join(rt.Bootstrap.Config.Paths.ProjectsDir, projectAppShaide),
@@ -23,11 +37,9 @@ func DeployAppShaide(rt *core.Runtime) error {
 			GatewayHostname: rt.Bootstrap.GatewayHostname,
 			Images:          mirroredImages(rt.Bootstrap.Catalog.ServiceImages, harborRegistryHostname(rt)),
 
-			// Prefer the nodes the node assignment stage labelled for CPU
-			// work. The preference is soft, so the components still schedule
-			// if those nodes are full.
-			NodeSelectorKey: placement.CPULabel,
-			NodeSelector:    placement.Value,
+			// Prefer the node pools assigned to CPU work. The preference is
+			// soft, so the components still schedule if those nodes are full.
+			Placement: shaidePlacement(rt.Placement.CPU),
 		},
 	)
 

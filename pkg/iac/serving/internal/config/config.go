@@ -65,6 +65,8 @@ type Model struct {
 	Namespace    string            `json:"nameSpace"`
 	ReleaseName  string            `json:"releaseName"`
 	NodeSelector map[string]string `json:"nodeSelector"`
+	// Placement, when set, replaces NodeSelector.
+	Placement []PlacementTerm `json:"placement,omitempty"`
 
 	ModelSource *ModelSource `json:"modelSource"`
 }
