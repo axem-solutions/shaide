@@ -1,7 +1,9 @@
 package stacks
 
 import (
+	"context"
 	"io"
+	"k8s.io/client-go/kubernetes/fake"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -391,5 +393,27 @@ func TestModelStorageSizeFillsAMissingSizeFromTheVolume(t *testing.T) {
 	}
 	if got[0].StorageSize != "70Gi" {
 		t.Errorf("size = %q, want the volume's 70Gi", got[0].StorageSize)
+	}
+}
+
+// Before deploying, a model pod left on a deleted node is removed, so a
+// recreate does not wait for its Deployment until it times out.
+func TestOrphanedModelPodsAreReleased(t *testing.T) {
+	projects := packagedModels(t, map[string]string{"GPT-OSS-20B": "generative"})
+	rt := runtimeWith(t, projects, nil)
+	rt.Bootstrap.Catalog.Models = []catalog.Model{gptOSS()}
+	rt.Cluster.Client = fake.NewClientset(
+		&corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Name: "decode", Namespace: "llm-d-gpt-oss-20b"},
+			Spec:       corev1.PodSpec{NodeName: "deleted-node"},
+		},
+	)
+
+	if err := releaseOrphanedModelPods(rt, filepath.Join(projects, projectAppServing)); err != nil {
+		t.Fatalf("releaseOrphanedModelPods: %v", err)
+	}
+
+	if _, err := rt.Cluster.Client.CoreV1().Pods("llm-d-gpt-oss-20b").Get(context.Background(), "decode", metav1.GetOptions{}); err == nil {
+		t.Error("the pod on the deleted node was not removed")
 	}
 }
