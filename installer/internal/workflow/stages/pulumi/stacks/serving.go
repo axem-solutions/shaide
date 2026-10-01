@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/axem-solutions/ai_platform/installer/internal/iac"
+	"github.com/axem-solutions/ai_platform/installer/internal/kube"
 	"github.com/axem-solutions/ai_platform/installer/internal/placement"
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/core"
 	"github.com/axem-solutions/ai_platform/pkg/iac/serving"
@@ -34,6 +35,10 @@ func ServesModels(rt *core.Runtime) bool {
 func DeployAppServing(rt *core.Runtime) error {
 	workDir := filepath.Join(rt.Bootstrap.Config.Paths.ProjectsDir, projectAppServing)
 	platform := cluster.Provider(rt.Bootstrap.Provider)
+
+	if err := releaseOrphanedModelPods(rt, workDir); err != nil {
+		return err
+	}
 
 	// The stack refuses an empty model list, so uninstalling the last model
 	// tears the stack down instead of updating it.
@@ -94,6 +99,45 @@ func DeployAppServing(rt *core.Runtime) error {
 	_, err = deployer.Deploy(context.Background())
 	if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+// releaseOrphanedModelPods removes model pods bound to a node that no longer
+// exists, such as one a node pool replaced while the pod was being deleted.
+// Nothing confirms such a pod stopped, so a recreate or uninstall would wait
+// for its Deployment to be deleted until it timed out. Every supported
+// model's namespace is checked, as an installed model may have been dropped
+// from the selection.
+func releaseOrphanedModelPods(rt *core.Runtime, workDir string) error {
+	models := make([]serving.Model, 0, len(rt.Bootstrap.Catalog.Models))
+	for _, model := range rt.Bootstrap.Catalog.Models {
+		models = append(models, serving.Model{Name: model.Name})
+	}
+
+	volumes, err := serving.ModelVolumes(workDir, models)
+	if err != nil {
+		return fmt.Errorf("name model namespaces: %w", err)
+	}
+
+	seen := map[string]bool{}
+	for _, volume := range volumes {
+		if seen[volume.Namespace] {
+			continue
+		}
+		seen[volume.Namespace] = true
+
+		released, held, err := kube.ReleaseOrphanedPods(context.Background(), rt.Cluster.Client, volume.Namespace)
+		if err != nil {
+			return err
+		}
+		for _, pod := range released {
+			rt.Detailf("removed pod %s/%s: its node %s no longer exists", volume.Namespace, pod.Name, pod.Node)
+		}
+		for _, pod := range held {
+			rt.Detailf("pod %s/%s is on node %s, which no longer exists, and is held by a finalizer the installer does not remove; a recreate or uninstall will wait for it", volume.Namespace, pod.Name, pod.Node)
+		}
 	}
 
 	return nil
