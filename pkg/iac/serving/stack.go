@@ -29,9 +29,17 @@ type Model struct {
 	// Options.ModelStorageClass.
 	StorageClass string
 
-	// NodeSelector names the node labels the model's pods require, for
-	// example its own pool's. Empty uses the stack's default GPU pool.
-	NodeSelector map[string]string
+	// Placement admits the nodes the model's pods may run on, for example
+	// the node pools assigned to it. Empty uses the stack's default GPU pool.
+	Placement []PlacementTerm
+}
+
+// PlacementTerm admits the nodes whose Key label is one of Values, e.g. a node
+// pool label and the pools' names. A model's terms are alternatives: a node
+// matching any of them qualifies.
+type PlacementTerm struct {
+	Key    string
+	Values []string
 }
 
 // ModelVolume is the PersistentVolumeClaim holding a model's weights.
@@ -116,24 +124,28 @@ func ModelVolumes(projectDir string, models []Model) ([]ModelVolume, error) {
 	return volumes, nil
 }
 
-// modelsInput places each model by the category its packaged values are in,
-// on the GPU pool, with its weights under hub/<ID> in its volume. A model with
-// no packaged values is dropped rather than guessed at: serving it from the
-// wrong values directory would deploy the wrong runtime.
-// nodeSelector is the model's own selector, or the default GPU pool's.
-func nodeSelector(model Model) map[string]string {
-	if len(model.NodeSelector) == 0 {
-		return servingconfig.DefaultInferenceNodeSelector()
+// placement is the model's own placement, or nil when the stack's default GPU
+// pool applies.
+func placement(model Model) []servingconfig.PlacementTerm {
+	if len(model.Placement) == 0 {
+		return nil
 	}
 
-	selector := make(map[string]string, len(model.NodeSelector))
-	for key, value := range model.NodeSelector {
-		selector[key] = value
+	terms := make([]servingconfig.PlacementTerm, 0, len(model.Placement))
+	for _, term := range model.Placement {
+		terms = append(terms, servingconfig.PlacementTerm{
+			Key:    term.Key,
+			Values: append([]string(nil), term.Values...),
+		})
 	}
 
-	return selector
+	return terms
 }
 
+// modelsInput places each model by the category its packaged values are in,
+// on its own placement or the GPU pool, with its weights under hub/<ID> in its
+// volume. A model with no packaged values is dropped rather than guessed at:
+// serving it from the wrong values directory would deploy the wrong runtime.
 func modelsInput(projectDir string, models []Model, logf func(format string, args ...any)) servingconfig.ModelsInput {
 	var input servingconfig.ModelsInput
 
@@ -147,15 +159,19 @@ func modelsInput(projectDir string, models []Model, logf func(format string, arg
 		}
 
 		entry := servingconfig.ModelInput{
-			Name:         model.Name,
-			Enabled:      true,
-			NodeSelector: nodeSelector(model),
+			Name:      model.Name,
+			Enabled:   true,
+			Placement: placement(model),
 			ModelSource: &servingconfig.ModelSourceInput{
 				HarborRef:    model.HarborRef,
 				ModelUri:     path.Join("hub", model.ID),
 				StorageSize:  model.StorageSize,
 				StorageClass: model.StorageClass,
 			},
+		}
+
+		if len(entry.Placement) == 0 {
+			entry.NodeSelector = servingconfig.DefaultInferenceNodeSelector()
 		}
 
 		switch category {

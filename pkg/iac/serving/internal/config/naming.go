@@ -8,27 +8,6 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
-// nodeAffinityMatchExpressions builds a sorted-by-key list of {key, In, [value]}
-// matchExpressions from a nodeSelector-shaped map, so Pulumi diffs stay stable
-// regardless of Go's randomized map iteration order.
-func nodeAffinityMatchExpressions(selector map[string]string) []map[string]interface{} {
-	keys := make([]string, 0, len(selector))
-	for k := range selector {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
-	exprs := make([]map[string]interface{}, 0, len(keys))
-	for _, k := range keys {
-		exprs = append(exprs, map[string]interface{}{
-			"key":      k,
-			"operator": "In",
-			"values":   []string{selector[k]},
-		})
-	}
-	return exprs
-}
-
 // ClaimName is the PersistentVolumeClaim holding the model's weights.
 func (m *Model) ClaimName() string {
 	return modelClaim(m.Slug)
@@ -98,23 +77,73 @@ func (m Model) NodeSelectorStringMap() pulumi.StringMap {
 	return out
 }
 
+// placementTerms is the model's placement as nodeSelectorTerms: one per
+// Placement term, each matching its key against any of its values, or a
+// single term ANDing the NodeSelector entries. Terms are alternatives, so a
+// model placed on pools named by different labels can match any of them.
+func (m Model) placementTerms() [][]nodeRequirement {
+	if len(m.Placement) > 0 {
+		terms := make([][]nodeRequirement, 0, len(m.Placement))
+		for _, term := range m.Placement {
+			values := append([]string(nil), term.Values...)
+			sort.Strings(values)
+			terms = append(terms, []nodeRequirement{{key: term.Key, values: values}})
+		}
+		return terms
+	}
+
+	if len(m.NodeSelector) == 0 {
+		return nil
+	}
+
+	keys := make([]string, 0, len(m.NodeSelector))
+	for k := range m.NodeSelector {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	term := make([]nodeRequirement, 0, len(keys))
+	for _, k := range keys {
+		term = append(term, nodeRequirement{key: k, values: []string{m.NodeSelector[k]}})
+	}
+	return [][]nodeRequirement{term}
+}
+
+type nodeRequirement struct {
+	key    string
+	values []string
+}
+
 // NodeAffinityMap builds a hard (required) nodeAffinity as a raw pulumi.Map, for chart values
 // that accept an arbitrary pod-spec passthrough (llm-d-modelservice's extraConfig).
 // Renders to the same requiredDuringSchedulingIgnoredDuringExecution shape used everywhere
-// else in this design. Returns an empty map when NodeSelector is empty, matching
-// NodeSelectorMap's behavior of contributing nothing to the pod spec.
+// else in this design. Returns an empty map when the model has no placement, contributing
+// nothing to the pod spec.
 func (m Model) NodeAffinityMap() pulumi.Map {
-	if len(m.NodeSelector) == 0 {
+	terms := m.placementTerms()
+	if len(terms) == 0 {
 		return pulumi.Map{}
 	}
+
+	nodeSelectorTerms := make(pulumi.Array, 0, len(terms))
+	for _, term := range terms {
+		exprs := make([]map[string]interface{}, 0, len(term))
+		for _, req := range term {
+			exprs = append(exprs, map[string]interface{}{
+				"key":      req.key,
+				"operator": "In",
+				"values":   req.values,
+			})
+		}
+		nodeSelectorTerms = append(nodeSelectorTerms, pulumi.Map{
+			"matchExpressions": pulumi.Any(exprs),
+		})
+	}
+
 	return pulumi.Map{
 		"nodeAffinity": pulumi.Map{
 			"requiredDuringSchedulingIgnoredDuringExecution": pulumi.Map{
-				"nodeSelectorTerms": pulumi.Array{
-					pulumi.Map{
-						"matchExpressions": pulumi.Any(nodeAffinityMatchExpressions(m.NodeSelector)),
-					},
-				},
+				"nodeSelectorTerms": nodeSelectorTerms,
 			},
 		},
 	}
@@ -123,32 +152,30 @@ func (m Model) NodeAffinityMap() pulumi.Map {
 // NodeAffinityArgs builds the same hard (required) nodeAffinity as *corev1.AffinityArgs, for
 // components using typed corev1.PodSpecArgs directly instead of raw Helm values.
 func (m Model) NodeAffinityArgs() *corev1.AffinityArgs {
-	if len(m.NodeSelector) == 0 {
+	terms := m.placementTerms()
+	if len(terms) == 0 {
 		return nil
 	}
-	keys := make([]string, 0, len(m.NodeSelector))
-	for k := range m.NodeSelector {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
 
-	exprs := make(corev1.NodeSelectorRequirementArray, 0, len(keys))
-	for _, k := range keys {
-		exprs = append(exprs, &corev1.NodeSelectorRequirementArgs{
-			Key:      pulumi.String(k),
-			Operator: pulumi.String("In"),
-			Values:   pulumi.StringArray{pulumi.String(m.NodeSelector[k])},
+	nodeSelectorTerms := make(corev1.NodeSelectorTermArray, 0, len(terms))
+	for _, term := range terms {
+		exprs := make(corev1.NodeSelectorRequirementArray, 0, len(term))
+		for _, req := range term {
+			exprs = append(exprs, &corev1.NodeSelectorRequirementArgs{
+				Key:      pulumi.String(req.key),
+				Operator: pulumi.String("In"),
+				Values:   pulumi.ToStringArray(req.values),
+			})
+		}
+		nodeSelectorTerms = append(nodeSelectorTerms, &corev1.NodeSelectorTermArgs{
+			MatchExpressions: exprs,
 		})
 	}
 
 	return &corev1.AffinityArgs{
 		NodeAffinity: &corev1.NodeAffinityArgs{
 			RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelectorArgs{
-				NodeSelectorTerms: corev1.NodeSelectorTermArray{
-					&corev1.NodeSelectorTermArgs{
-						MatchExpressions: exprs,
-					},
-				},
+				NodeSelectorTerms: nodeSelectorTerms,
 			},
 		},
 	}

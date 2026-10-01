@@ -38,8 +38,7 @@ At runtime the installer:
    project's `deployments/models`;
 5. reads the mounted kubeconfig and lets the user select a context;
 6. lets the user choose which models to install, keep or uninstall;
-7. lets the user assign the cluster's nodes to each model's pool and to CPU work, and
-   labels them;
+7. lets the user assign the cluster's node pools to each model and to CPU work;
 8. discovers whether Harbor already exists in the selected cluster;
 9. deploys or configures Harbor when needed;
 10. downloads the selected Hugging Face models that Harbor lacks and uploads model/image artifacts to
@@ -60,7 +59,7 @@ The default workflow is defined in `installer/internal/workflow/workflow.go`.
 | `bootstrap` | Check terminal/storage, prepare the Pulumi projects, load manifests, require `HF_TOKEN`, and read `GHCR_TOKEN`. |
 | `initK8s` | Load kubeconfig, prompt for a Kubernetes context, and build the Kubernetes client. |
 | `select models` | Detect installed models from their pods' `axem.dev/model-slug` label and ask for an action per supported model. |
-| `assign nodes` | Assign every schedulable node to a model's pool, to CPU work or to nothing, and reconcile the `axem.dev/model-*` and `axem.dev/workload-*` node labels. |
+| `assign node pools` | Group the schedulable nodes into their pools, let the operator assign pools to each model and to CPU work, and store the assignment in ConfigMap `kube-system/shaide-placement`. |
 | `discovery` | Find or deploy Harbor, create Harbor projects and robot credentials, and open a local port-forward. |
 | `populate Harbor` | Check model artifacts, download and upload the models to serve that Harbor lacks, upload service images, and delete uninstalled models. |
 | `deploy AI platform` | Deploy `app-serving`, `gateway-provider`, and `app-shaide` Pulumi stacks. |
@@ -88,7 +87,7 @@ resource name, continue an update flow, or abort.
 | `installer/internal/config` | Runtime defaults, project preparation, manifest parsing, and storage paths. |
 | `installer/internal/workflow` | Stage runner, recovery behavior, and workflow state. |
 | `installer/internal/workflow/stages` | Bootstrap, Kubernetes, model selection, node assignment, discovery, artifact, and Pulumi stages. |
-| `installer/internal/placement` | The node labels that decide where workloads run, shared by the node assignment stage and the stacks. |
+| `installer/internal/placement` | Node pool discovery and the placement terms the stacks match on. |
 | `installer/internal/ui` | Bubble Tea terminal UI. |
 | `installer/internal/harbor` | Harbor auth and API helpers. |
 | `installer/internal/huggingface` | Hugging Face download integration. |

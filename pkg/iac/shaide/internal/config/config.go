@@ -2,6 +2,7 @@ package appconfig
 
 import (
 	"fmt"
+	"sort"
 
 	corev1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/core/v1"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
@@ -15,7 +16,14 @@ import (
 // NodeSelectorKey=val, but must still be able to run elsewhere if none is available.
 // Returns just the NodeAffinity sub-block (not the full AffinityArgs wrapper) so callers can
 // compose it alongside PodAntiAffinityFor in a single Affinity value.
+//
+// A Placement, when set, replaces all of that: every component prefers the
+// nodes it admits, one preferred term per placement term.
 func (c Values) NodeAffinityFor(override string) *corev1.NodeAffinityArgs {
+	if len(c.Placement) > 0 {
+		return c.placementAffinity()
+	}
+
 	val := override
 	if val == "" {
 		val = c.NodeSelector
@@ -39,6 +47,36 @@ func (c Values) NodeAffinityFor(override string) *corev1.NodeAffinityArgs {
 			},
 		},
 	}
+}
+
+func (c Values) placementAffinity() *corev1.NodeAffinityArgs {
+	terms := make(corev1.PreferredSchedulingTermArray, 0, len(c.Placement))
+	for _, term := range c.Placement {
+		values := append([]string(nil), term.Values...)
+		sort.Strings(values)
+
+		terms = append(terms, &corev1.PreferredSchedulingTermArgs{
+			Weight: pulumi.Int(100),
+			Preference: &corev1.NodeSelectorTermArgs{
+				MatchExpressions: corev1.NodeSelectorRequirementArray{
+					&corev1.NodeSelectorRequirementArgs{
+						Key:      pulumi.String(term.Key),
+						Operator: pulumi.String("In"),
+						Values:   pulumi.ToStringArray(values),
+					},
+				},
+			},
+		})
+	}
+
+	return &corev1.NodeAffinityArgs{PreferredDuringSchedulingIgnoredDuringExecution: terms}
+}
+
+// PlacementTerm admits the nodes whose Key label is one of Values, e.g. a node
+// pool label and the pools' names.
+type PlacementTerm struct {
+	Key    string   `json:"key"`
+	Values []string `json:"values"`
 }
 
 type ServiceNames struct {
@@ -97,22 +135,23 @@ type RustFSEnv struct {
 // Config is the typed view of Pulumi stack config used by this stack.
 type Values struct {
 	Namespace                string
-	NodeSelectorKey          string // label key used for node selection (default: nodegroup)
-	NodeSelector             string // global fallback — applies to all components when no per-component key is set
-	NodeSelectorShaide       string // optional — overrides NodeSelector for shaide-server
-	NodeSelectorControlPanel string // optional — overrides NodeSelector for control-panel
-	NodeSelectorWebApp       string // optional — overrides NodeSelector for webapp
-	NodeSelectorRustfs       string // optional — overrides NodeSelector for rustfs
-	NodeSelectorQdrant       string // optional — overrides NodeSelector for qdrant
-	CloudProvider            string // informational only — identifies the target platform (e.g. "gcp", "aws", "on-prem")
-	StorageClassName         string // optional — if empty, PVCs use the cluster default StorageClass
-	PVNodeHostname           string // optional — node hostname for hostPath PV nodeAffinity (on-prem only)
-	Kubeconfig               string // optional — path to kubeconfig file; empty = use KUBECONFIG env / ~/.kube/config
-	Context                  string // optional — kubeconfig context to deploy to; empty = the kubeconfig's current-context
-	ShaidePVSize             string // optional — shaide-server PV/PVC size (default: 5Gi)
-	RustfsPVSize             string // optional — rustfs PV/PVC size (default: 5Gi)
-	QdrantPVSize             string // optional — qdrant PV/PVC size (default: 5Gi)
-	KnowledgeCenterEnabled   bool   // optional — presence of the Knowledge Center feature; injected into control-panel as KNOWLEDGE_CENTER_ENABLED; default: false
+	Placement                []PlacementTerm // preferred nodes; replaces the node selector keys below when set
+	NodeSelectorKey          string          // label key used for node selection (default: nodegroup)
+	NodeSelector             string          // global fallback — applies to all components when no per-component key is set
+	NodeSelectorShaide       string          // optional — overrides NodeSelector for shaide-server
+	NodeSelectorControlPanel string          // optional — overrides NodeSelector for control-panel
+	NodeSelectorWebApp       string          // optional — overrides NodeSelector for webapp
+	NodeSelectorRustfs       string          // optional — overrides NodeSelector for rustfs
+	NodeSelectorQdrant       string          // optional — overrides NodeSelector for qdrant
+	CloudProvider            string          // informational only — identifies the target platform (e.g. "gcp", "aws", "on-prem")
+	StorageClassName         string          // optional — if empty, PVCs use the cluster default StorageClass
+	PVNodeHostname           string          // optional — node hostname for hostPath PV nodeAffinity (on-prem only)
+	Kubeconfig               string          // optional — path to kubeconfig file; empty = use KUBECONFIG env / ~/.kube/config
+	Context                  string          // optional — kubeconfig context to deploy to; empty = the kubeconfig's current-context
+	ShaidePVSize             string          // optional — shaide-server PV/PVC size (default: 5Gi)
+	RustfsPVSize             string          // optional — rustfs PV/PVC size (default: 5Gi)
+	QdrantPVSize             string          // optional — qdrant PV/PVC size (default: 5Gi)
+	KnowledgeCenterEnabled   bool            // optional — presence of the Knowledge Center feature; injected into control-panel as KNOWLEDGE_CENTER_ENABLED; default: false
 
 	ServiceAccountAnnotations map[string]string
 	ServiceAccountName        string

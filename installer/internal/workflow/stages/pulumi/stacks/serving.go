@@ -132,9 +132,24 @@ func destroyAppServing(rt *core.Runtime, workDir string, platform cluster.Provid
 	return deployer.DestroyOnly(context.Background(), servingStack.Deploy)
 }
 
+// servingPlacement places a model on the node pools assigned to it.
+func servingPlacement(pools []placement.Pool) []serving.PlacementTerm {
+	terms := placement.Terms(pools)
+	if len(terms) == 0 {
+		return nil
+	}
+
+	out := make([]serving.PlacementTerm, 0, len(terms))
+	for _, term := range terms {
+		out = append(out, serving.PlacementTerm{Key: term.Key, Values: term.Values})
+	}
+
+	return out
+}
+
 // selectedModels maps the models to serve onto the stack's model list. The
 // Harbor reference is derived from where the artifact stage put each model,
-// and each model runs on the pool the node assignment stage labelled for it.
+// and each model runs on the node pools assigned to it.
 func selectedModels(rt *core.Runtime) []serving.Model {
 	registry := harborRegistryHostname(rt)
 
@@ -147,8 +162,8 @@ func selectedModels(rt *core.Runtime) []serving.Model {
 				"%s/%s/%s:%s",
 				registry, model.HarborProject, model.HarborName, model.HarborTag,
 			),
-			StorageSize:  model.StorageSize,
-			NodeSelector: placement.ModelSelector(model),
+			StorageSize: model.StorageSize,
+			Placement:   servingPlacement(rt.Placement.Models[model.Slug]),
 		})
 	}
 

@@ -2,7 +2,9 @@ package nodes
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -10,10 +12,9 @@ import (
 	"github.com/axem-solutions/ai_platform/installer/internal/kube"
 	"github.com/axem-solutions/ai_platform/installer/internal/placement"
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/core"
-	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
 )
 
-// Options a node can be assigned to, besides one per model to serve.
+// Options a pool can be assigned to, besides one per model to serve.
 const (
 	OptionCPU        = "cpu"
 	OptionUnassigned = "unassigned"
@@ -21,41 +22,47 @@ const (
 	modelOptionPrefix = "model:"
 )
 
+// The assignment is kept in the cluster, so a rerun from any provisioning
+// host starts from it. kube-system always exists and outlives the platform's
+// own namespaces, which a recreate deletes.
 const (
-	confirmApply = "Apply"
-	confirmBack  = "Back to assignment"
+	assignmentNamespace = "kube-system"
+	assignmentName      = "shaide-placement"
+	assignmentDataKey   = "assignment.json"
 )
 
+var assignmentLabels = map[string]string{"app.kubernetes.io/part-of": "shaide"}
+
 type state struct {
-	nodes   []kube.NodeInfo
-	changes []labelChange
+	pools []pool
+	// stored is the assignment found in the cluster; found is false on a
+	// first run.
+	stored placement.Assignment
+	found  bool
 }
 
-// labelChange is the label patch that brings one node in line with its
-// assignment.
-type labelChange struct {
-	Node   string
-	Set    []string
-	Remove []string
+// pool is a node pool and the nodes of it the workloads can run on.
+type pool struct {
+	ID    placement.Pool
+	Nodes []kube.NodeInfo
 }
 
 func Stage() core.Stage {
 	return core.Stage{
-		Name:     "assign nodes",
+		Name:     "assign node pools",
 		NewState: func() any { return &state{} },
 		Steps: []core.Step{
 			{
-				Name: "list nodes",
-				Run:  listNodes,
+				Name: "list node pools",
+				Run:  listPools,
 			},
 			{
-				Name: "assign nodes",
-				Run:  assignNodes,
+				Name: "assign node pools",
+				Run:  assignPools,
 			},
 			{
-				Name: "apply node labels",
-				When: hasChanges,
-				Run:  applyLabels,
+				Name: "save node pool assignment",
+				Run:  saveAssignment,
 			},
 		},
 	}
@@ -65,119 +72,181 @@ func modelOption(model catalog.Model) string {
 	return modelOptionPrefix + model.Slug
 }
 
-// listNodes lists the nodes shaide's workloads can run on. A node reserved by
-// a taint they do not tolerate, such as a control plane or a system pool, is
-// left out: assigning it would put a workload where it cannot be scheduled.
-func listNodes(rt *core.Runtime) error {
+// listPools groups the nodes shaide's workloads can run on into their pools,
+// and reads the assignment a previous run stored. A node reserved by a taint
+// the workloads do not tolerate, such as a control plane or a system pool,
+// is left out.
+func listPools(rt *core.Runtime) error {
 	st := core.StageData[*state](rt)
+	ctx := context.Background()
 
-	all, err := kube.ListNodes(context.Background(), rt.Cluster.Client)
+	nodes, err := kube.ListNodes(ctx, rt.Cluster.Client)
 	if err != nil {
 		return err
 	}
 
-	st.nodes = nil
-	for _, node := range all {
+	byID := map[placement.Pool]*pool{}
+	for _, node := range nodes {
 		if taint, reserved := node.ExclusiveTaint(placement.GPUTaintKey); reserved {
-			rt.Detailf("not listing node %s: reserved by taint %s=%s:%s", node.Name, taint.Key, taint.Value, taint.Effect)
+			rt.Detailf("not offering node %s: reserved by taint %s=%s:%s", node.Name, taint.Key, taint.Value, taint.Effect)
 			continue
 		}
-		st.nodes = append(st.nodes, node)
+
+		id := placement.PoolOf(node.Name, node.Labels)
+		if byID[id] == nil {
+			byID[id] = &pool{ID: id}
+		}
+		byID[id].Nodes = append(byID[id].Nodes, node)
 	}
 
-	if len(st.nodes) == 0 {
+	st.pools = make([]pool, 0, len(byID))
+	for _, p := range byID {
+		st.pools = append(st.pools, *p)
+	}
+	sort.Slice(st.pools, func(i, j int) bool {
+		if st.pools[i].ID.Name != st.pools[j].ID.Name {
+			return st.pools[i].ID.Name < st.pools[j].ID.Name
+		}
+		return st.pools[i].ID.Key < st.pools[j].ID.Key
+	})
+
+	if len(st.pools) == 0 {
 		return fmt.Errorf("the cluster has no node shaide's workloads can be scheduled on")
 	}
 
-	return nil
+	for _, p := range st.pools {
+		rt.Detailf("node pool %s (%s): %d %s", p.ID.Name, p.ID.Kind(), len(p.Nodes), plural(len(p.Nodes), "node", "nodes"))
+	}
+
+	st.stored, st.found, err = readAssignment(ctx, rt)
+	return err
 }
 
-func assignNodes(rt *core.Runtime) error {
+func readAssignment(ctx context.Context, rt *core.Runtime) (placement.Assignment, bool, error) {
+	data, found, err := kube.ReadConfigMapData(ctx, rt.Cluster.Client, assignmentNamespace, assignmentName)
+	if err != nil || !found {
+		return placement.Assignment{}, false, err
+	}
+
+	var assignment placement.Assignment
+	if err := json.Unmarshal([]byte(data[assignmentDataKey]), &assignment); err != nil {
+		rt.Detailf("ignoring the stored node pool assignment, which cannot be read: %v", err)
+		return placement.Assignment{}, false, nil
+	}
+
+	return assignment, true, nil
+}
+
+func assignPools(rt *core.Runtime) error {
 	st := core.StageData[*state](rt)
 	models := rt.Models.Serve
 
-	if cluster.Provider(rt.Bootstrap.Provider) != cluster.OnPrem {
-		rt.Detailf("node labels set here are lost when a node pool replaces a node; set them on the node pool as well")
+	values, err := rt.Reporter.Choose(assignmentPrompt(st, models))
+	if err != nil {
+		return err
+	}
+	if len(values) != len(st.pools) {
+		return fmt.Errorf("node pool assignment returned %d choices for %d pools", len(values), len(st.pools))
 	}
 
-	prompt := assignmentPrompt(st.nodes, models)
+	rt.Placement = assignmentOf(st.pools, models, values)
 
-	for {
-		values, err := rt.Reporter.Choose(prompt)
-		if err != nil {
-			return err
-		}
-		if len(values) != len(st.nodes) {
-			return fmt.Errorf("node assignment returned %d choices for %d nodes", len(values), len(st.nodes))
-		}
-
-		changes := labelChanges(st.nodes, models, values)
-		if len(changes) == 0 {
-			rt.Detailf("node labels are up to date")
-			st.changes = nil
-			return nil
-		}
-
-		for _, change := range changes {
-			rt.Detailf("%s", change)
-		}
-
-		answer, err := rt.Reporter.Select(
-			fmt.Sprintf("Apply the label changes to %d %s? The log lists them.", len(changes), plural(len(changes), "node", "nodes")),
-			confirmApply,
-			[]string{confirmApply, confirmBack},
-		)
-		if err != nil {
-			return err
-		}
-		if answer == confirmApply {
-			st.changes = changes
-			return nil
-		}
-
-		// Back to the view with the edits kept.
-		for i := range prompt.Rows {
-			prompt.Rows[i].Current = values[i]
-		}
+	for _, model := range models {
+		rt.Detailf("%s runs on %s", model.Name, poolNames(rt.Placement.Models[model.Slug]))
 	}
+	rt.Detailf("CPU work runs on %s", poolNames(rt.Placement.CPU))
+
+	return nil
 }
 
-func hasChanges(rt *core.Runtime) bool {
-	return len(core.StageData[*state](rt).changes) > 0
-}
-
-func applyLabels(rt *core.Runtime) error {
+// saveAssignment stores the assignment in the cluster, and removes the node
+// labels earlier installers placed workloads with.
+func saveAssignment(rt *core.Runtime) error {
 	st := core.StageData[*state](rt)
+	ctx := context.Background()
 
-	for _, change := range st.changes {
-		set := make(map[string]string, len(change.Set))
-		for _, key := range change.Set {
-			set[key] = placement.Value
+	if !st.found || !sameAssignment(st.stored, rt.Placement) {
+		data, err := json.Marshal(rt.Placement)
+		if err != nil {
+			return fmt.Errorf("encode node pool assignment: %w", err)
 		}
 
-		if err := kube.PatchNodeLabels(context.Background(), rt.Cluster.Client, change.Node, set, change.Remove); err != nil {
+		if err := kube.WriteConfigMapData(ctx, rt.Cluster.Client, assignmentNamespace, assignmentName,
+			assignmentLabels, map[string]string{assignmentDataKey: string(data)}); err != nil {
 			return err
 		}
+		rt.Detailf("stored the node pool assignment in ConfigMap %s/%s", assignmentNamespace, assignmentName)
+	}
 
-		rt.Detailf("labelled %s", change)
+	for _, p := range st.pools {
+		for _, node := range p.Nodes {
+			var legacy []string
+			for key := range node.Labels {
+				if placement.IsLegacyLabel(key) {
+					legacy = append(legacy, key)
+				}
+			}
+			if len(legacy) == 0 {
+				continue
+			}
+			sort.Strings(legacy)
+
+			if err := kube.PatchNodeLabels(ctx, rt.Cluster.Client, node.Name, nil, legacy); err != nil {
+				return err
+			}
+			rt.Detailf("removed labels no longer used for placement from node %s: %s", node.Name, strings.Join(legacy, ", "))
+		}
 	}
 
 	return nil
 }
 
-func (c labelChange) String() string {
-	parts := make([]string, 0, len(c.Set)+len(c.Remove))
-	for _, key := range c.Set {
-		parts = append(parts, "+"+key)
-	}
-	for _, key := range c.Remove {
-		parts = append(parts, "-"+key)
+func sameAssignment(a, b placement.Assignment) bool {
+	normalize := func(x placement.Assignment) placement.Assignment {
+		out := placement.Assignment{Models: map[string][]placement.Pool{}, CPU: sortedPools(x.CPU)}
+		for slug, pools := range x.Models {
+			if len(pools) > 0 {
+				out.Models[slug] = sortedPools(pools)
+			}
+		}
+		return out
 	}
 
-	return fmt.Sprintf("%s: %s", c.Node, strings.Join(parts, ", "))
+	return reflect.DeepEqual(normalize(a), normalize(b))
 }
 
-func assignmentPrompt(nodes []kube.NodeInfo, models []catalog.Model) core.ChoicePrompt {
+func sortedPools(pools []placement.Pool) []placement.Pool {
+	out := append([]placement.Pool(nil), pools...)
+	sort.Slice(out, func(i, j int) bool { return out[i].String() < out[j].String() })
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func assignmentOf(pools []pool, models []catalog.Model, values []string) placement.Assignment {
+	assignment := placement.Assignment{Models: map[string][]placement.Pool{}}
+
+	bySlug := map[string]catalog.Model{}
+	for _, model := range models {
+		bySlug[modelOption(model)] = model
+	}
+
+	for i, value := range values {
+		switch {
+		case value == OptionCPU:
+			assignment.CPU = append(assignment.CPU, pools[i].ID)
+		case strings.HasPrefix(value, modelOptionPrefix):
+			if model, ok := bySlug[value]; ok {
+				assignment.Models[model.Slug] = append(assignment.Models[model.Slug], pools[i].ID)
+			}
+		}
+	}
+
+	return assignment
+}
+
+func assignmentPrompt(st *state, models []catalog.Model) core.ChoicePrompt {
 	groups := make([]core.ChoiceGroup, 0, len(models)+2)
 	for _, model := range models {
 		groups = append(groups, core.ChoiceGroup{Option: modelOption(model), Title: modelTitle(model)})
@@ -187,39 +256,55 @@ func assignmentPrompt(nodes []kube.NodeInfo, models []catalog.Model) core.Choice
 		core.ChoiceGroup{Option: OptionUnassigned, Title: "Unassigned"},
 	)
 
-	rows := make([]core.ChoiceRow, 0, len(nodes))
-	for _, node := range nodes {
+	rows := make([]core.ChoiceRow, 0, len(st.pools))
+	for _, p := range st.pools {
 		rows = append(rows, core.ChoiceRow{
-			Cells:   []string{node.Name, gpuCell(node), computeCell(node)},
-			Detail:  nodeDetail(node),
-			Options: nodeOptions(node, models),
-			Current: initialOption(node, models),
+			Cells:   []string{p.ID.Name, nodeCount(p), gpuCell(p)},
+			Detail:  poolDetail(p),
+			Options: poolOptions(p, models),
+			Current: initialOption(p, models, st.stored, st.found),
 		})
 	}
 
+	pools := st.pools
 	return core.ChoicePrompt{
-		Title:       "Assign nodes to workloads",
-		Columns:     []string{"Node", "GPU", "CPU/Mem"},
+		Title:       "Assign node pools to workloads",
+		Columns:     []string{"Pool", "Nodes", "GPU"},
 		Rows:        rows,
 		Groups:      groups,
 		ClearOption: OptionUnassigned,
 		Check: func(values []string) core.ChoiceCheck {
-			return checkAssignment(nodes, models, values)
+			return checkAssignment(pools, models, values)
 		},
 	}
 }
 
-// fits reports whether one pod of the model fits on the node's GPUs.
-func fits(node kube.NodeInfo, model catalog.Model) bool {
-	return node.GPUs >= int64(model.GPUsPerPod)
+// minGPUs is the GPU count of the pool's smallest node: what one pod placed
+// anywhere in the pool can rely on.
+func minGPUs(p pool) int64 {
+	smallest := int64(-1)
+	for _, node := range p.Nodes {
+		if smallest < 0 || node.GPUs < smallest {
+			smallest = node.GPUs
+		}
+	}
+	if smallest < 0 {
+		return 0
+	}
+	return smallest
 }
 
-// nodeOptions is what a node can be assigned to: the models whose pod fits
-// on its GPUs, CPU work, or nothing.
-func nodeOptions(node kube.NodeInfo, models []catalog.Model) []string {
+// fits reports whether one pod of the model fits on every node of the pool.
+func fits(p pool, model catalog.Model) bool {
+	return minGPUs(p) >= int64(model.GPUsPerPod)
+}
+
+// poolOptions is what a pool can be assigned to: the models whose pod fits on
+// every one of its nodes, CPU work, or nothing.
+func poolOptions(p pool, models []catalog.Model) []string {
 	var options []string
 	for _, model := range models {
-		if fits(node, model) {
+		if fits(p, model) {
 			options = append(options, modelOption(model))
 		}
 	}
@@ -227,55 +312,92 @@ func nodeOptions(node kube.NodeInfo, models []catalog.Model) []string {
 	return append(options, OptionCPU, OptionUnassigned)
 }
 
-// initialOption is what the node's labels already say, so a rerun that
-// changes nothing is a single confirm.
-func initialOption(node kube.NodeInfo, models []catalog.Model) string {
+// initialOption is where the pool already is, so a rerun that changes nothing
+// is a single confirm: the stored assignment, else the labels an earlier
+// installer put on its nodes, else a first-run guess.
+func initialOption(p pool, models []catalog.Model, stored placement.Assignment, found bool) string {
+	options := poolOptions(p, models)
+	offered := func(option string) bool {
+		for _, candidate := range options {
+			if candidate == option {
+				return true
+			}
+		}
+		return false
+	}
+
+	if found {
+		for _, model := range models {
+			if containsPool(stored.Models[model.Slug], p.ID) && offered(modelOption(model)) {
+				return modelOption(model)
+			}
+		}
+		if containsPool(stored.CPU, p.ID) {
+			return OptionCPU
+		}
+		return OptionUnassigned
+	}
+
 	for _, model := range models {
-		if node.Labels[placement.ModelLabel(model.Slug)] == placement.Value && fits(node, model) {
+		if allNodesLabelled(p, placement.LegacyModelLabel(model.Slug)) && offered(modelOption(model)) {
 			return modelOption(model)
 		}
 	}
-
-	if node.Labels[placement.CPULabel] == placement.Value {
+	if allNodesLabelled(p, placement.LegacyCPULabel) {
 		return OptionCPU
 	}
 
-	// A node pool labelled with a class serves that class; when exactly one
-	// model of the class is served, the node is meant for it.
-	var candidates []catalog.Model
-	for _, model := range models {
-		if node.Labels[placement.ClassLabel(model.Category)] == placement.Value && fits(node, model) {
-			candidates = append(candidates, model)
-		}
-	}
-	if len(candidates) == 1 {
-		return modelOption(candidates[0])
-	}
-
-	// First assignment: nodes without a GPU run the platform itself.
-	if !hasManagedLabels(node) && node.GPUs == 0 && !node.ControlPlane {
+	// First run: pools without a GPU run the platform itself.
+	if !hasGPU(p) && !allControlPlane(p) {
 		return OptionCPU
 	}
 
 	return OptionUnassigned
 }
 
-func hasManagedLabels(node kube.NodeInfo) bool {
-	for key := range node.Labels {
-		if placement.Managed(key) {
+func containsPool(pools []placement.Pool, id placement.Pool) bool {
+	for _, pool := range pools {
+		if pool == id {
 			return true
 		}
 	}
-
 	return false
 }
 
-// checkAssignment validates each pool and reports the header status of every
-// group. The first problem blocks the assignment from being submitted.
-func checkAssignment(nodes []kube.NodeInfo, models []catalog.Model, values []string) core.ChoiceCheck {
-	members := map[string][]kube.NodeInfo{}
+func allNodesLabelled(p pool, label string) bool {
+	for _, node := range p.Nodes {
+		if node.Labels[label] != "true" {
+			return false
+		}
+	}
+	return len(p.Nodes) > 0
+}
+
+func hasGPU(p pool) bool {
+	for _, node := range p.Nodes {
+		if node.GPUs > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func allControlPlane(p pool) bool {
+	for _, node := range p.Nodes {
+		if !node.ControlPlane {
+			return false
+		}
+	}
+	return true
+}
+
+// checkAssignment validates each model's pools and reports the header status
+// of every group. The first problem blocks the assignment from being
+// submitted.
+func checkAssignment(pools []pool, models []catalog.Model, values []string) core.ChoiceCheck {
+	members := map[string][]pool{}
 	for i, value := range values {
-		members[value] = append(members[value], nodes[i])
+		members[value] = append(members[value], pools[i])
 	}
 
 	check := core.ChoiceCheck{Groups: map[string]core.GroupStatus{}}
@@ -287,124 +409,107 @@ func checkAssignment(nodes []kube.NodeInfo, models []catalog.Model, values []str
 
 	for _, model := range models {
 		option := modelOption(model)
-		pool := members[option]
+		assigned := members[option]
 
-		switch products := gpuProducts(pool); {
-		case len(pool) == 0:
-			check.Groups[option] = core.GroupStatus{Text: "no nodes"}
-			block("Assign at least one node to %s.", model.Name)
-		case len(products) > 1:
+		if len(assigned) == 0 {
+			check.Groups[option] = core.GroupStatus{Text: "no pools"}
+			block("Assign at least one node pool to %s.", model.Name)
+			continue
+		}
+
+		if mixed := mixedPool(assigned); mixed != "" {
 			check.Groups[option] = core.GroupStatus{Text: "mixed GPUs"}
-			block("%s mixes GPU types (%s); a pool can have one GPU type.", model.Name, strings.Join(products, ", "))
-		default:
-			short := ""
-			for _, node := range pool {
-				if !fits(node, model) {
-					short = node.Name
-					break
-				}
-			}
-			if short != "" {
-				check.Groups[option] = core.GroupStatus{Text: "too few GPUs"}
-				block("%s has too few GPUs for %s, which needs %d per pod.", short, model.Name, model.GPUsPerPod)
-				continue
-			}
+			block("Node pool %s mixes GPU types; %s needs one GPU type.", mixed, model.Name)
+			continue
+		}
 
-			check.Groups[option] = core.GroupStatus{
-				OK:   true,
-				Text: fmt.Sprintf("%s ×%d", shortProduct(firstOr(products, "no GPU")), len(pool)),
+		products := gpuProducts(assigned)
+		if len(products) > 1 {
+			check.Groups[option] = core.GroupStatus{Text: "mixed GPUs"}
+			block("The node pools of %s have different GPU types (%s); a model runs on one GPU type.", model.Name, strings.Join(products, ", "))
+			continue
+		}
+
+		short := ""
+		nodes := 0
+		for _, p := range assigned {
+			nodes += len(p.Nodes)
+			if !fits(p, model) && short == "" {
+				short = p.ID.Name
 			}
+		}
+		if short != "" {
+			check.Groups[option] = core.GroupStatus{Text: "too few GPUs"}
+			block("Node pool %s has nodes with too few GPUs for %s, which needs %d per pod.", short, model.Name, model.GPUsPerPod)
+			continue
+		}
+
+		check.Groups[option] = core.GroupStatus{
+			OK:   true,
+			Text: fmt.Sprintf("%s, %d %s", shortProduct(firstOr(products, "no GPU")), nodes, plural(nodes, "node", "nodes")),
 		}
 	}
 
 	if cpu := members[OptionCPU]; len(cpu) == 0 {
-		check.Groups[OptionCPU] = core.GroupStatus{Text: "no nodes"}
-		block("Assign at least one node to CPU only; the platform itself runs there.")
+		check.Groups[OptionCPU] = core.GroupStatus{Text: "no pools"}
+		block("Assign at least one node pool to CPU only; the platform itself runs there.")
 	} else {
+		nodes := 0
+		for _, p := range cpu {
+			nodes += len(p.Nodes)
+		}
 		check.Groups[OptionCPU] = core.GroupStatus{
 			OK:   true,
-			Text: fmt.Sprintf("%d %s", len(cpu), plural(len(cpu), "node", "nodes")),
+			Text: fmt.Sprintf("%d %s", nodes, plural(nodes, "node", "nodes")),
 		}
 	}
 
 	return check
 }
 
-// gpuProducts is the distinct GPU products of a pool, sorted.
-func gpuProducts(pool []kube.NodeInfo) []string {
+// mixedPool names the first pool whose nodes have different GPU products.
+func mixedPool(pools []pool) string {
+	for _, p := range pools {
+		if len(gpuProducts([]pool{p})) > 1 {
+			return p.ID.Name
+		}
+	}
+	return ""
+}
+
+// gpuProducts is the distinct GPU products of the pools' nodes, sorted.
+func gpuProducts(pools []pool) []string {
 	seen := map[string]bool{}
 	var products []string
-	for _, node := range pool {
-		product := node.GPUProduct
-		if product == "" && node.GPUs > 0 {
-			product = "unknown GPU"
+	for _, p := range pools {
+		for _, node := range p.Nodes {
+			product := node.GPUProduct
+			if product == "" && node.GPUs > 0 {
+				product = "unknown GPU"
+			}
+			if product == "" || seen[product] {
+				continue
+			}
+			seen[product] = true
+			products = append(products, product)
 		}
-		if product == "" || seen[product] {
-			continue
-		}
-		seen[product] = true
-		products = append(products, product)
 	}
 
 	sort.Strings(products)
 	return products
 }
 
-// labelChanges compares each node's managed labels with the ones its
-// assignment calls for. Managed labels the assignment does not call for are
-// removed, which also clears the pools of models no longer served.
-func labelChanges(nodes []kube.NodeInfo, models []catalog.Model, values []string) []labelChange {
-	byOption := map[string]catalog.Model{}
-	for _, model := range models {
-		byOption[modelOption(model)] = model
+func poolNames(pools []placement.Pool) string {
+	if len(pools) == 0 {
+		return "no pools"
 	}
 
-	var changes []labelChange
-	for i, node := range nodes {
-		want := wantedLabels(values[i], byOption)
-
-		change := labelChange{Node: node.Name}
-		for _, key := range want {
-			if node.Labels[key] != placement.Value {
-				change.Set = append(change.Set, key)
-			}
-		}
-		for key := range node.Labels {
-			if placement.Managed(key) && !contains(want, key) {
-				change.Remove = append(change.Remove, key)
-			}
-		}
-		sort.Strings(change.Set)
-		sort.Strings(change.Remove)
-
-		if len(change.Set) > 0 || len(change.Remove) > 0 {
-			changes = append(changes, change)
-		}
+	names := make([]string, 0, len(pools))
+	for _, p := range pools {
+		names = append(names, p.Name)
 	}
-
-	return changes
-}
-
-func wantedLabels(option string, models map[string]catalog.Model) []string {
-	switch option {
-	case OptionCPU:
-		return []string{placement.CPULabel}
-	case OptionUnassigned:
-		return nil
-	}
-
-	model, ok := models[option]
-	if !ok {
-		return nil
-	}
-
-	var keys []string
-	for key := range placement.ModelSelector(model) {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-
-	return keys
+	sort.Strings(names)
+	return strings.Join(names, ", ")
 }
 
 func modelTitle(model catalog.Model) string {
@@ -416,55 +521,37 @@ func modelTitle(model catalog.Model) string {
 	return fmt.Sprintf("%s · %s · %d GPU", model.Name, kind, model.GPUsPerPod)
 }
 
-func gpuCell(node kube.NodeInfo) string {
-	if node.GPUs == 0 {
+func nodeCount(p pool) string {
+	return fmt.Sprintf("%d %s", len(p.Nodes), plural(len(p.Nodes), "node", "nodes"))
+}
+
+func gpuCell(p pool) string {
+	products := gpuProducts([]pool{p})
+	switch {
+	case !hasGPU(p):
 		return "-"
+	case len(products) > 1:
+		return "mixed"
+	default:
+		return fmt.Sprintf("%s ×%d", shortProduct(firstOr(products, "GPU")), minGPUs(p))
 	}
-
-	return fmt.Sprintf("%s ×%d", shortProduct(firstOr([]string{node.GPUProduct}, "GPU")), node.GPUs)
 }
 
-func computeCell(node kube.NodeInfo) string {
-	const gib = 1 << 30
-	return fmt.Sprintf("%dc/%dG", (node.CPUMillis+500)/1000, (node.MemoryBytes+gib/2)/gib)
-}
-
-func nodeDetail(node kube.NodeInfo) string {
-	var hardware []string
-	if node.InstanceType != "" {
-		hardware = append(hardware, node.InstanceType)
-	}
-	if node.ControlPlane {
-		hardware = append(hardware, "control plane")
+func poolDetail(p pool) string {
+	names := make([]string, 0, len(p.Nodes))
+	for _, node := range p.Nodes {
+		names = append(names, node.Name)
 	}
 
-	if node.GPUs == 0 {
-		hardware = append(hardware, "no GPU")
-	} else {
-		gpu := fmt.Sprintf("%s ×%d", firstOr([]string{node.GPUProduct}, "unknown GPU"), node.GPUs)
-		if node.GPUMemoryMiB > 0 {
-			gpu += fmt.Sprintf(", %d GB each", (node.GPUMemoryMiB+512)/1024)
-		}
-		if node.MIGCapable {
-			gpu += ", MIG capable"
-		}
-		hardware = append(hardware, gpu)
-	}
-
-	var managed []string
-	for key, value := range node.Labels {
-		if placement.Managed(key) && value == placement.Value {
-			managed = append(managed, key)
+	hardware := "no GPU"
+	if hasGPU(p) {
+		hardware = strings.Join(gpuProducts([]pool{p}), ", ")
+		if p.Nodes[0].MIGCapable {
+			hardware += ", MIG capable"
 		}
 	}
-	sort.Strings(managed)
 
-	labels := "labels: none"
-	if len(managed) > 0 {
-		labels = "labels: " + strings.Join(managed, ", ")
-	}
-
-	return strings.Join(hardware, ", ") + "\n" + labels
+	return fmt.Sprintf("%s, %s\nnodes: %s", p.ID.Kind(), hardware, strings.Join(names, ", "))
 }
 
 // shortProduct trims the vendor prefix the GPU Operator reports, so
@@ -479,16 +566,6 @@ func firstOr(values []string, fallback string) string {
 	}
 
 	return values[0]
-}
-
-func contains(values []string, value string) bool {
-	for _, v := range values {
-		if v == value {
-			return true
-		}
-	}
-
-	return false
 }
 
 func plural(n int, one, many string) string {

@@ -11,11 +11,10 @@ import (
 type Options struct {
 	GatewayHostname string
 
-	// NodeSelectorKey and NodeSelector name the node label the components
-	// prefer (soft node affinity), for example "axem.dev/workload-cpu" and
-	// "true".
-	NodeSelectorKey string
-	NodeSelector    string
+	// Placement names the nodes the components prefer (soft node affinity),
+	// for example the node pools assigned to CPU work. A node matching any
+	// term is preferred.
+	Placement []PlacementTerm
 
 	// Images maps an upstream image name, as the image manifest lists it
 	// (e.g. "qdrant/qdrant"), to the reference the cluster pulls it from. The
@@ -38,11 +37,30 @@ func NewStack(projectDir string, common stackpkg.Options, options ...Options) *S
 		common,
 		appconfig.Sources{
 			GatewayHostname: shaideOptions.GatewayHostname,
-			NodeSelectorKey: shaideOptions.NodeSelectorKey,
-			NodeSelector:    shaideOptions.NodeSelector,
+			Placement:       placement(shaideOptions.Placement),
 			Images:          shaideOptions.Images,
 		},
 	)}
+}
+
+// PlacementTerm admits the nodes whose Key label is one of Values, e.g. a node
+// pool label and the pools' names.
+type PlacementTerm struct {
+	Key    string
+	Values []string
+}
+
+func placement(terms []PlacementTerm) []appconfig.PlacementTerm {
+	if len(terms) == 0 {
+		return nil
+	}
+
+	out := make([]appconfig.PlacementTerm, 0, len(terms))
+	for _, term := range terms {
+		out = append(out, appconfig.PlacementTerm{Key: term.Key, Values: append([]string(nil), term.Values...)})
+	}
+
+	return out
 }
 
 func (s *Stack) Config() stackpkg.Config {

@@ -1,6 +1,7 @@
 package shaide
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
@@ -42,12 +43,13 @@ func newTestStack(options Options) *Stack {
 	}, options)
 }
 
-// The installer places app-shaide on the nodes it labelled for CPU work, so
-// the label it chose has to reach the stack config.
-func TestInstallerOptionsCarryNodeSelectorToStackConfig(t *testing.T) {
+// The installer places app-shaide on the node pools assigned to CPU work, so
+// the pools it chose have to reach the stack config.
+func TestInstallerOptionsCarryPlacementToStackConfig(t *testing.T) {
 	stack := newTestStack(Options{
-		NodeSelectorKey: "axem.dev/workload-cpu",
-		NodeSelector:    "true",
+		Placement: []PlacementTerm{
+			{Key: "kubernetes.azure.com/agentpool", Values: []string{"shaide"}},
+		},
 	})
 
 	resolved, err := stack.Config().Resolve(answeringPrompter{})
@@ -55,27 +57,29 @@ func TestInstallerOptionsCarryNodeSelectorToStackConfig(t *testing.T) {
 		t.Fatalf("Resolve() error = %v", err)
 	}
 
-	for key, want := range map[string]string{
-		"app-shaide:nodeSelectorKey": "axem.dev/workload-cpu",
-		"app-shaide:nodeSelector":    "true",
-	} {
-		if got := resolved[key].Value; got != want {
-			t.Errorf("%s = %q, want %q", key, got, want)
-		}
+	value, ok := resolved["app-shaide:placement"]
+	if !ok {
+		t.Fatal("app-shaide:placement was not written")
+	}
+
+	var got []PlacementTerm
+	if err := json.Unmarshal([]byte(value.Value), &got); err != nil {
+		t.Fatalf("decode placement %q: %v", value.Value, err)
+	}
+	if len(got) != 1 || got[0].Key != "kubernetes.azure.com/agentpool" || len(got[0].Values) != 1 || got[0].Values[0] != "shaide" {
+		t.Errorf("placement = %+v, want the CPU pool", got)
 	}
 }
 
-// Without installer values the keys are not written, so a value set by hand
-// in Pulumi.<stack>.yaml survives.
-func TestEmptyNodeSelectorIsNotWritten(t *testing.T) {
+// Without installer values the key is not written, so a node selector set by
+// hand in Pulumi.<stack>.yaml stays in effect.
+func TestEmptyPlacementIsNotWritten(t *testing.T) {
 	resolved, err := newTestStack(Options{}).Config().Resolve(answeringPrompter{})
 	if err != nil {
 		t.Fatalf("Resolve() error = %v", err)
 	}
 
-	for _, key := range []string{"app-shaide:nodeSelectorKey", "app-shaide:nodeSelector"} {
-		if _, ok := resolved[key]; ok {
-			t.Errorf("%s was written without an installer value", key)
-		}
+	if _, ok := resolved["app-shaide:placement"]; ok {
+		t.Error("app-shaide:placement was written without an installer value")
 	}
 }

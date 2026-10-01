@@ -62,6 +62,7 @@ const (
 	KeyJWTSecret     stackconfig.Key = "jwtSecret"
 	KeySessionSecret stackconfig.Key = "sessionSecret"
 
+	KeyPlacement                stackconfig.Key = "placement"
 	KeyNodeSelectorKey          stackconfig.Key = "nodeSelectorKey"
 	KeyNodeSelector             stackconfig.Key = "nodeSelector"
 	KeyNodeSelectorShaide       stackconfig.Key = "nodeSelectorShaide"
@@ -129,10 +130,9 @@ const (
 type Sources struct {
 	GatewayHostname string
 
-	// NodeSelectorKey and NodeSelector name the node label the components
-	// prefer to run on. The installer sets them to the CPU pool's label.
-	NodeSelectorKey string
-	NodeSelector    string
+	// Placement names the nodes the components prefer to run on. The
+	// installer sets it to the node pools assigned to CPU work.
+	Placement []PlacementTerm
 
 	// Images maps an upstream image name to the reference the cluster pulls
 	// it from. It may hold images other stacks deploy; only the ones named
@@ -211,17 +211,13 @@ func runtimeEntries(opts stack.Options, sources Sources) []stackconfig.Entry[Val
 			},
 		},
 		{
-			Key:    KeyNodeSelectorKey,
-			Source: stackconfig.Source{Value: optionalSource(sources.NodeSelectorKey)},
+			// Written only when the installer assigned CPU pools, so a
+			// hand-set node selector in Pulumi.<stack>.yaml stays in effect
+			// otherwise.
+			Key:    KeyPlacement,
+			Source: stackconfig.Source{Value: optionalPlacement(sources.Placement)},
 			Setter: func(cfg *Values, root *pulumiconfig.Config) {
-				cfg.NodeSelectorKey = root.Get(KeyNodeSelectorKey.String())
-			},
-		},
-		{
-			Key:    KeyNodeSelector,
-			Source: stackconfig.Source{Value: optionalSource(sources.NodeSelector)},
-			Setter: func(cfg *Values, root *pulumiconfig.Config) {
-				cfg.NodeSelector = root.Get(KeyNodeSelector.String())
+				_ = root.TryObject(KeyPlacement.String(), &cfg.Placement)
 			},
 		},
 		{
@@ -297,6 +293,14 @@ func imageEntries(sources Sources) []stackconfig.Entry[Values] {
 			},
 		},
 	}
+}
+
+func optionalPlacement(terms []PlacementTerm) any {
+	if len(terms) == 0 {
+		return nil
+	}
+
+	return terms
 }
 
 func optionalSource(value string) any {
@@ -407,6 +411,8 @@ func optionalEntries() []stackconfig.Entry[Values] {
 		set func(*Values, string)
 	}{
 		{KeyInfraStackRef, func(c *Values, v string) { c.Routing.InfraStackRef = v }},
+		{KeyNodeSelectorKey, func(c *Values, v string) { c.NodeSelectorKey = v }},
+		{KeyNodeSelector, func(c *Values, v string) { c.NodeSelector = v }},
 		{KeyNodeSelectorShaide, func(c *Values, v string) { c.NodeSelectorShaide = v }},
 		{KeyNodeSelectorControlPanel, func(c *Values, v string) { c.NodeSelectorControlPanel = v }},
 		{KeyNodeSelectorWebapp, func(c *Values, v string) { c.NodeSelectorWebApp = v }},

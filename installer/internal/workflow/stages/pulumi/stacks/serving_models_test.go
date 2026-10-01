@@ -4,6 +4,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -16,6 +17,7 @@ import (
 
 	"github.com/axem-solutions/ai_platform/installer/internal/config/catalog"
 	"github.com/axem-solutions/ai_platform/installer/internal/config/paths"
+	"github.com/axem-solutions/ai_platform/installer/internal/placement"
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/core"
 	"github.com/axem-solutions/ai_platform/pkg/iac/serving"
 )
@@ -104,23 +106,40 @@ func TestModelsRunOnTheirOwnPool(t *testing.T) {
 	embedder.Name, embedder.Slug, embedder.Category = "BGE-M3", "bge-m3", catalog.CategoryEmbedder
 
 	rt := runtimeWith(t, t.TempDir(), []catalog.Model{gptOSS(), embedder})
+	rt.Placement = placement.Assignment{Models: map[string][]placement.Pool{
+		"gpt-oss-20b": {
+			{Key: "kubernetes.azure.com/agentpool", Name: "generative-b"},
+			{Key: "kubernetes.azure.com/agentpool", Name: "generative"},
+		},
+		"bge-m3": {
+			{Key: "nodegroup", Name: "gpu"},
+			{Key: "kubernetes.io/hostname", Name: "server4"},
+		},
+	}}
+
 	models := selectedModels(rt)
 
-	want := []map[string]string{
-		{"axem.dev/model-gpt-oss-20b": "true", "axem.dev/workload-generative": "true"},
-		{"axem.dev/model-bge-m3": "true", "axem.dev/workload-embedding": "true"},
+	want := [][]serving.PlacementTerm{
+		{{Key: "kubernetes.azure.com/agentpool", Values: []string{"generative", "generative-b"}}},
+		{
+			{Key: "kubernetes.io/hostname", Values: []string{"server4"}},
+			{Key: "nodegroup", Values: []string{"gpu"}},
+		},
 	}
-	for i, selector := range want {
-		got := models[i].NodeSelector
-		if len(got) != len(selector) {
-			t.Errorf("%s NodeSelector = %v, want %v", models[i].Name, got, selector)
-			continue
+	for i := range want {
+		if !reflect.DeepEqual(models[i].Placement, want[i]) {
+			t.Errorf("%s placement = %+v, want %+v", models[i].Name, models[i].Placement, want[i])
 		}
-		for key, value := range selector {
-			if got[key] != value {
-				t.Errorf("%s NodeSelector = %v, want %v", models[i].Name, got, selector)
-			}
-		}
+	}
+}
+
+// A model without assigned pools gets no placement, and the stack falls back
+// to its default GPU pool.
+func TestModelWithoutPoolsHasNoPlacement(t *testing.T) {
+	rt := runtimeWith(t, t.TempDir(), []catalog.Model{gptOSS()})
+
+	if got := selectedModels(rt)[0].Placement; got != nil {
+		t.Errorf("placement = %+v, want none", got)
 	}
 }
 

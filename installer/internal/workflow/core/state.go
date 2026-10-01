@@ -5,6 +5,7 @@ import (
 	"github.com/axem-solutions/ai_platform/installer/internal/config/catalog"
 	harborapi "github.com/axem-solutions/ai_platform/installer/internal/harbor/api"
 	"github.com/axem-solutions/ai_platform/installer/internal/harbor/auth"
+	"github.com/axem-solutions/ai_platform/installer/internal/placement"
 	"github.com/axem-solutions/ai_platform/pkg/kube"
 	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
 	"k8s.io/client-go/kubernetes"
@@ -16,6 +17,8 @@ type GlobalState struct {
 	Cluster   ClusterState
 	Bootstrap BootstrapState
 	Models    ModelsState
+	// Placement is the node pools assigned to each model and to CPU work.
+	Placement placement.Assignment
 	Artifact  ArtifactState
 	Pulumi    PulumiState
 }
