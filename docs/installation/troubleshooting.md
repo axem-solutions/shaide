@@ -54,9 +54,15 @@ project exists.
 
 ## Manifest validation
 
-The installer validates the image manifest that ships inside the image, and the model
-manifest you supply. A missing or unreadable model manifest fails at bootstrap with a
-message naming the expected path.
+The image manifest and the model catalog both ship inside the installer image. If either
+is missing or unreadable, the installer fails at bootstrap with a message naming the
+path; this indicates a broken image build.
+
+A packaged model that fails validation is not offered, and the run continues. The reason
+is logged at the start of the `Select models` stage, for example a missing or duplicate
+`ms-<slug>/values.yaml`, an unpinned `shaide.revision`, a missing
+`modelArtifacts.name` or `modelArtifacts.size`, or a decode GPU limit that is not a
+whole number.
 
 ## Cluster connectivity
 
