@@ -200,13 +200,14 @@ ls -ld "$STORAGE_PATH"
 
 ```bash
 docker run --rm -it \
+  --pull always \
   --network host \
   -e HF_TOKEN \
   -e PULUMI_CONFIG_PASSPHRASE \
   -e PRIVATE_KEY_PATH \
   -v "${HOST_KUBECONFIG}:/.kube/config:ro" \
   --mount "type=bind,src=${STORAGE_PATH},dst=/var/shaide-installer" \
-  ghcr.io/axem-solutions/shaide/installer:oss
+  ghcr.io/axem-solutions/shaide/installer:latest
 ```
 
 The installer requires an interactive terminal, so `-it` is required.

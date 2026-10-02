@@ -17,12 +17,13 @@ PULUMI_CONFIG_PASSPHRASE=<same-passphrase-as-the-original-install>
 HF_TOKEN=<your-huggingface-token>
 
 docker run --rm -it \
+  --pull always \
   --network host \
   -e PULUMI_CONFIG_PASSPHRASE \
   -e HF_TOKEN \
   -v "$HOME/.kube/config:/.kube/config:ro" \
   --mount "type=bind,src=${STORAGE_PATH},dst=/var/shaide-installer" \
-  ghcr.io/axem-solutions/shaide/installer:oss
+  ghcr.io/axem-solutions/shaide/installer:latest
 ```
 
 The installer diffs desired against current state and applies only what changed.
