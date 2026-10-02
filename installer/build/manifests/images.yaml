@@ -1,8 +1,8 @@
 # Images mirrored into Harbor during installation.
 harbor_upload_images:
   # app_shaide
-  - { source: "ghcr", project: "shaide", name: "axem-solutions/shaide_server", tag: "dev" }
-  - { source: "ghcr", project: "shaide", name: "axem-solutions/shaide_control_panel", tag: "dev" }
+  - { source: "ghcr", project: "shaide", name: "axem-solutions/shaide_server", tag: "v1.0.0" }
+  - { source: "ghcr", project: "shaide", name: "axem-solutions/shaide_control_panel", tag: "v1.0.0" }
   - { source: "ghcr", project: "shaide", name: "axem-solutions/shaide-webapp", tag: "v0.2.0" }
   - { source: "dockerhub", project: "shaide", name: "rustfs/rustfs", tag: "1.0.0-alpha.92" }
   - { source: "dockerhub", project: "shaide", name: "qdrant/qdrant", tag: "v1.17" }
