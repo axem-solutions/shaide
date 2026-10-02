@@ -47,12 +47,13 @@ STORAGE_PATH=<storage-path>
 mkdir -p "${STORAGE_PATH}"
 
 docker run --rm -it \
+  --pull always \
   --network host \
   -e PULUMI_CONFIG_PASSPHRASE \
   -e HF_TOKEN \
   -v "$HOME/.kube/config:/.kube/config:ro" \
   --mount "type=bind,src=${STORAGE_PATH},dst=/var/shaide-installer" \
-  ghcr.io/axem-solutions/shaide/installer:oss
+  ghcr.io/axem-solutions/shaide/installer:latest
 ```
 
 The installer prompts for configuration and deploys the platform.

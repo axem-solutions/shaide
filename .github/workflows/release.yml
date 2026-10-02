@@ -101,6 +101,7 @@ jobs:
           images: ghcr.io/${{ github.repository }}/installer
           tags: |
             type=raw,value=${{ needs.release.outputs.version }}
+            type=raw,value=latest
 
       - name: Build and push installer image
         uses: docker/build-push-action@v7
