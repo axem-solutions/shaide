@@ -107,7 +107,7 @@ docker run --rm -it \
   -e HF_TOKEN \
   -v "$HOME/.kube/config:/.kube/config:ro" \
   --mount "type=bind,src=${STORAGE_PATH},dst=/var/shaide-installer" \
-  ghcr.io/axem-solutions/shaide/installer:latest
+  ghcr.io/axem-solutions/shaide/installer:v1.0.0
 ```
 
 > **[→ Installer guide](docs/installation/installer-guide.md)**

@@ -67,6 +67,26 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  publish-docs:
+    name: Publish documentation
+    needs: release
+    runs-on: ubuntu-latest
+
+    permissions:
+      actions: write
+
+    steps:
+      # A dispatch (unlike a workflow_call) runs on main, which the github-pages
+      # environment accepts; this run's pull_request merge ref is rejected.
+      - name: Dispatch the docs workflow for the release tag
+        run: |
+          gh workflow run docs.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref main \
+            -f ref="${{ needs.release.outputs.version }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   build-installer-image:
     name: Build and publish installer image
     needs: release
