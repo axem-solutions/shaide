@@ -13,6 +13,8 @@ concurrency:
 jobs:
   build-installer-image:
     name: Build and publish installer image
+    # Release merges are published with their version tag by release.yml instead.
+    if: github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'chore(release): v')
     runs-on: ubuntu-latest
 
     permissions:
@@ -56,4 +58,4 @@ jobs:
           labels: ${{ steps.metadata.outputs.labels }}
 
           cache-from: type=gha,scope=installer-linux-amd64
-          cache-to: type=gha,mode=max,scope=installer-linux-amd64
+          cache-to: type=gha,mode=max,scope=installer-linux-amd64,ignore-error=true

@@ -114,5 +114,9 @@ jobs:
           tags: ${{ steps.metadata.outputs.tags }}
           labels: ${{ steps.metadata.outputs.labels }}
 
-          cache-from: type=gha,scope=installer-linux-amd64
-          cache-to: type=gha,mode=max,scope=installer-linux-amd64
+          # The dev image workflow builds the same merge commit concurrently,
+          # so write to a separate scope and never fail the release on cache export.
+          cache-from: |
+            type=gha,scope=installer-release-linux-amd64
+            type=gha,scope=installer-linux-amd64
+          cache-to: type=gha,mode=max,scope=installer-release-linux-amd64,ignore-error=true
