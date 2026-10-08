@@ -1,34 +1,61 @@
 name: Publish documentation
 
+# The site is versioned with mike: every release is built into its own folder on
+# the gh-pages branch, and `latest` points at the newest release. release.yml
+# dispatches this workflow on main (the only branch the github-pages environment
+# accepts) with the new tag as `version`.
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - docs/**
-      - mkdocs.yml
-      - hooks.py
-      - docs-requirements.txt
-      - .github/workflows/docs.yml
+    inputs:
+      version:
+        description: Docs version to publish (defaults to the latest release tag)
+        required: false
+        type: string
+      ref:
+        description: Git ref to build it from (defaults to the version tag)
+        required: false
+        type: string
 
-# The Pages deployment is the live site, so queue runs instead of cancelling —
-# a cancelled deploy would leave the site on an older build.
+# The Pages deployment is the live site and gh-pages is shared state, so queue
+# runs instead of cancelling - a cancelled deploy would leave the site on an
+# older build.
 concurrency:
   group: pages
   cancel-in-progress: false
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
     steps:
+      - name: Resolve the version
+        id: version
+        run: |
+          LATEST="$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)"
+          VERSION="${INPUT_VERSION:-$LATEST}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "ref=${INPUT_REF:-$VERSION}" >> "$GITHUB_OUTPUT"
+          # Only the newest release moves the `latest` alias, so republishing an
+          # older version never takes over the default docs.
+          if [ "$VERSION" = "$LATEST" ]; then
+            echo "aliases=latest" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_REF: ${{ inputs.ref }}
+          GH_TOKEN: ${{ github.token }}
+
       - name: Check out the repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.version.outputs.ref }}
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -41,18 +68,55 @@ jobs:
         run: pip install -r docs-requirements.txt
 
       # --strict fails the build on broken internal links, so a bad link never
-      # reaches the published site.
-      - name: Build the site
+      # reaches the published site. mike builds without it.
+      - name: Check the site
         run: mkdocs build --strict
+
+      - name: Deploy the version to gh-pages
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin gh-pages:gh-pages || true
+          mike deploy --push --update-aliases --alias-type=copy "$VERSION" $ALIASES
+          mike set-default --push latest
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          ALIASES: ${{ steps.version.outputs.aliases }}
+
+      - name: Export gh-pages
+        run: |
+          mkdir pages
+          git archive gh-pages | tar -x -C pages
+          # Pages serves the root 404.html for any missing path: send links from
+          # before versioning (/shaide/<page>) on to the same page under latest/.
+          cat > pages/404.html <<'HTML'
+          <!DOCTYPE html>
+          <meta charset="utf-8">
+          <title>Redirecting</title>
+          <script>
+            var base = "/shaide/";
+            var rest = location.pathname.slice(base.length);
+            if (location.pathname.indexOf(base) === 0 && !/^(latest|v\d+\.\d+\.\d+)\//.test(rest)) {
+              location.replace(base + "latest/" + rest + location.search + location.hash);
+            } else {
+              location.replace(base);
+            }
+          </script>
+          HTML
 
       - name: Upload the site artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: pages
 
   deploy:
     needs: build
     runs-on: ubuntu-latest
+
+    permissions:
+      pages: write
+      id-token: write
+
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

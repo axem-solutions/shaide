@@ -20,6 +20,13 @@ theme:
     - content.code.copy
     - search.suggest
 
+# Versioned with mike: each release is deployed to its own folder on the
+# gh-pages branch and the theme renders a version selector in the header.
+extra:
+  version:
+    provider: mike
+    default: latest
+
 extra_css:
   - stylesheets/extra.css
 

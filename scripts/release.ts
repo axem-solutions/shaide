@@ -4,13 +4,14 @@
  * Usage:
  *   npx tsx scripts/release.ts <version> [changelog-file] [pr-body-file] [--dry-run]
  *
- * Creates a release branch, updates CHANGELOG, opens a PR.
+ * Creates a release branch, updates CHANGELOG and the docs version, opens a PR.
  * Merging the PR triggers CI to create the tag and GitHub Release.
  */
 
 import * as fs from "node:fs";
 import { exec, currentBranch, isClean, tagExists } from "./lib/git";
 import { insertChangelog } from "./lib/changelog";
+import { updateDocsVersion } from "./lib/docs";
 
 const args = process.argv.slice(2);
 if (args.length < 1 || args[0] === "--help") {
@@ -63,6 +64,15 @@ if (snippet) {
   console.warn(
     "  Warning: no changelog snippet provided – CHANGELOG.md not updated."
   );
+}
+
+if (dryRun) {
+  console.log(`  [dry-run] updateDocsVersion ${version}`);
+} else {
+  for (const file of updateDocsVersion(version)) {
+    exec("git", ["add", file], dryRun);
+    console.log(`  Updated ${file}`);
+  }
 }
 
 if (snippet) exec("git", ["add", "CHANGELOG.md"], dryRun);
