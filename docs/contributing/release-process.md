@@ -20,8 +20,8 @@ or: "release shaide vX.Y.Z"
 
 The agent will:
 1. Read the git log since the last tag (the source migration commit before the first release) and draft a CHANGELOG entry
-2. Ask you to confirm the CHANGELOG content before proceeding
-3. Create a `release/vX.Y.Z` branch, update `CHANGELOG.md`, pin the installer image in `README.md` and `docs/` to `vX.Y.Z`, commit, push, and open a PR titled `RELEASE vX.Y.Z`
+2. Review the docs for version references and ask you to confirm the CHANGELOG content and the documentation changes before proceeding
+3. Create a `release/vX.Y.Z` branch, update `CHANGELOG.md`, pin the installer image in `README.md` and `docs/` to `vX.Y.Z`, commit, push, open a PR titled `RELEASE vX.Y.Z`, and verify that every installer image reference in the docs points at `vX.Y.Z`
 4. Print the Jira Release notes for you to paste manually into the `shaide AI Platform vX.Y.Z` release
 
 **Merge the PR.** CI (`release.yml`) will automatically create the `vX.Y.Z` tag and the GitHub Release, publish the installer image and publish the documentation built from the tag to https://axem-solutions.github.io/shaide/.
@@ -61,7 +61,7 @@ for example after a docs fix:
 gh workflow run docs.yml
 
 # Rebuild a version from another ref
-gh workflow run docs.yml -f version=v1.0.0 -f ref=main
+gh workflow run docs.yml -f version=vX.Y.Z -f ref=main
 ```
 
 To pin the installer image in the docs without cutting a release, run
