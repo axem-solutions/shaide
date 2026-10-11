@@ -1,0 +1,4 @@
+# Match the FastAPI/Starlette versions in llm-d-cuda:v0.7.0.
+fastapi==0.136.1
+starlette==0.52.1
+httpx==0.28.1

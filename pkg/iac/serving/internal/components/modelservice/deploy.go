@@ -51,6 +51,14 @@ func Deploy(
 	modelServiceValues := values(decodeValues, prefillValues)
 
 	chartDeps := []pulumi.Resource{gaie}
+	metadata, err := configureMetadata(ctx, model.MsValuesPath, model.ModelServiceReleaseName(), model.Namespace, modelServiceValues,
+		append([]pulumi.ResourceOption{pulumi.Provider(helmProvider)}, opts...)...)
+	if err != nil {
+		return nil, fmt.Errorf("configure runtime metadata: %w", err)
+	}
+	if metadata != nil {
+		chartDeps = append(chartDeps, metadata)
+	}
 
 	modelArtifacts := pulumi.Map{
 		"labels": model.MetaLabels(category),
