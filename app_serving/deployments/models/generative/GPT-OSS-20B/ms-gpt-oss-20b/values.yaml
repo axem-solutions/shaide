@@ -10,6 +10,9 @@
 # Read by the shaide installer and ignored by the chart. The revision pins the
 # Hugging Face commit to download and derives the Harbor tag of the artifact.
 shaide:
+  # Expose read-only runtime settings through vLLM, without development APIs.
+  runtimeMetadata:
+    enabled: true
   revision: "6cee5e81ee83917806bbde320786a8fb61efebee"
 
 multinode: false

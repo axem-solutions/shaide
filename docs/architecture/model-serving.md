@@ -519,3 +519,16 @@ Pulumi state is managed via the backend configured for the environment (S3 or GC
 pulumi login <backend-url>
 pulumi stack select <stack>
 ```
+
+## Runtime metadata for Control Panel discovery
+
+Models can opt into the dedicated read-only endpoint with
+`shaide.runtimeMetadata.enabled: true` in their modelservice values file.
+GPT-OSS-20B enables this by default. The platform mounts a small vLLM middleware
+module from a ConfigMap, and shaide-server reads `GET /v1/shaide/metadata` through
+the discovered model Service. The values file configures vLLM; the endpoint
+reports the running process's resolved settings. It does not read a YAML copy,
+run inference probes, or enable vLLM development APIs.
+
+See the [runtime metadata module](../../pkg/iac/serving/internal/components/modelservice/metadata/README.md)
+for the schema, authentication behavior, missing-dimension handling, and tests.
