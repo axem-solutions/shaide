@@ -25,9 +25,17 @@ jobs:
 
       - name: Extract version
         id: version
+        # The branch name is PR input, so it reaches the script through env and
+        # only a strict vX.Y.Z version is passed on to the later steps.
         run: |
-          BRANCH="${{ github.event.pull_request.head.ref }}"
-          echo "version=${BRANCH#release/}" >> "$GITHUB_OUTPUT"
+          VERSION="${HEAD_REF#release/}"
+          if ! [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Release branch '$HEAD_REF' does not name a vX.Y.Z version."
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
 
       - name: Create and push tag
         run: |
