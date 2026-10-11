@@ -14,7 +14,10 @@ jobs:
   build-installer-image:
     name: Build and publish installer image
     # Release merges are published with their version tag by release.yml instead.
-    if: github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'chore(release): v')
+    # A block scalar, because the ": " in the prefix breaks a plain YAML value.
+    if: >-
+      github.event_name != 'push' ||
+      !startsWith(github.event.head_commit.message, 'chore(release): v')
     runs-on: ubuntu-latest
 
     permissions:
