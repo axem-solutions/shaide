@@ -1,0 +1,4368 @@
+<!DOCTYPE html><html lang="en" class="no-js"><head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Per-model inference stacks built on vLLM and llm-d.">
+      
+      
+      
+        <link rel="canonical" href="https://axem-solutions.github.io/shaide/v1.0.0/architecture/model-serving/">
+      
+      
+        <link rel="prev" href="../gateway/">
+      
+      
+        <link rel="next" href="../model-deployment-flow/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Model serving - shaide documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&amp;display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  <link href="../../assets/stylesheets/glightbox.min.css" rel="stylesheet"><script src="../../assets/javascripts/glightbox.min.js"></script><style id="glightbox-style">
+            html.glightbox-open { overflow: initial; height: 100%; }
+            .gslide-title { margin-top: 0px; user-select: text; }
+            .gslide-desc { color: #666; user-select: text; }
+            .gslide-image img { background: white; }
+            .gscrollbar-fixer { padding-right: 15px; }
+            .gdesc-inner { font-size: 0.75rem; }
+            body[data-md-color-scheme="slate"] .gdesc-inner { background: var(--md-default-bg-color); }
+            body[data-md-color-scheme="slate"] .gslide-title { color: var(--md-default-fg-color); }
+            body[data-md-color-scheme="slate"] .gslide-desc { color: var(--md-default-fg-color); }
+        </style><meta name="doc-source" content="architecture/model-serving.md"></head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="custom">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#model-serving" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden="">
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="shaide documentation" class="md-header__button md-logo" aria-label="shaide documentation" data-md-component="logo">
+      
+  <img src="../../assets/shaide-logo-white.svg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"></path></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            shaide documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Model serving
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"></path></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required="">
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"></path></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"></path></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"></path></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix="">
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/axem-solutions/shaide" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"></path></svg>
+  </div>
+  <div class="md-source__repository">
+    axem-solutions/shaide
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation">
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="shaide documentation" class="md-nav__button md-logo" aria-label="shaide documentation" data-md-component="logo">
+      
+  <img src="../../assets/shaide-logo-white.svg" alt="logo">
+
+    </a>
+    shaide documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/axem-solutions/shaide" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"></path></svg>
+  </div>
+  <div class="md-source__repository">
+    axem-solutions/shaide
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix="">
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_1">
+        
+          
+          <label class="md-nav__link" for="__nav_1" id="__nav_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Introduction
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Introduction
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../introduction/what-is-shaide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    What is shaide?
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../introduction/concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../introduction/architecture-overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../introduction/deployment-targets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deployment targets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2">
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cluster requirements
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Cluster requirements
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cluster-requirements/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cluster-requirements/compute/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Compute
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cluster-requirements/storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Storage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cluster-requirements/networking/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Networking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cluster-requirements/verification/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verification
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3">
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/provisioning-prerequisites/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Provisioner Prerequisites
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quickstart
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/verify-installation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verify installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4">
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Installation
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../installation/installer-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installer guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../installation/air-gapped/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Air-gapped
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../installation/troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5">
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Usage
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Usage
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../usage/openai-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OpenAI-compatible API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../usage/chat-completions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Chat completions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../usage/embeddings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Embeddings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../usage/agent-integrations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent integrations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../usage/model-catalog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Model catalog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../usage/authentication/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Authentication
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked="">
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Architecture
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../traffic-flow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Traffic flow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../platform-services/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Platform services
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gateway/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gateway
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Model serving
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Model serving
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix="">
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Architecture
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Architecture">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#traffic-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Traffic flow
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Traffic flow">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#end-to-end-call-path-for-embeddings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        End-to-end call path for embeddings
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#required-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Required Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#optional-per-model-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optional Per-Model Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#on-prem-air-gap-configuration-optional" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        On-Prem / Air-Gap Configuration (optional)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prerequisites" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prerequisites
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deployment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deployment
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#single-gpu-swaps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Single-GPU Swaps
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#supported-models" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supported Models
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Supported Models">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#generative-models" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generative Models
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Generative Models">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#benchmarks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Benchmarks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Error
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#embedder-models" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Embedder Models
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adding-a-new-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding a New Model
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Adding a New Model">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How it works
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Workflow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#naming-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Naming flow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Steps
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Steps">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#required-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Required Steps
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#optional-per-model-overrides" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optional per-model overrides
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exposing-installed-models" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exposing Installed Models
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dependencies
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#model-weight-pre-loading" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Model Weight Pre-loading
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#common-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common Issues
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#development" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Development
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#state-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        State Management
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../model-deployment-flow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Model deployment flow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../model-storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Model storage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../application-layer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Application layer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7">
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cluster setup
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Cluster setup
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cluster-setup/overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cluster-setup/aws-eks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AWS EKS
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cluster-setup/gcp-gke/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GCP GKE
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cluster-setup/azure-aks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Azure AKS
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cluster-setup/on-prem-rke2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    On-prem RKE2
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cluster-setup/rke2-cni/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RKE2 CNI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8">
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/model-management/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Model management
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/mcp-servers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP servers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/scaling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scaling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/model-registry/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Model registry
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/image-mirroring/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Image mirroring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/node-registry-trust/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Node registry trust
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/tls-certificates/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TLS certificates
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Storage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/upgrades/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Upgrades
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/backup-restore/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Backup and restore
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../operations/troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9">
+        
+          
+          <label class="md-nav__link" for="__nav_9" id="__nav_9_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Contributing
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contributing/development-setup/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Development setup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contributing/local-cluster/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Local cluster
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contributing/benchmarking/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmarking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contributing/release-process/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release process
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contributing/ai-policy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AI policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_6">
+        
+          
+          <label class="md-nav__link" for="__nav_9_6" id="__nav_9_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Local cluster reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_9_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Local cluster reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix="">
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contributing/local-cluster/env/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Environment variables
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contributing/local-cluster/k8s-version/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kubernetes version
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contributing/local-cluster/networking/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Networking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contributing/local-cluster/ports/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Port mapping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contributing/local-cluster/volumes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Volumes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contributing/local-cluster/storage/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Storage
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contributing/local-cluster/lb/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Load balancing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contributing/local-cluster/monitoring/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Resource monitoring
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contributing/local-cluster/remote-gpu/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Remote GPU nodes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../contributing/local-cluster/troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc">
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix="">
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Architecture
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Architecture">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#traffic-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Traffic flow
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Traffic flow">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#end-to-end-call-path-for-embeddings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        End-to-end call path for embeddings
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#required-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Required Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#optional-per-model-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optional Per-Model Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#on-prem-air-gap-configuration-optional" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        On-Prem / Air-Gap Configuration (optional)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prerequisites" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prerequisites
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deployment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Deployment
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#single-gpu-swaps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Single-GPU Swaps
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#supported-models" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supported Models
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Supported Models">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#generative-models" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generative Models
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Generative Models">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#benchmarks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Benchmarks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Error
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#embedder-models" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Embedder Models
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adding-a-new-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding a New Model
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Adding a New Model">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How it works
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Workflow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#naming-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Naming flow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Steps
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Steps">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#required-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Required Steps
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#optional-per-model-overrides" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optional per-model overrides
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exposing-installed-models" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exposing Installed Models
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dependencies
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#model-weight-pre-loading" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Model Weight Pre-loading
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#common-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common Issues
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#development" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Development
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#state-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        State Management
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="model-serving">Model serving<a class="headerlink" href="#model-serving" title="Permanent link">¶</a></h1>
+<p>This is the application layer Pulumi project that deploys the distributed LLM model serving infrastructure using the llm-d framework on Kubernetes.</p>
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">¶</a></h2>
+<p>The app layer deploys a complete LLM serving stack including:
+- <strong>llm-d Infrastructure</strong> components from the llm-d-infra Helm chart
+- <strong>GAIE (Gateway AI Engine)</strong> for inference gateway
+- <strong>ModelService</strong> for serving specific models
+- <strong>HTTPRoutes</strong> for connecting generative model components
+- <strong>Embedding Services</strong> for direct-backend access to embedding models</p>
+<h2 id="architecture">Architecture<a class="headerlink" href="#architecture" title="Permanent link">¶</a></h2>
+<p>The deployment creates the following components:</p>
+<ol>
+<li><strong>LLM-D Infrastructure</strong> (<code>pkg/iac/serving/internal/components/llmd-infra/deploy.go</code>): Core llm-d components</li>
+<li>Deployed via Helm chart from <code>./charts/llm-d-infra-v1.4.0.tgz</code> (downloaded into the installer image)</li>
+<li>Creates Gateway with Istio ingress configuration</li>
+<li>
+<p>Sets up TLS and traffic policies</p>
+</li>
+<li>
+<p><strong>GAIE</strong> (<code>pkg/iac/serving/internal/components/gaie/deploy.go</code>): AI inference engine gateway</p>
+</li>
+<li>InferencePool for model serving</li>
+<li>
+<p>Endpoint configurations</p>
+</li>
+<li>
+<p><strong>Model Service</strong> (<code>pkg/iac/serving/internal/components/modelservice/deploy.go</code>): Model-specific serving</p>
+</li>
+<li>Supports any model via convention-based discovery from <code>deployments/models/</code> directory</li>
+<li>
+<p>Configurable via the <code>models.generative</code> / <code>models.embedder</code> lists</p>
+</li>
+<li>
+<p><strong>HTTPRoute</strong> (<code>pkg/iac/serving/internal/components/httproute/deploy.go</code>): Traffic routing for generative models</p>
+</li>
+<li>Connects Gateway listeners to GAIE InferencePool</li>
+<li>
+<p>Created only for <code>generative</code> category models</p>
+</li>
+<li>
+<p><strong>Embedding Service</strong> (<code>pkg/iac/serving/internal/components/embeddingservice/deploy.go</code>): Direct-backend Service for embedder models</p>
+</li>
+<li>Created only for <code>embedder</code> category models; skipped for generative models</li>
+<li>ClusterIP Service named <code>ms-&lt;slug&gt;-embeddings</code> in the model namespace</li>
+<li>Selects decode pods via <code>llm-d.ai/model</code> and <code>llm-d.ai/role: decode</code> labels</li>
+<li>Exposes port 8200 — the inference server port used by vLLM in pooling (embedding) mode</li>
+<li>Reachable as <code>http://ms-&lt;slug&gt;-embeddings.&lt;namespace&gt;.svc.cluster.local:8200/v1/embeddings</code></li>
+</ol>
+<h3 id="traffic-flow">Traffic flow<a class="headerlink" href="#traffic-flow" title="Permanent link">¶</a></h3>
+<p><strong>Generative models:</strong>
+shaide server → Istio Gateway → GAIE InferencePool → ModelService decode pod (port 8000 via routing proxy)</p>
+<p><strong>Embedding models:</strong>
+shaide server → <code>ms-&lt;slug&gt;-embeddings.&lt;namespace&gt;.svc.cluster.local:8200</code> → ModelService decode pod (port 8200 direct)</p>
+<p>The Gateway/HTTPRoute path is not used for embedding models — the per-model gateway service returns route-level errors for embedding requests. Downstream apps (e.g. app-shaide) must use the direct ClusterIP Service DNS name for embeddings.</p>
+<h4 id="end-to-end-call-path-for-embeddings">End-to-end call path for embeddings<a class="headerlink" href="#end-to-end-call-path-for-embeddings" title="Permanent link">¶</a></h4>
+<div class="highlight"><pre><span></span><code>app-shaide
+    │
+    │  POST /v1/embeddings
+    ▼
+ms-&lt;slug&gt;-embeddings.&lt;namespace&gt;.svc.cluster.local:8200
+    │
+    │  kube-proxy / iptables (ClusterIP)
+    ▼
+decode pod (vLLM --runner pooling, listening on :8200)
+</code></pre></div>
+<p>No Istio Gateway, no GAIE, no EPP scheduling — the request goes straight to the model server.</p>
+<p>External ingress and TLS for generative models are handled by the cloud-specific infra layer (e.g., AWS Load Balancer Controller or GKE Gateway + Certificate Manager), keeping this app layer provider-agnostic.</p>
+<h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">¶</a></h2>
+<p>The application is configured via Pulumi config values in <code>deployments/Pulumi.{stack}.yaml</code>:</p>
+<h3 id="required-configuration">Required Configuration<a class="headerlink" href="#required-configuration" title="Permanent link">¶</a></h3>
+<ul>
+<li><code>cloudProvider</code>: Target platform — <code>cloud</code> (GCP/AWS/Azure) or <code>on-prem</code>. Determines which credentials are required and how the Kubernetes provider is configured.</li>
+<li><code>models</code>: Model list, split by category. Each entry names a folder under <code>deployments/models/&lt;category&gt;/</code> and specifies per-model settings:
+  <div class="highlight"><pre><span></span><code><span class="nt">app-serving:models</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">generative</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">DeepSeek-Coder-V2-Lite-Instruct</span>
+<span class="w">      </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">          </span><span class="c1"># must be boolean true/false, not a string</span>
+<span class="w">      </span><span class="nt">nodeSelector</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">nodegroup</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">g2-standard-48-l4</span>
+<span class="w">  </span><span class="nt">embedder</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">BGE-M3</span>
+<span class="w">      </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">      </span><span class="nt">nodeSelector</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">nodegroup</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">g2-standard-48-l4</span>
+</code></pre></div>
+  All models share the same cluster credentials (<code>kubeconfig</code>, <code>harborHostname</code>, <code>harborUser</code>, <code>harborToken</code>). Each model gets its own namespace and set of resources derived from its slug.</li>
+<li><code>harborToken</code>: Harbor robot account secret (encrypted). Required on on-prem; also required on cloud stacks that use <code>modelSource.harborRef</code>. Set via <code>pulumi config set --secret harborToken &lt;secret&gt;</code>.</li>
+</ul>
+<h3 id="optional-per-model-configuration">Optional Per-Model Configuration<a class="headerlink" href="#optional-per-model-configuration" title="Permanent link">¶</a></h3>
+<p>These can be added inside a model entry to override auto-derived values:
+- <code>nameSpace</code>: Override auto-derived namespace (default: <code>llm-d-&lt;slug&gt;</code>).
+- <code>releaseName</code>: Override auto-derived Helm release name (default: <code>infra-&lt;slug&gt;</code>).</p>
+<h3 id="on-prem-air-gap-configuration-optional">On-Prem / Air-Gap Configuration (optional)<a class="headerlink" href="#on-prem-air-gap-configuration-optional" title="Permanent link">¶</a></h3>
+<p>These fields are only needed when deploying to an air-gapped RKE2 cluster. All are
+absent from cloud stack configs.</p>
+<ul>
+<li><code>kubeconfig</code>: Path to the RKE2 cluster kubeconfig on the provisioner laptop (e.g. <code>~/.kube/rke2-cluster.yaml</code>). Omit to fall back to <code>KUBECONFIG</code> env var or <code>~/.kube/config</code>.</li>
+<li><code>harborHostname</code>: Internal Harbor registry hostname for containerd image pulls (e.g. <code>harbor.internal.lan</code>).</li>
+<li><code>harborUser</code>: Harbor robot account name (e.g. <code>robot$k8s-puller</code>).</li>
+<li><code>harborToken</code>: Harbor robot account secret (encrypted). Required for on-prem. Set via <code>pulumi config set --secret harborToken &lt;secret&gt;</code>. When set, a <code>harbor-creds</code> pull secret is created in each model namespace.</li>
+</ul>
+<h2 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">¶</a></h2>
+<ol>
+<li><strong>Kubernetes Cluster</strong>: GCP/AWS/Azure cloud cluster, or an on-prem RKE2 cluster provisioned via <code>infra/on-prem</code></li>
+<li><strong>Gateway Provider Prereqs</strong>: Gateway API + GAIE CRDs and a Gateway implementation (Istio) installed via <code>infra/gateway-provider</code></li>
+<li><strong>Harbor Registry</strong>: Models stored as OCI artifacts in Harbor. On cloud, Harbor is deployed by <code>infra/cloud-harbor</code>; on on-prem by <code>infra/on-prem/pulumi/services</code>. Model artifacts uploaded via <code>infra/model-registry/model-sync.sh</code>.</li>
+<li><strong>Go</strong>: Go 1.23+ with toolchain 1.24.5+</li>
+<li><strong>Pulumi</strong>: Pulumi CLI</li>
+<li><strong>On-prem only</strong>: Harbor registry deployed and configured, images uploaded via <code>infra/on-prem/ansible/harbor_upload.yml</code>. The <code>hostpath</code> StorageClass is used for model PVCs — PVs are created automatically by Pulumi when <code>modelSource.hostpathNode</code> is set, but the backing directory must exist on the node first (managed via the <code>hostpath_dirs</code> Ansible role).</li>
+<li><strong>Real models only</strong>: Model OCI artifacts pushed to Harbor via <code>infra/model-registry/model-sync.sh</code> before <code>pulumi up</code>. See <a href="#model-weight-pre-loading">Model Weight Pre-loading</a> below.</li>
+</ol>
+<h2 id="deployment">Deployment<a class="headerlink" href="#deployment" title="Permanent link">¶</a></h2>
+<ol>
+<li>
+<p><strong>Set Configuration</strong>:
+   </p><div class="highlight"><pre><span></span><code><span class="c1"># Set Harbor robot token (encrypted)</span>
+pulumi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>--secret<span class="w"> </span>harborToken<span class="w"> </span>&lt;robot-secret&gt;
+</code></pre></div><p></p>
+</li>
+<li>
+<p><strong>Deploy</strong>:
+   </p><div class="highlight"><pre><span></span><code><span class="nb">cd</span><span class="w"> </span>app_serving/deployments
+pulumi<span class="w"> </span>up
+</code></pre></div><p></p>
+</li>
+<li>
+<p><strong>Verify Deployment</strong>:
+   </p><div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>llm-d-&lt;slug&gt;
+kubectl<span class="w"> </span>get<span class="w"> </span>gateway<span class="w"> </span>-n<span class="w"> </span>llm-d-&lt;slug&gt;
+kubectl<span class="w"> </span>get<span class="w"> </span>httproute<span class="w"> </span>-n<span class="w"> </span>llm-d-&lt;slug&gt;
+</code></pre></div><p></p>
+</li>
+</ol>
+<h2 id="single-gpu-swaps">Single-GPU Swaps<a class="headerlink" href="#single-gpu-swaps" title="Permanent link">¶</a></h2>
+<p>If you want to deploy a different model on the same GPU, first remove the current deployment and then deploy the new one:</p>
+<div class="highlight"><pre><span></span><code><span class="nb">cd</span><span class="w"> </span>app_serving/deployments
+pulumi<span class="w"> </span>destroy
+pulumi<span class="w"> </span>up
+</code></pre></div>
+<p>This is needed when the old model must be removed before the new pod can be scheduled on the same GPU.</p>
+<h2 id="supported-models">Supported Models<a class="headerlink" href="#supported-models" title="Permanent link">¶</a></h2>
+<h3 id="generative-models">Generative Models<a class="headerlink" href="#generative-models" title="Permanent link">¶</a></h3>
+<ul>
+<li><strong>sim</strong>: Simulation model for testing (GCP)</li>
+<li><strong>sim-rke2-1 / sim-rke2-2</strong>: Simulation model for testing (RKE2 on-prem, Harbor images + <code>imagePullSecrets</code>)</li>
+<li><strong>DeepSeek-Coder-V2-Lite-Instruct</strong>: Code generation model</li>
+<li><a href="https://huggingface.co/zai-org/GLM-4.7-Flash"><strong>GLM-4.7-Flash</strong></a></li>
+<li><a href="https://huggingface.co/openai/gpt-oss-20b"><strong>GPT-OSS-20B</strong></a></li>
+<li><a href="https://huggingface.co/Qwen/Qwen3-Coder-30B-A3B-Instruct"><strong>Qwen3-Coder-30B-A3B-Instruct</strong></a></li>
+<li><a href="https://huggingface.co/mistralai/Devstral-Small-2-24B-Instruct-2512"><strong>Devstral-Small-2-24B-Instruct-2512</strong></a></li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Model</th>
+<th>Parameters</th>
+<th>Tensor Type</th>
+<th>Quantized</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>GLM-4.7-Flash</strong></td>
+<td>31B</td>
+<td>BF16 / F32</td>
+<td><a href="https://huggingface.co/unsloth/GLM-4.7-Flash-FP8-Dynamic">FP8</a></td>
+</tr>
+<tr>
+<td><strong>Qwen3-Coder-30B-A3B-Instruct-FP8</strong></td>
+<td>31B</td>
+<td>BF16</td>
+<td><a href="https://huggingface.co/Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8">FP8</a></td>
+</tr>
+<tr>
+<td><strong>Devstral-Small-2-24B-Instruct-2512</strong></td>
+<td>24B</td>
+<td>BF16</td>
+<td>-</td>
+</tr>
+<tr>
+<td><strong>Qwen3.5-27B-FP8</strong></td>
+<td>28B</td>
+<td>BF16</td>
+<td><a href="https://huggingface.co/Qwen/Qwen3.5-27B-FP8">FP8</a></td>
+</tr>
+</tbody>
+</table>
+<h4 id="benchmarks">Benchmarks<a class="headerlink" href="#benchmarks" title="Permanent link">¶</a></h4>
+<table>
+<thead>
+<tr>
+<th>Benchmark</th>
+<th style="text-align: right;">GLM-4.7-Flash</th>
+<th style="text-align: right;">GPT-OSS-20B</th>
+<th style="text-align: right;">Qwen3-Coder-30B-A3B-Instruct</th>
+<th style="text-align: right;">Devstral-Small-2-24B-Instruct-2512</th>
+<th style="text-align: right;">Qwen3.5-27B</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AIME 25</td>
+<td style="text-align: right;">91.6</td>
+<td style="text-align: right;">91.7</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+</tr>
+<tr>
+<td>GPQA</td>
+<td style="text-align: right;">75.2</td>
+<td style="text-align: right;">71.5</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">85.5</td>
+</tr>
+<tr>
+<td>HLE</td>
+<td style="text-align: right;">14.4</td>
+<td style="text-align: right;">10.9</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+</tr>
+<tr>
+<td>SWE-bench Verified</td>
+<td style="text-align: right;">59.2</td>
+<td style="text-align: right;">34.0</td>
+<td style="text-align: right;">51.6</td>
+<td style="text-align: right;">68.0%</td>
+<td style="text-align: right;">72.4</td>
+</tr>
+<tr>
+<td>LCB v6</td>
+<td style="text-align: right;">64.0</td>
+<td style="text-align: right;">61.0</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+</tr>
+<tr>
+<td>τ²-Bench</td>
+<td style="text-align: right;">79.5</td>
+<td style="text-align: right;">47.7</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+</tr>
+<tr>
+<td>BrowseComp</td>
+<td style="text-align: right;">42.8</td>
+<td style="text-align: right;">28.3</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">61.0</td>
+</tr>
+<tr>
+<td>Terminal-Bench</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">31.3</td>
+<td style="text-align: right;">22.5%</td>
+<td style="text-align: right;">41.6</td>
+</tr>
+<tr>
+<td>SWE-bench Multilingual</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">34.7</td>
+<td style="text-align: right;">55.7%</td>
+<td style="text-align: right;">—</td>
+</tr>
+</tbody>
+</table>
+<h4 id="error">Error<a class="headerlink" href="#error" title="Permanent link">¶</a></h4>
+<p>This error applies to both <strong>Qwen3.5-27B-FP8</strong> and <strong>GLM-4.7-Flash-FP8-Dynamic</strong> when the installed <code>transformers</code> version does not yet recognize the model architecture.</p>
+<div class="highlight"><pre><span></span><code>Value error, The checkpoint you are trying to load has model type `qwen3_5` but Transformers does not recognize this architecture. This could be because of an issue with the checkpoint, or because your version of Transformers is out of date. You can update Transformers with the command `pip install --upgrade transformers`.
+
+If this does not work, and the checkpoint is very new, then there may not be a release version that supports this model yet.
+In this case, you can get the most up-to-date code by installing Transformers from source with the command `pip install git+https://github.com/huggingface/transformers.git`
+</code></pre></div>
+<h3 id="embedder-models">Embedder Models<a class="headerlink" href="#embedder-models" title="Permanent link">¶</a></h3>
+<ul>
+<li><a href="https://huggingface.co/google/embeddinggemma-300m"><strong>EmbeddingGemma-300M</strong></a></li>
+<li><a href="https://huggingface.co/BAAI/bge-m3"><strong>BGE-M3</strong></a></li>
+<li><a href="https://huggingface.co/jinaai/jina-embeddings-v5-text-small-retrieval"><strong>jina-embeddings-v5-text-small-retrieval</strong></a></li>
+<li><a href="https://huggingface.co/nomic-ai/nomic-embed-text-v1.5"><strong>nomic-embed-text-v1.5</strong></a></li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Model</th>
+<th>Parameters</th>
+<th>Max context</th>
+<th>Max-num-seqs</th>
+<th>Max-num-batched-tokens</th>
+<th>Output dimension</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>EmbeddingGemma-300M</td>
+<td>~300M</td>
+<td>2048</td>
+<td>16</td>
+<td>12288</td>
+<td>768</td>
+</tr>
+<tr>
+<td>BGE-M3</td>
+<td>~568M</td>
+<td>2048</td>
+<td>16</td>
+<td>8192</td>
+<td>1024</td>
+</tr>
+<tr>
+<td>Jina-Embeddings-v5-text-small-retrieval</td>
+<td>~677M</td>
+<td>32K</td>
+<td>16</td>
+<td>12288</td>
+<td>1024</td>
+</tr>
+<tr>
+<td>Nomic-Embed-text-v1.5</td>
+<td>~137M</td>
+<td>2048</td>
+<td>8</td>
+<td>8192</td>
+<td>768</td>
+</tr>
+</tbody>
+</table>
+<p><a href="https://huggingface.co/spaces/mteb/leaderboard">Embedding Leaderboard</a></p>
+<p>Each entry below is a folder under <code>deployments/models/</code>. The same model may have
+multiple folders for different cluster targets (e.g. <code>sim</code> for GCP vs <code>sim-rke2-1</code> for RKE2).</p>
+<table>
+<thead>
+<tr>
+<th>Folder</th>
+<th>Model</th>
+<th>Target</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>sim</code></td>
+<td>llm-d inference simulator</td>
+<td>GCP</td>
+<td>No GPU required; for testing</td>
+</tr>
+<tr>
+<td><code>sim-rke2-1</code></td>
+<td>llm-d inference simulator</td>
+<td>RKE2 on-prem</td>
+<td>Harbor images, <code>imagePullSecrets</code></td>
+</tr>
+<tr>
+<td><code>sim-rke2-2</code></td>
+<td>llm-d inference simulator</td>
+<td>RKE2 on-prem</td>
+<td>Harbor images, <code>imagePullSecrets</code></td>
+</tr>
+<tr>
+<td><code>DeepSeek-Coder-V2-Lite-Instruct</code></td>
+<td>DeepSeek Coder V2 Lite</td>
+<td>GCP</td>
+<td>2× GPU, real model weights</td>
+</tr>
+<tr>
+<td><code>GLM-4.7-Flash</code></td>
+<td>Z.ai GLM-4.7-Flash</td>
+<td>Cloud</td>
+<td>4× GPU, real model weights</td>
+</tr>
+<tr>
+<td><code>GPT-OSS-20B</code></td>
+<td>GPT-OSS 20B</td>
+<td>GCP / on-prem</td>
+<td>1× GPU, real model weights</td>
+</tr>
+<tr>
+<td><code>Qwen3-Coder-30B-A3B-Instruct</code></td>
+<td>Qwen3 Coder 30B A3B Instruct</td>
+<td>Cloud</td>
+<td>BF16, tuned for 1× 96 GB GPU; use FP8 or TP&gt;1 on 48 GB GPUs</td>
+</tr>
+<tr>
+<td><code>nomic-embed-text-v1-5-rke2</code></td>
+<td>nomic-ai/nomic-embed-text-v1.5</td>
+<td>RKE2 on-prem</td>
+<td>CPU-only test via infinity; model weights pre-loaded via Harbor + ORAS (<code>modelSource.hostpathNode</code>)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="adding-a-new-model">Adding a New Model<a class="headerlink" href="#adding-a-new-model" title="Permanent link">¶</a></h2>
+<p>The code uses convention-based model discovery via <code>resolveModelPaths()</code>. Users create <code>deployments/models/&lt;category&gt;/&lt;modelName&gt;/gaie-&lt;slug&gt;/</code> and <code>ms-&lt;slug&gt;/</code> folders, and the code auto-derives <code>namespace</code>, release names, and values paths from the slug.</p>
+<h3 id="how-it-works">How it works<a class="headerlink" href="#how-it-works" title="Permanent link">¶</a></h3>
+<p>Paths are auto-discovered by <code>resolveModelPaths()</code> from the folder structure.
+Given a model entry <code>DeepSeek-Coder-V2-Lite-Instruct</code> in <code>models.generative</code>:
+</p><div class="highlight"><pre><span></span><code>→ scans deployments/models/generative/DeepSeek-Coder-V2-Lite-Instruct/
+→ finds gaie-deepseek-coder/ → gaieValuesPath = models/.../gaie-deepseek-coder/values.yaml
+→ finds ms-deepseek-coder/   → modelValuesPath = models/.../ms-deepseek-coder/values.yaml
+</code></pre></div><p></p>
+<h3 id="the-workflow">The Workflow<a class="headerlink" href="#the-workflow" title="Permanent link">¶</a></h3>
+<ol>
+<li>
+<p>User creates folders:
+</p><div class="highlight"><pre><span></span><code>deployments/models/generative/Test-Alma-V5-Pro/
+  gaie-alma-pro/values.yaml
+  ms-alma-pro/values.yaml
+</code></pre></div><p></p>
+</li>
+<li>
+<p>User adds the model to <code>models</code> in <code>Pulumi.&lt;stack-name&gt;.yaml</code> under the appropriate category:
+</p><div class="highlight"><pre><span></span><code><span class="nt">config</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">app-serving:cloudProvider</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cloud</span>
+<span class="w">  </span><span class="nt">app-serving:models</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">generative</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Test-Alma-V5-Pro</span>
+<span class="w">        </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">        </span><span class="nt">nodeSelector</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">nodegroup</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;node-pool-name&gt;</span>
+<span class="w">        </span><span class="nt">modelSource</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">harborRef</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">harbor.harbor.svc.cluster.local/ai-models/test-alma-v5-pro:1.0.0</span>
+<span class="w">          </span><span class="nt">modelUri</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">hub/test-org/Test-Alma-V5-Pro</span>
+<span class="w">          </span><span class="nt">storageSize</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10Gi</span>
+<span class="w">  </span><span class="nt">app-serving:harborHostname</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">harbor.harbor.svc.cluster.local</span>
+<span class="w">  </span><span class="nt">app-serving:harborUser</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">robot$k8s-puller</span>
+<span class="w">  </span><span class="nt">app-serving:harborToken</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">secure</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1:...</span>
+</code></pre></div><p></p>
+</li>
+<li>
+<p>Validation. The code catches mismatches immediately.
+In case the user mistypes subfolder names, for example:
+</p><div class="highlight"><pre><span></span><code>deployments/models/Test-Alma-V5-Pro/
+  gaie-aLMa-pro/values.yaml
+  ms-aMLa-pro/values.yaml
+</code></pre></div>
+Error message:
+<div class="highlight"><pre><span></span><code>Error: slug mismatch: gaie-aLMa-pro vs ms-aMLa-pro in "models/Test-Alma-V5-Pro"
+</code></pre></div>
+It also verifies both <code>values.yaml</code> files actually exist.<p></p>
+</li>
+<li>
+<p>Code scans, extracts slug <code>alma-pro</code> from folder names, derives everything else.</p>
+</li>
+</ol>
+<h3 id="naming-flow">Naming flow<a class="headerlink" href="#naming-flow" title="Permanent link">¶</a></h3>
+<div class="highlight"><pre><span></span><code>models entry: "DeepSeek-Coder-V2-Lite-Instruct"
+     │
+     ▼
+deployments/models/generative/DeepSeek-Coder-V2-Lite-Instruct/gaie-deepseek-coder/
+                                             │
+                                        slug = "deepseek-coder"
+                                             │
+              ┌──────────────────────────────┼──────────────────────────────┐
+              ▼                              ▼                              ▼
+    ns: llm-d-deepseek-coder    release: infra-deepseek-coder    gaie: gaie-deepseek-coder
+                                                                 ms:   ms-deepseek-coder
+</code></pre></div>
+<p>Everything flows from the slug. The slug flows from the folder name the user created.</p>
+<p>What gets auto-derived from the slug:</p>
+<table>
+<thead>
+<tr>
+<th>Resource</th>
+<th>Naming pattern</th>
+<th>Example (slug: <code>deepseek-coder</code>)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Namespace</td>
+<td><code>llm-d-&lt;slug&gt;</code></td>
+<td><code>llm-d-deepseek-coder</code></td>
+</tr>
+<tr>
+<td>Infra release</td>
+<td><code>infra-&lt;slug&gt;</code></td>
+<td><code>infra-deepseek-coder</code></td>
+</tr>
+<tr>
+<td>GAIE release</td>
+<td><code>gaie-&lt;slug&gt;</code></td>
+<td><code>gaie-deepseek-coder</code></td>
+</tr>
+<tr>
+<td>Model service release</td>
+<td><code>ms-&lt;slug&gt;</code></td>
+<td><code>ms-deepseek-coder</code></td>
+</tr>
+<tr>
+<td>Gateway</td>
+<td><code>infra-&lt;slug&gt;-inference-gateway</code></td>
+<td><code>infra-deepseek-coder-inference-gateway</code></td>
+</tr>
+<tr>
+<td>HTTPRoute</td>
+<td><code>llm-d-&lt;slug&gt;</code></td>
+<td><code>llm-d-deepseek-coder</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="steps">Steps<a class="headerlink" href="#steps" title="Permanent link">¶</a></h3>
+<h4 id="required-steps">Required Steps<a class="headerlink" href="#required-steps" title="Permanent link">¶</a></h4>
+<ol>
+<li><strong>Create the model directory</strong></li>
+</ol>
+<div class="highlight"><pre><span></span><code>mkdir<span class="w"> </span>-p<span class="w"> </span>models/&lt;category&gt;/&lt;ModelName&gt;/gaie-&lt;slug&gt;/
+mkdir<span class="w"> </span>-p<span class="w"> </span>models/&lt;category&gt;/&lt;ModelName&gt;/ms-&lt;slug&gt;/
+</code></pre></div>
+<ul>
+<li><code>&lt;category&gt;</code> — <code>generative</code> or <code>embedder</code></li>
+<li><code>&lt;ModelName&gt;</code> — the exact model name (e.g. <code>DeepSeek-Coder-V2-Lite-Instruct</code>)</li>
+<li><code>&lt;slug&gt;</code> — a short, lowercase identifier (e.g. <code>deepseek-coder</code>)</li>
+<li>Both subdirectories <strong>must use the same slug</strong></li>
+</ul>
+<p>Example:
+</p><div class="highlight"><pre><span></span><code>mkdir<span class="w"> </span>-p<span class="w"> </span>models/generative/Test-Alma-V5-Pro/gaie-alma-pro/
+mkdir<span class="w"> </span>-p<span class="w"> </span>models/generative/Test-Alma-V5-Pro/ms-alma-pro/
+</code></pre></div><p></p>
+<ol>
+<li><strong>Add Helm values files</strong></li>
+</ol>
+<p>Create <code>values.yaml</code> in each subdirectory:</p>
+<div class="highlight"><pre><span></span><code>deployments/models/generative/Test-Alma-V5-Pro/
+  gaie-alma-pro/values.yaml    # GAIE InferencePool values
+  ms-alma-pro/values.yaml      # llm-d-modelservice values
+</code></pre></div>
+<p>Use an existing model as reference for the values structure:
+- Cloud target: copy from <code>deployments/models/generative/sim/</code> (external image registries)
+- On-prem target: copy from <code>deployments/models/generative/sim-rke2-1/</code> (Harbor image references, <code>imagePullSecrets</code>)</p>
+<ol>
+<li><strong>Add the model to the stack config file</strong></li>
+</ol>
+<p>Add the model to <code>models</code> in <code>Pulumi.&lt;stack-name&gt;.yaml</code> under the appropriate category (<code>generative</code> or <code>embedder</code>):</p>
+<div class="highlight"><pre><span></span><code><span class="nt">app-serving:models</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">generative</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ExistingModel</span>
+<span class="w">      </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">      </span><span class="nt">nodeSelector</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">nodegroup</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;node-pool-name&gt;</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Test-Alma-V5-Pro</span>
+<span class="w">      </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">      </span><span class="nt">nodeSelector</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">nodegroup</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;node-pool-name&gt;</span>
+</code></pre></div>
+<p>Or create a new stack config from the template:</p>
+<div class="highlight"><pre><span></span><code>cp<span class="w"> </span>Pulumi.TEMPLATE.yaml<span class="w"> </span>Pulumi.&lt;stack-name&gt;.yaml
+</code></pre></div>
+<ol>
+<li><strong>Create a Pulumi stack and set the secret</strong> (new stacks only)</li>
+</ol>
+<div class="highlight"><pre><span></span><code><span class="nb">cd</span><span class="w"> </span>app_serving/deployments
+pulumi<span class="w"> </span>stack<span class="w"> </span>init<span class="w"> </span>&lt;stack-name&gt;
+pulumi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>--secret<span class="w"> </span>harborToken<span class="w"> </span>&lt;robot-secret&gt;
+</code></pre></div>
+<ol>
+<li><strong>Preview and deploy</strong></li>
+</ol>
+<div class="highlight"><pre><span></span><code>pulumi<span class="w"> </span>preview<span class="w">    </span><span class="c1"># verify what will be created</span>
+pulumi<span class="w"> </span>up<span class="w">         </span><span class="c1"># deploy</span>
+</code></pre></div>
+<h4 id="optional-per-model-overrides">Optional per-model overrides<a class="headerlink" href="#optional-per-model-overrides" title="Permanent link">¶</a></h4>
+<p>These can be added inside a model entry to override auto-derived values:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">app-serving:models</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">generative</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Test-Alma-V5-Pro</span>
+<span class="w">      </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">      </span><span class="nt">nodeSelector</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">nodegroup</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;node-pool-name&gt;</span>
+<span class="w">      </span><span class="nt">nameSpace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">custom-namespace</span><span class="w">       </span><span class="c1"># overrides llm-d-&lt;slug&gt;</span>
+<span class="w">      </span><span class="nt">releaseName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">custom-release-name</span><span class="w">  </span><span class="c1"># overrides infra-&lt;slug&gt;</span>
+</code></pre></div>
+<h4 id="validation">Validation<a class="headerlink" href="#validation" title="Permanent link">¶</a></h4>
+<p>The code validates that:
+- A <code>gaie-*</code> subdirectory exists under <code>deployments/models/&lt;category&gt;/&lt;ModelName&gt;/</code>
+- A <code>ms-*</code> subdirectory exists under <code>deployments/models/&lt;category&gt;/&lt;ModelName&gt;/</code>
+- Both use the <strong>same slug</strong> (e.g. <code>gaie-alma-pro</code> and <code>ms-alma-pro</code>)
+- Both <code>values.yaml</code> files exist</p>
+<p>Mismatches (e.g. <code>gaie-alma-pro</code> + <code>ms-amla-pro</code>) will produce a clear error at <code>pulumi preview</code> time.</p>
+<h2 id="exposing-installed-models">Exposing Installed Models<a class="headerlink" href="#exposing-installed-models" title="Permanent link">¶</a></h2>
+<p>app_serving does not export a model list. Instead, each model's routable Service is labeled
+with <code>axem.dev/model-slug</code>, <code>axem.dev/model-category</code> (<code>generative</code>/<code>embedder</code>), and
+<code>app.kubernetes.io/part-of=app-serving</code> (see <code>Model.MetaLabels()</code> in
+<code>pkg/iac/serving/internal/config/naming.go</code>): the generative path's <code>llmd-gateway-&lt;slug&gt;</code>
+ExternalName Service and the embedder path's <code>ms-&lt;slug&gt;-embeddings</code> ClusterIP Service.</p>
+<p>app-shaide grants shaide-server cluster-wide read access to <code>services</code> and <code>namespaces</code> (see
+<code>pkg/iac/shaide/internal/platform/k8s-rbac.go</code>), so it discovers this topology by label
+selector at runtime and pairs each Service with the model-owned metadata (name, context size,
+...) served by vLLM's own <code>/server-info</code> endpoint. <code>values.yaml</code> configures the model's
+deployment; it is not read to describe the model. See
+<a href="../application-layer/#installed-model-discovery">Installed Model Discovery</a>.</p>
+<p>Two enabled models resolving to the same slug collide on the Kubernetes objects they would
+create (same <code>llm-d-&lt;slug&gt;</code> namespace, same release names), so the deploy fails at apply
+time. Nothing in the stacks detects two different slugs serving the same model name; that
+check belongs with shaide-server, which aggregates <code>/server-info</code> across models.</p>
+<h2 id="dependencies">Dependencies<a class="headerlink" href="#dependencies" title="Permanent link">¶</a></h2>
+<p>The project uses:
+- <strong>Pulumi Kubernetes Provider</strong> v4.25.0
+- <strong>llm-d framework</strong> (pinned <code>llm-d-infra</code> chart bundled under <code>charts/</code>)
+- <strong>llm-d-infra</strong> chart v1.4.0
+- <strong>llm-d-modelservice</strong> chart v0.4.12
+- <strong>Gateway API Inference Extension</strong> chart v1.2.0
+- <strong>Helm</strong> for component packaging</p>
+<h2 id="model-weight-pre-loading">Model Weight Pre-loading<a class="headerlink" href="#model-weight-pre-loading" title="Permanent link">¶</a></h2>
+<p>For deployments with real model weights (not sim), model OCI artifacts must be pushed to
+Harbor <strong>before</strong> <code>pulumi up</code>. Pulumi creates a PVC and an ORAS pull Job that fetches the
+artifact from Harbor at deploy time — no HuggingFace access is required from the cluster.</p>
+<p>Use the scripts in <code>infra/model-registry/</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="nb">cd</span><span class="w"> </span>infra/model-registry
+
+<span class="c1"># Build downloader image once</span>
+docker<span class="w"> </span>build<span class="w"> </span>-t<span class="w"> </span>hf-downloader:local<span class="w"> </span>downloader/
+
+<span class="c1"># Download from HuggingFace + push to Harbor</span>
+<span class="nv">HF_TOKEN</span><span class="o">=</span>&lt;your-token&gt;<span class="w"> </span><span class="nv">HARBOR_HOST</span><span class="o">=</span>localhost:5000<span class="w"> </span><span class="nv">CACHE_DIR</span><span class="o">=</span>/tmp/hf-cache<span class="w"> </span>./model-sync.sh
+</code></pre></div>
+<p>Model definitions (HF repo ID, Harbor project, artifact name, tag) live in
+<code>infra/model-registry/models.yaml</code>.</p>
+<p>The <code>modelSource</code> block in the stack config triggers Pulumi to create the PVC and ORAS Job:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">modelSource</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">harborRef</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">harbor.harbor.svc.cluster.local/ai-models/&lt;artifact&gt;:&lt;tag&gt;</span>
+<span class="w">  </span><span class="nt">modelUri</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">hub/&lt;org&gt;/&lt;model&gt;</span>
+<span class="w">  </span><span class="nt">storageSize</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;size&gt;Gi</span>
+<span class="w">  </span><span class="nt">hostpathNode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;node-hostname&gt;</span><span class="w">   </span><span class="c1"># on-prem only — node where the hostpath PV is created</span>
+</code></pre></div>
+<p>On on-prem clusters, <code>hostpathNode</code> is required. Pulumi creates the PV automatically
+pointing to <code>/var/lib/hostpath/models/&lt;slug&gt;</code> on the specified node. The directory
+must exist before <code>pulumi up</code> — add it to <code>hostpath_pv_dirs</code> in the node's
+<code>inventory-dev/host_vars/&lt;node&gt;.yml</code> and run:</p>
+<div class="highlight"><pre><span></span><code><span class="nb">cd</span><span class="w"> </span>infra/on-prem/ansible
+ansible-playbook<span class="w"> </span>setup/hostpath_dirs.yml<span class="w"> </span>-i<span class="w"> </span>inventory-dev<span class="w"> </span>--limit<span class="w"> </span>&lt;node&gt;
+</code></pre></div>
+<p>See <a href="../model-storage/">Model storage</a> for full details on the artifact layout and
+Job failure recovery.</p>
+<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">¶</a></h2>
+<h3 id="common-issues">Common Issues<a class="headerlink" href="#common-issues" title="Permanent link">¶</a></h3>
+<ol>
+<li><strong>Missing <code>harborToken</code></strong>: Ensure <code>harborToken</code> is configured as an encrypted secret (<code>pulumi config set --secret harborToken &lt;secret&gt;</code>). Required for on-prem and for cloud stacks using <code>modelSource</code>.</li>
+<li><strong>Missing models</strong>: Ensure <code>models</code> (with <code>generative</code> and/or <code>embedder</code> lists) is set in the stack config.</li>
+<li><strong>Namespace Issues</strong>: Verify target namespace exists or will be created.</li>
+<li><strong>Gateway Provider Dependencies</strong>: Check that Gateway CRDs and Istio control plane are installed via <code>infra/gateway-provider</code>.</li>
+<li><strong>ORAS Job failed</strong>: Check <code>kubectl logs -n &lt;ns&gt; job/&lt;slug&gt;-model-pull</code>. After fixing root cause, delete the Job and PVC manually then re-run <code>pulumi up</code>. See <a href="../model-storage/">Model storage</a> for recovery steps.</li>
+<li><strong>Pod starts with empty PVC</strong>: The ORAS Job may have not finished or the ModelService chart was deployed without <code>DependsOn</code> the Job. Ensure the Job completed successfully before the pod starts.</li>
+<li><strong>Port conflict in decode pod</strong>: The routing-proxy init container binds port 8000. The inference server (<code>vllmServe</code> or <code>custom</code> modelCommand) must listen on port <strong>8200</strong> for decode pods. With <code>modelCommand: vllmServe</code> the chart handles this automatically; with <code>modelCommand: custom</code> set <code>--port 8200</code> explicitly.</li>
+<li><strong>Embeddings endpoint via gateway returns 400</strong>: The inference gateway (EPP) only validates chat-completion requests. For embedding models, access the inference server directly via pod port-forward on port 8200 or add a separate ClusterIP service pointing to port 8200.</li>
+</ol>
+<h2 id="development">Development<a class="headerlink" href="#development" title="Permanent link">¶</a></h2>
+<p><code>app_serving/</code> itself only contains <code>main.go</code> (a thin wrapper that calls
+<code>serving.DeployAppServing(ctx, "", nil)</code>), <code>deployments/</code>, and <code>charts/</code>. The actual
+implementation lives in the shared <code>pkg</code> module, at <code>pkg/iac/serving/</code>:</p>
+<ul>
+<li><code>main.go</code>: Compiles the stack binary; delegates to <code>pkg/iac/serving.DeployAppServing</code></li>
+<li><code>pkg/iac/serving/serving.go</code>: Orchestration — loops over all models in <code>config.Models</code></li>
+<li><code>pkg/iac/serving/internal/config/config.go</code>: Config loading and convention-based model discovery; returns a single <code>Config</code> containing one <code>Model</code> entry per enabled model</li>
+<li><code>pkg/iac/serving/internal/config/naming.go</code>: Release name derivation from slug</li>
+<li><code>pkg/iac/serving/internal/components/*/deploy.go</code>: Component-specific installation functions (llmd-infra, gaie, modelservice, httproute, embeddingservice)</li>
+<li><code>pkg/iac/serving/internal/platform/secret.go</code>: Harbor pull secret creation (<code>harbor-creds</code>)</li>
+<li><code>pkg/iac/serving/internal/platform/model_storage.go</code>: PVC + ORAS pull Job creation for <code>modelSource</code></li>
+<li><code>deployments/models/</code>: Model-specific configurations (one directory per category + model + cluster target combination)</li>
+<li><code>deployments/Pulumi.TEMPLATE.yaml</code>: Template for creating new stack configs</li>
+</ul>
+<h2 id="state-management">State Management<a class="headerlink" href="#state-management" title="Permanent link">¶</a></h2>
+<p>Pulumi state is managed via the backend configured for the environment (S3 or GCS):
+</p><div class="highlight"><pre><span></span><code>pulumi<span class="w"> </span>login<span class="w"> </span>&lt;backend-url&gt;
+pulumi<span class="w"> </span>stack<span class="w"> </span><span class="k">select</span><span class="w"> </span>&lt;stack&gt;
+</code></pre></div><p></p>
+
+
+
+
+
+
+
+  
+  
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden="">
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"></path></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.top", "navigation.indexes", "content.code.copy", "search.suggest"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+        <script src="../../javascripts/header-buttons.js"></script>
+      
+    
+  
+<script id="init-glightbox">const lightbox = GLightbox({"touchNavigation": true, "loop": false, "zoomable": true, "draggable": true, "openEffect": "fade", "closeEffect": "fade", "slideEffect": "slide"});
+document$.subscribe(()=>{ lightbox.reload(); });
+</script></body></html>
