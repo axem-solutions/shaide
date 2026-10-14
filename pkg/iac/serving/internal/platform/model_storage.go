@@ -61,7 +61,7 @@ func createModelStorage(
 
 	// On on-prem with hostpath storage, create a PV bound to the target node before the PVC.
 	// The PV uses a local path under hostpathBase/<slug> on the node specified by HostpathNode.
-	// The directory must exist on the node before pulumi up (managed via ansible hostpath_dirs role).
+	// The directory must exist on the node before pulumi up.
 	if cfg.Platform == kubecluster.OnPrem && src.HostpathNode != "" {
 		pvName := pvcName + "-pv"
 		hostpathDir := src.HostpathDir
@@ -109,7 +109,7 @@ func createModelStorage(
 		},
 	}
 	// On-prem RKE2 clusters use hostpath (kubernetes.io/no-provisioner) — static PVs only.
-	// A matching PV must be pre-created before pulumi up (see infra/on-prem/ansible/inventory-dev/host_vars/).
+	// A matching PV must exist before pulumi up, either created above or provided by the cluster.
 	// On cloud (GKE) no class is specified, using the cluster default (standard-rwo or equivalent).
 	if cfg.Platform == kubecluster.OnPrem {
 		pvcSpec.StorageClassName = pulumi.StringPtr("hostpath")

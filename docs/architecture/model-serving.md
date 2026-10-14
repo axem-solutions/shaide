@@ -112,12 +112,12 @@ absent from cloud stack configs.
 
 ## Prerequisites
 
-1. **Kubernetes Cluster**: GCP/AWS/Azure cloud cluster, or an on-prem RKE2 cluster provisioned via `infra/on-prem`
+1. **Kubernetes Cluster**: GCP/AWS/Azure cloud cluster, or an on-prem RKE2 cluster
 2. **Gateway Provider Prereqs**: Gateway API + GAIE CRDs and a Gateway implementation (Istio) installed via `infra/gateway-provider`
-3. **Harbor Registry**: Models stored as OCI artifacts in Harbor. On cloud, Harbor is deployed by `infra/cloud-harbor`; on on-prem by `infra/on-prem/pulumi/services`. Model artifacts are uploaded by the installer's [`Populate Harbor` stage](../installation/installer-guide.md#populate-harbor-stage).
+3. **Harbor Registry**: Models stored as OCI artifacts in Harbor. The installer deploys Harbor when needed in its [`Discovery` stage](../installation/installer-guide.md#discovery-stage). Model artifacts are uploaded by the installer's [`Populate Harbor` stage](../installation/installer-guide.md#populate-harbor-stage).
 4. **Go**: Go 1.23+ with toolchain 1.24.5+
 5. **Pulumi**: Pulumi CLI
-6. **On-prem only**: Harbor registry deployed and configured, images uploaded via `infra/on-prem/ansible/harbor_upload.yml`. The `hostpath` StorageClass is used for model PVCs — PVs are created automatically by Pulumi when `modelSource.hostpathNode` is set, but the backing directory must exist on the node first (managed via the `hostpath_dirs` Ansible role).
+6. **On-prem only**: Container images uploaded to Harbor by the installer's `Populate Harbor` stage. The `hostpath` StorageClass is used for model PVCs. When `modelSource.hostpathNode` is set, Pulumi creates the PV automatically, but the backing directory must already exist on that node.
 7. **Real models only**: Model OCI artifacts pushed to Harbor by the installer before `pulumi up`. See [Model Weight Pre-loading](#model-weight-pre-loading) below.
 
 ## Deployment
@@ -463,13 +463,8 @@ modelSource:
 
 On on-prem clusters, `hostpathNode` is required. Pulumi creates the PV automatically
 pointing to `/var/lib/hostpath/models/<slug>` on the specified node. The directory
-must exist before `pulumi up` — add it to `hostpath_pv_dirs` in the node's
-`inventory-dev/host_vars/<node>.yml` and run:
-
-```bash
-cd infra/on-prem/ansible
-ansible-playbook setup/hostpath_dirs.yml -i inventory-dev --limit <node>
-```
+must exist on that node before `pulumi up`. Set `hostpathDir` to use a different
+absolute path.
 
 See [Model storage](model-storage.md) for full details on the artifact layout and
 Job failure recovery.
@@ -480,7 +475,7 @@ Job failure recovery.
 1. **Missing `harborToken`**: Ensure `harborToken` is configured as an encrypted secret (`pulumi config set --secret harborToken <secret>`). Required for on-prem and for cloud stacks using `modelSource`.
 2. **Missing models**: Ensure `models` (with `generative` and/or `embedder` lists) is set in the stack config.
 3. **Namespace Issues**: Verify target namespace exists or will be created.
-4. **Gateway Provider Dependencies**: Check that Gateway CRDs and Istio control plane are installed via `infra/gateway-provider`.
+4. **Gateway Provider Dependencies**: Check that Gateway CRDs and Istio control plane are installed by the `gateway-provider` stack (`infra/gateway-provider`).
 5. **ORAS Job failed**: Check `kubectl logs -n <ns> job/<slug>-model-pull`. After fixing root cause, delete the Job and PVC manually then re-run `pulumi up`. See [Model storage](model-storage.md) for recovery steps.
 6. **Pod starts with empty PVC**: The ORAS Job may have not finished or the ModelService chart was deployed without `DependsOn` the Job. Ensure the Job completed successfully before the pod starts.
 7. **Port conflict in decode pod**: The routing-proxy init container binds port 8000. The inference server (`vllmServe` or `custom` modelCommand) must listen on port **8200** for decode pods. With `modelCommand: vllmServe` the chart handles this automatically; with `modelCommand: custom` set `--port 8200` explicitly.

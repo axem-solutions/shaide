@@ -59,6 +59,36 @@ shaide - see [Compute](../cluster-requirements/compute.md).
 | Requires a terminal | Missing `-it` on `docker run` |
 | Times out reaching cluster | kubeconfig or network path |
 
+## Gateway
+
+Requests do not reach a model: check that the shared Gateway is programmed and its
+routes are attached.
+
+```bash
+kubectl -n gateway-system get gateway shared-gateway
+kubectl get httproute -A
+```
+
+With the `istio` GatewayClass, the Gateway runs as the `shared-gateway-istio` Envoy
+deployment. Its admin interface on port `15000` is bound to localhost, so query it
+from inside the pod:
+
+```bash
+kubectl exec -n gateway-system deploy/shared-gateway-istio -c istio-proxy -- \
+  curl -s localhost:15000/<endpoint>
+```
+
+| Endpoint | Shows |
+| --- | --- |
+| `/config_dump` | Full xDS config: listeners, routes, clusters, endpoints (pipe to `jq`) |
+| `/listeners` | Active listeners |
+| `/clusters` | Upstream health and connection counts |
+| `/stats` | Counters and gauges |
+| `/ready` | Proxy readiness |
+
+Other ports on the pod: `15021` readiness probe (also the cloud load balancer health
+check), `15090` Prometheus metrics, `80` ingress traffic.
+
 ## TLS
 
 Certificate not issued: check cert-manager and any DNS validation records.
