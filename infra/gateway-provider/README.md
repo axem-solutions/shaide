@@ -15,15 +15,18 @@ For architecture details, traffic flows, and design decisions see [Gateway and r
 | Key | Required | Default | Description |
 |---|---|---|---|
 | `cloudProvider` | Yes | — | `gcp`, `azure`, or `on-prem` |
+| `provider` | No | `istio` | Gateway implementation to install. Any other value skips Istio, e.g. when a managed Gateway implementation such as Azure AGC brings its own control plane. |
 | `gatewayClassName` | Yes | — | Gateway controller class: `gke-l7-regional-external-managed` (GCP), `azure-alb-external` (Azure), or `istio` (on-prem) |
 | `namespace` | No | `istio-system` | Namespace for Istio control plane |
 | `kubeconfig` | No | `~/.kube/config` | Path to kubeconfig; omit on GCP/Azure (uses cloud auth plugin) |
+| `context` | No | current context | kubeconfig context to use |
+| `gatewayNamespace` | No | `gateway-system` | Namespace for the shared Gateway |
 | `istioHub` | No | `docker.io/istio` | Container image registry for Istio images |
 | `istioTag` | No | `1.28.1` | Istio version |
 | `installGatewayApiCrds` | No | `false` on Azure, `true` elsewhere | Whether this stack installs upstream Gateway API CRDs. Keep `false` on AKS managed Gateway API clusters because Azure owns those CRDs. |
-| `gatewayApiCrdsPath` | No | GitHub URL v1.5.1 experimental | Override CRD source (use local path for air-gapped environments) |
-| `gieCrdsPath` | No | GitHub URL v1.4.0 | Override GIE CRD source (use local path for air-gapped environments) |
-| `infraStackRef` | No | — | Pulumi StackReference to cloud infra stack exporting `gatewayHostname`, `gatewayCertName`, `gatewayStaticIPName`, `albSubnetId`. Set on GCP and Azure stacks. |
+| `gatewayApiCrdsPath` | No | `crds/gateway-api/standard` (bundled v1.5.1) | Override the Gateway API CRD source: a local kustomize dir or a remote URL. See [crds/README.md](crds/README.md). |
+| `gieCrdsPath` | No | `crds/gie` (bundled v1.4.0) | Override the GIE CRD source: a local kustomize dir or a remote URL. |
+| `infraStackRef` | No | — | Pulumi StackReference to cloud infra stack exporting `gatewayHostname`, `gatewayCertName`, `gatewayStaticIPName`, `albSubnetId`. Set on GCP and Azure stacks. Each export can also be set directly as a config key of the same name (plus `gatewayStaticIP` for a literal IP). |
 | `gatewayHostname` | No | — | Direct hostname for the shared gateway (on-prem alternative to `infraStackRef`). Set on RKE2 stack. |
 | `albName` | No | `shared-alb` | Azure AGC `ApplicationLoadBalancer` resource name. Used only when `gatewayClassName` is `azure-alb-external`: creates the ALB in `gateway-system` using `albSubnetId`. Ignored for any other class. |
 | `tlsCertAnnotation` | No | — | Provider annotation for TLS certificate binding. GCP: `networking.gke.io/cert-manager-certs` |
@@ -39,7 +42,7 @@ gateway or `gateway-system` namespace is created.
 | Environment | `gatewayClassName` | Controller |
 |---|---|---|
 | GCP | `gke-l7-regional-external-managed` | GKE Gateway controller (built-in) |
-| Azure | `azure-alb-external` | ALB Controller for AGC (AKS add-on, deployed by `infra/azure/03_cluster`) |
+| Azure | `azure-alb-external` | ALB Controller for AGC (AKS add-on) |
 | On-prem | `istio` | Istio ingress gateway |
 
 ### TLS per environment
@@ -48,7 +51,7 @@ gateway or `gateway-system` namespace is created.
 |---|---|---|
 | GCP | GCP Certificate Manager (cloud-managed, auto-renewal) | `infraStackRef` + `tlsCertAnnotation` |
 | Azure | cert-manager + Let's Encrypt (cluster-hosted, auto-renewal) | `infraStackRef` + `certManagerIssuer` + `tlsSecretName` (+ `bootstrapTlsSecret` on a brand-new stack) |
-| On-prem | Manual cert as Pulumi secrets | `tlsCert` + `tlsKey` (+ optional `tlsSecretName`) |
+| On-prem | Pre-created K8s TLS Secret | `tlsSecretName` |
 
 ### Gateway address per environment
 

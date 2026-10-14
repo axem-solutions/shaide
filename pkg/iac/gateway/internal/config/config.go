@@ -23,8 +23,10 @@ const (
 	DefaultGatewayNamespace = "gateway-system"
 	DefaultTLSSecretName    = "gateway-tls"
 
-	DefaultGatewayAPICRDsPath = "https://github.com/kubernetes-sigs/gateway-api/config/crd/experimental?ref=v1.5.1"
-	DefaultGIECRDsPath        = "https://github.com/kubernetes-sigs/gateway-api-inference-extension/config/crd?ref=v1.4.0"
+	// CRD manifests bundled with the project, so neither the installer nor a
+	// direct pulumi run reaches GitHub for them. Relative to the project dir.
+	DefaultGatewayAPICRDsPath = "crds/gateway-api/standard"
+	DefaultGIECRDsPath        = "crds/gie"
 )
 
 type Values struct {

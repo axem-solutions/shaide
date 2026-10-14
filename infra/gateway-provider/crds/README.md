@@ -6,12 +6,11 @@ Each subdirectory is a self-contained kustomize directory consumed by the `gatew
 | Directory | Channel | Source project | Pinned version |
 |---|---|---|---|
 | `gateway-api/standard/` | standard | kubernetes-sigs/gateway-api | v1.5.1 |
-| `gateway-api/experimental/` | experimental | kubernetes-sigs/gateway-api | v1.5.1 |
 | `gie/` | — | kubernetes-sigs/gateway-api-inference-extension | v1.4.0 |
 
-Stack → directory mapping:
-- On-prem RKE2 stacks → `gateway-api/experimental/`
-- GCP stacks → `gateway-api/standard/`
+These are the default `gatewayApiCrdsPath` and `gieCrdsPath` on every platform. Azure
+skips the Gateway API CRDs (`installGatewayApiCrds` defaults to `false`) because AGC owns
+them.
 
 ---
 
@@ -33,32 +32,12 @@ Each command renders the remote kustomize directory into a single file and commi
 
 ### Gateway API CRDs — standard channel (v1.5.1)
 
-Used by GCP stacks. Safe to apply on clusters that already
-have standard-channel CRDs installed.
+Safe to apply on clusters that already have standard-channel CRDs installed.
 
 ```bash
 kubectl kustomize \
   "https://github.com/kubernetes-sigs/gateway-api/config/crd?ref=v1.5.1" \
   > infra/gateway-provider/crds/gateway-api/standard/crds.yaml
-```
-
-### Gateway API CRDs — experimental channel (v1.5.1)
-
-Used by the `rke2-cluster` stack. Superset of standard: includes `TCPRoute`, `UDPRoute`,
-`ListenerSet`, `xMesh`, and other alpha types. Applying on a cluster that already has
-standard-channel CRDs requires deleting the `safe-upgrades` ValidatingAdmissionPolicy first:
-
-```bash
-kubectl delete validatingadmissionpolicy safe-upgrades.gateway.networking.k8s.io
-kubectl delete validatingadmissionpolicybinding safe-upgrades.gateway.networking.k8s.io
-```
-
-Then download:
-
-```bash
-kubectl kustomize \
-  "https://github.com/kubernetes-sigs/gateway-api/config/crd/experimental?ref=v1.5.1" \
-  > infra/gateway-provider/crds/gateway-api/experimental/crds.yaml
 ```
 
 ### Gateway API Inference Extension CRDs (v1.4.0)
@@ -76,7 +55,7 @@ kubectl kustomize \
 ```bash
 # Count CRDs in each rendered file
 grep "^kind: CustomResourceDefinition" \
-  infra/gateway-provider/crds/gateway-api/crds.yaml | wc -l
+  infra/gateway-provider/crds/gateway-api/standard/crds.yaml | wc -l
 
 grep "^kind: CustomResourceDefinition" \
   infra/gateway-provider/crds/gie/crds.yaml | wc -l
@@ -90,7 +69,6 @@ After downloading, commit both `crds.yaml` files:
 
 ```bash
 git add infra/gateway-provider/crds/gateway-api/standard/crds.yaml \
-        infra/gateway-provider/crds/gateway-api/experimental/crds.yaml \
         infra/gateway-provider/crds/gie/crds.yaml
 git commit -m "chore(gateway-provider): pin gateway-api v1.5.1 and GIE v1.4.0 CRDs offline"
 ```
@@ -103,5 +81,5 @@ To upgrade to a newer version:
 
 1. Re-run the download commands above with the new `?ref=` tag.
 2. Update the version column in this table.
-3. Update the defaults in `pkg/iac/gateway/gateway.go` (`gatewayApiCrdsSrc`, `gieCrdsSrc`).
+3. Update the versions noted in `../README.md` and `../deployments/Pulumi.TEMPLATE.yaml`.
 4. Commit and re-run `pulumi up`.

@@ -32,12 +32,11 @@
 #   installGatewayApiCrds — boolean; whether this stack installs the Gateway API CRDs.
 #                            See the cloudProvider note above for the default.
 #   gatewayApiCrdsPath     — local kustomize path (or remote URL) for Gateway API CRDs;
-#                            default: the experimental-channel v1.5.1 CRDs from
-#                            github.com/kubernetes-sigs/gateway-api. Populate the local
-#                            path first — see crds/README.md.
+#                            default: the bundled standard-channel v1.5.1 CRDs in
+#                            crds/gateway-api/standard — see crds/README.md.
 #   gieCrdsPath            — local kustomize path (or remote URL) for the Gateway API
-#                            Inference Extension CRDs; default: v1.4.0 from
-#                            github.com/kubernetes-sigs/gateway-api-inference-extension
+#                            Inference Extension CRDs; default: the bundled v1.4.0 CRDs
+#                            in crds/gie
 #
 #   tlsCertAnnotation — annotation key used to bind a cloud-managed certificate to the
 #                       Gateway listener/metadata. GCP: networking.gke.io/cert-manager-certs.
@@ -91,7 +90,7 @@ config:
   # gateway-provider:istioHub: docker.io/istio
   # gateway-provider:istioTag: "1.28.1"
 
-  # --- CRDs (populate local paths first — see crds/README.md) ---
+  # --- CRDs (bundled defaults shown — see crds/README.md) ---
   # gateway-provider:installGatewayApiCrds: true
   # gateway-provider:gatewayApiCrdsPath: ./crds/gateway-api/standard
   # gateway-provider:gieCrdsPath: ./crds/gie

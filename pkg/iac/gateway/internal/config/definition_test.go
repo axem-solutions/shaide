@@ -142,11 +142,11 @@ func TestRuntimeValuesAreInjected(t *testing.T) {
 func TestPackagedCRDPathsAreWritten(t *testing.T) {
 	values, _ := resolveFor(t, cluster.Azure)
 
-	if got := values["gateway-provider:gatewayApiCrdsPath"]; got != PackagedGatewayAPICRDsPath {
-		t.Errorf("gatewayApiCrdsPath = %q, want %q", got, PackagedGatewayAPICRDsPath)
+	if got := values["gateway-provider:gatewayApiCrdsPath"]; got != DefaultGatewayAPICRDsPath {
+		t.Errorf("gatewayApiCrdsPath = %q, want %q", got, DefaultGatewayAPICRDsPath)
 	}
-	if got := values["gateway-provider:gieCrdsPath"]; got != PackagedGIECRDsPath {
-		t.Errorf("gieCrdsPath = %q, want %q", got, PackagedGIECRDsPath)
+	if got := values["gateway-provider:gieCrdsPath"]; got != DefaultGIECRDsPath {
+		t.Errorf("gieCrdsPath = %q, want %q", got, DefaultGIECRDsPath)
 	}
 }
 

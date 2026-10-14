@@ -39,15 +39,6 @@ const (
 	KeyBootstrapTLSSecret    stackconfig.Key = "bootstrapTlsSecret"
 )
 
-// Packaged CRD locations. The installer image ships the manifests next to the
-// project, so an install does not reach GitHub for them. They are declared here
-// rather than as Go defaults because the Go defaults are the upstream URLs,
-// which is what a developer running pulumi directly should get.
-const (
-	PackagedGatewayAPICRDsPath = "crds/gateway-api/standard"
-	PackagedGIECRDsPath        = "crds/gie"
-)
-
 type Config struct {
 	stack.Config
 	definition stackconfig.Config[Values]
@@ -267,7 +258,7 @@ func newDefinition(opts stack.Options, sources Sources) stackconfig.Config[Value
 			{
 				Key: KeyGatewayAPICRDsPath,
 				Source: stackconfig.Source{
-					Default: PackagedGatewayAPICRDsPath,
+					Default: DefaultGatewayAPICRDsPath,
 				},
 				Setter: func(cfg *Values, root *pulumiconfig.Config) {
 					cfg.CRDs.GatewayAPIPath = root.Get(KeyGatewayAPICRDsPath.String())
@@ -276,7 +267,7 @@ func newDefinition(opts stack.Options, sources Sources) stackconfig.Config[Value
 			{
 				Key: KeyGIECRDsPath,
 				Source: stackconfig.Source{
-					Default: PackagedGIECRDsPath,
+					Default: DefaultGIECRDsPath,
 				},
 				Setter: func(cfg *Values, root *pulumiconfig.Config) {
 					cfg.CRDs.GIEPath = root.Get(KeyGIECRDsPath.String())
