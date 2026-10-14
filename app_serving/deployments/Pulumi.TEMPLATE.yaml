@@ -16,7 +16,7 @@
 #                     modelSource  — pre-loaded model weights; Pulumi creates a PVC and a
 #                                    one-time ORAS pull Job that populates it from Harbor, then
 #                                    overrides modelArtifacts.uri with pvc+hf://<slug>-model/<modelUri>.
-#                                      harborRef    — full OCI ref pushed by model-upload.sh,
+#                                      harborRef    — full OCI ref pushed by the installer,
 #                                                     e.g. harbor.harbor.svc.cluster.local/ai-models/nomic:1.5.0
 #                                      modelUri     — HF cache path inside the PVC,
 #                                                     e.g. hub/nomic-ai/nomic-embed-text-v1.5

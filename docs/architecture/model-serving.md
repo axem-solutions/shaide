@@ -114,11 +114,11 @@ absent from cloud stack configs.
 
 1. **Kubernetes Cluster**: GCP/AWS/Azure cloud cluster, or an on-prem RKE2 cluster provisioned via `infra/on-prem`
 2. **Gateway Provider Prereqs**: Gateway API + GAIE CRDs and a Gateway implementation (Istio) installed via `infra/gateway-provider`
-3. **Harbor Registry**: Models stored as OCI artifacts in Harbor. On cloud, Harbor is deployed by `infra/cloud-harbor`; on on-prem by `infra/on-prem/pulumi/services`. Model artifacts uploaded via `infra/model-registry/model-sync.sh`.
+3. **Harbor Registry**: Models stored as OCI artifacts in Harbor. On cloud, Harbor is deployed by `infra/cloud-harbor`; on on-prem by `infra/on-prem/pulumi/services`. Model artifacts are uploaded by the installer's [`Populate Harbor` stage](../installation/installer-guide.md#populate-harbor-stage).
 4. **Go**: Go 1.23+ with toolchain 1.24.5+
 5. **Pulumi**: Pulumi CLI
 6. **On-prem only**: Harbor registry deployed and configured, images uploaded via `infra/on-prem/ansible/harbor_upload.yml`. The `hostpath` StorageClass is used for model PVCs — PVs are created automatically by Pulumi when `modelSource.hostpathNode` is set, but the backing directory must exist on the node first (managed via the `hostpath_dirs` Ansible role).
-7. **Real models only**: Model OCI artifacts pushed to Harbor via `infra/model-registry/model-sync.sh` before `pulumi up`. See [Model Weight Pre-loading](#model-weight-pre-loading) below.
+7. **Real models only**: Model OCI artifacts pushed to Harbor by the installer before `pulumi up`. See [Model Weight Pre-loading](#model-weight-pre-loading) below.
 
 ## Deployment
 
@@ -446,20 +446,10 @@ For deployments with real model weights (not sim), model OCI artifacts must be p
 Harbor **before** `pulumi up`. Pulumi creates a PVC and an ORAS pull Job that fetches the
 artifact from Harbor at deploy time — no HuggingFace access is required from the cluster.
 
-Use the scripts in `infra/model-registry/`:
-
-```bash
-cd infra/model-registry
-
-# Build downloader image once
-docker build -t hf-downloader:local downloader/
-
-# Download from HuggingFace + push to Harbor
-HF_TOKEN=<your-token> HARBOR_HOST=localhost:5000 CACHE_DIR=/tmp/hf-cache ./model-sync.sh
-```
-
-Model definitions (HF repo ID, Harbor project, artifact name, tag) live in
-`infra/model-registry/models.yaml`.
+The installer downloads the selected models from Hugging Face and pushes them to Harbor
+in its [`Populate Harbor` stage](../installation/installer-guide.md#populate-harbor-stage). The Hugging Face
+commit is pinned by `shaide.revision` in each model's `ms-<slug>/values.yaml`, which also
+derives the Harbor tag.
 
 The `modelSource` block in the stack config triggers Pulumi to create the PVC and ORAS Job:
 

@@ -425,20 +425,9 @@ Sim models use a built-in fake model; they do not require this step. For real mo
 weights must be pushed to Harbor before `pulumi up`. The ORAS pull Job created by Pulumi
 will then fetch them from Harbor at deploy time.
 
-Use the scripts in `infra/model-registry/` on a machine with internet access:
-
-```bash
-cd infra/model-registry
-
-# Build downloader image once
-docker build -t hf-downloader:local downloader/
-
-# Download from HuggingFace + push to Harbor in one step
-HF_TOKEN=<your-token> HARBOR_HOST=localhost:5000 CACHE_DIR=/tmp/hf-cache ./model-sync.sh
-```
-
-Model definitions live in `infra/model-registry/models.yaml`. Each entry maps one model
-to a Harbor project, artifact name, and tag.
+The installer does this in its [`Populate Harbor` stage](../installation/installer-guide.md#populate-harbor-stage):
+it downloads the pinned Hugging Face revision of each selected model and pushes it to
+Harbor as `ai-models/<slug>:<first 12 characters of the revision>`.
 
 After `pulumi up`, the ORAS pull Job runs automatically inside the cluster and populates
 the PVC. The ModelService pod waits for the Job to complete before starting.

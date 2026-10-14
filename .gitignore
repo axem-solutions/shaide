@@ -1,5 +1,3 @@
-infra/model-registry/env-vars/*
-!infra/model-registry/env-vars/example
 .vscode
 .claude/*
 !.claude/commands/
@@ -59,7 +57,6 @@ downloads/
 # Harbor / model registry
 k8s-harbor-sa-secret
 model-cache/
-infra/model-registry/logs/
 
 shaide-installer-data
 /installer/installer-bundle/**/*.json

@@ -15,7 +15,8 @@ kubectl -n shaide-serving get pods -l app.kubernetes.io/component=modelservice
 
 ## Adding
 
-1. Publish weights to the internal registry - see [Model registry](model-registry.md).
+1. Pin the Hugging Face revision in the model's `ms-<slug>/values.yaml`; the installer
+   publishes the weights to the internal registry - see [Model registry](model-registry.md).
 2. Add the model definition under the serving stack's model deployments.
 3. Reference it in the stack configuration.
 4. Apply the serving stack.

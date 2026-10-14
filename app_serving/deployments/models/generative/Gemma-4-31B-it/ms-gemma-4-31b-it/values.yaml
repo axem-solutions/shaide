@@ -17,15 +17,7 @@
 #   ansible-playbook -i inventory-dev harbor_upload.yml
 #
 # Model artifact upload:
-#   Ensure your model registry manifest contains:
-#     id: google/gemma-4-31B-it
-#     harbor_project: ai-models
-#     harbor_name: gemma-4-31b-it
-#     harbor_tag: "1.0.0"
-#     revision: "<pinned HF commit SHA>"
-#
-#   Then run:
-#     bash model-sync.sh
+#   Done by the shaide installer in its Populate Harbor stage.
 #
 # Expected Harbor model artifact:
 #   harbor.harbor.svc.cluster.local/ai-models/gemma-4-31b-it:1.0.0
