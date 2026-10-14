@@ -121,24 +121,8 @@ app-serving:harborToken:
 
 ## Uploading Models to Harbor
 
-Use the scripts in `infra/model-registry/` on a machine with internet access.
-See `infra/model-registry/README.md` for full documentation.
-
-### Quick reference
-
-```bash
-cd infra/model-registry
-
-# Cloud
-ENV_FILE=<stack-name> MODELS_YML=<stack-name>.yml bash model-sync.sh
-
-# On-prem (air-gapped)
-KUBECONFIG=~/.kube/rke2-cluster.yaml \
-  ENV_FILE=<stack-name> MODELS_YML=<stack-name>.yml \
-  bash model-sync.sh
-```
-
-Model manifests live in `infra/model-registry/models/<stack-name>.yml`.
+The installer downloads the selected models from Hugging Face on the provisioning host
+and uploads them to Harbor. See [`Populate Harbor` stage](../installation/installer-guide.md#populate-harbor-stage).
 
 ---
 

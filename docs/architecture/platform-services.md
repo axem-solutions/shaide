@@ -327,24 +327,9 @@ are commented out (not needed on GKE).
 
 ## Uploading Models
 
-After Harbor is running, use `infra/model-registry/model-sync.sh` to download
-models from HuggingFace and push them as OCI artifacts to Harbor:
-
-```bash
-cd infra/model-registry
-
-ENV_FILE=<stack-name> MODELS_YML=<stack-name>.yml bash model-sync.sh
-```
-
-The `env-vars/<stack-name>` file must contain:
-
-```bash
-HF_TOKEN=hf_...
-HARBOR_USER=robot$k8s-harbor-sa
-HARBOR_PASSWORD=<robot-password>
-```
-
-See `infra/model-registry/env-vars/example` for the full template.
+After Harbor is running, the installer downloads the selected models from Hugging Face
+and pushes them as OCI artifacts to Harbor. See
+[`Populate Harbor` stage](../installation/installer-guide.md#populate-harbor-stage).
 
 ---
 

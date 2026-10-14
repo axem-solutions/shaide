@@ -138,7 +138,7 @@ func createModelStorage(
 	// (e.g. pvc+hf://<pvc>/hub/org/model). The idempotency marker is kept at
 	// /model-cache/.pulled (outside hub/) so it is written exactly once and is not
 	// affected by what ORAS extracts inside hub/.
-	// Harbor artifacts must include refs/main (created by model-upload.sh before push).
+	// Harbor artifacts must include refs/main (created by the installer before push).
 	pullCmd := fmt.Sprintf(
 		`[ -f /model-cache/.pulled ] && echo "already pulled, skipping" && exit 0; `+
 			`mkdir -p /model-cache/hub && `+

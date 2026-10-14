@@ -103,7 +103,7 @@ code=$(curl -s -o /dev/null -w "%{http_code}" \
 if [[ "${code}" == "200" ]]; then
   echo "    Robot credentials verified — registry token service: OK"
   echo ""
-  echo "==> Done. You can now run model-sync.sh."
+  echo "==> Done."
 else
   echo "ERROR: Credentials still rejected by registry token service (HTTP ${code})." >&2
   echo "       The password may not meet Harbor's complexity requirements." >&2
