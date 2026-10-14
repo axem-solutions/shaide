@@ -66,8 +66,8 @@ func deployNodeTrustResources(
 
 	// Self-healing loop: rewrites hosts.toml every 300s instead of once, so a
 	// node whose file gets deleted/corrupted self-corrects without needing its
-	// pod rescheduled. See infra/cloud-harbor node-trust docs for the tradeoff
-	// against a write-once-then-idle variant.
+	// pod rescheduled. See docs/operations/node-registry-trust.md for the
+	// tradeoff against a write-once-then-idle variant.
 	script := fmt.Sprintf(
 		nodeTrustScriptTemplate,
 		certsDir,

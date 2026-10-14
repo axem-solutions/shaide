@@ -6,7 +6,7 @@ encryptionsalt: v1:d+Qx4h1NMfc=:v1:NyTQgdUO55Z1fcuG:Fy8s5al0vlJQsvcBoJ/Ly5fuFuvv
 # 
 config:
   # Harbor admin password — set once, never change after first deploy.
-  #   cd infra/cloud-harbor
+  #   cd harbor/deployment
   #   pulumi stack select aks-axem-trial-westeurope
   #   pulumi config set --secret harbor:adminPassword <password>
   harbor:adminPassword:

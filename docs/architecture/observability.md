@@ -847,41 +847,36 @@ After the restart, new relabel rules are active on all incoming log streams. Exi
 
 ## Mirror Images (on-prem)
 
-On-prem clusters cannot pull from public registries. Mirror images into Harbor before deploying.
+On-prem clusters cannot pull from public registries. The installer does not ship these
+images, so copy them into Harbor before deploying:
 
 ```bash
 skopeo copy docker://grafana/loki:3.7.2 \
-  oci-archive:infra/on-prem/ansible/artifacts/images/loki-3.7.2.tar
+  docker://<harbor-host>/<project>/loki:3.7.2
 
 skopeo copy docker://grafana/grafana:13.0.1 \
-  oci-archive:infra/on-prem/ansible/artifacts/images/grafana-13.0.1.tar
+  docker://<harbor-host>/<project>/grafana:13.0.1
 
 skopeo copy docker://grafana/alloy:v1.16.1 \
-  oci-archive:infra/on-prem/ansible/artifacts/images/alloy-v1.16.1.tar
+  docker://<harbor-host>/<project>/alloy:v1.16.1
 
 skopeo copy docker://amazon/aws-cli:latest \
-  oci-archive:infra/on-prem/ansible/artifacts/images/aws-cli-latest.tar
+  docker://<harbor-host>/<project>/aws-cli:latest
 
 # Prometheus (only if the "prometheus" component is enabled)
 skopeo copy docker://quay.io/prometheus/prometheus:v3.13.2 \
-  oci-archive:infra/on-prem/ansible/artifacts/images/prometheus-v3.13.2.tar
+  docker://<harbor-host>/<project>/prometheus:v3.13.2
 
 skopeo copy docker://registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.19.1 \
-  oci-archive:infra/on-prem/ansible/artifacts/images/kube-state-metrics-v2.19.1.tar
+  docker://<harbor-host>/<project>/kube-state-metrics:v2.19.1
 
 skopeo copy docker://quay.io/prometheus/node-exporter:v1.12.1 \
-  oci-archive:infra/on-prem/ansible/artifacts/images/node-exporter-v1.12.1.tar
+  docker://<harbor-host>/<project>/node-exporter:v1.12.1
 
 skopeo copy docker://quay.io/prometheus-operator/prometheus-config-reloader:v0.93.0 \
-  oci-archive:infra/on-prem/ansible/artifacts/images/prometheus-config-reloader-v0.93.0.tar
+  docker://<harbor-host>/<project>/prometheus-config-reloader:v0.93.0
 ```
 
-Then upload via the Harbor playbook:
-
-```bash
-cd infra/on-prem/ansible
-ansible-playbook -i inventory-dev harbor_upload.yml
-```
 
 ## Security Notes
 

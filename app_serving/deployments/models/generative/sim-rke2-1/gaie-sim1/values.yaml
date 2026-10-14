@@ -6,7 +6,7 @@ inferenceExtension:
     # EPP image served from internal Harbor registry.
     # Harbor project: shaide  source: registry.k8s.io/gateway-api-inference-extension/epp:v1.2.0
     # Upload: skopeo copy docker://registry.k8s.io/gateway-api-inference-extension/epp:v1.2.0 \
-    #           oci-archive:ansible/artifacts/images/epp-v1.2.0.tar
+    #           docker://<harbor-host>/shaide/epp:v1.2.0
     name: epp
     hub: harbor.harbor.svc.cluster.local/shaide
     tag: v1.2.0

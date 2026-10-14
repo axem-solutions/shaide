@@ -1,4 +1,4 @@
-module github.com/axem-solutions/ai_platform/infra/cloud-harbor
+module github.com/axem-solutions/ai_platform/harbor
 
 go 1.26.6
 

@@ -8,9 +8,10 @@ weight: 20
 
 Pulumi project that deploys Harbor as an internal OCI model registry onto a Kubernetes cluster.
 
-Works on any cloud provider (GCP, AWS, Azure) or any cluster reachable via kubeconfig.
-On-prem Harbor (which uses hostPath PVs and pre-loaded images) lives separately in
-`infra/on-prem/pulumi/services/`.
+Works on any cloud provider (GCP, AWS, Azure), on-prem (hostPath PVs), or any cluster
+reachable via kubeconfig. The installer deploys it in its
+[`Discovery` stage](../installation/installer-guide.md#discovery-stage) when no usable
+Harbor exists; the steps below are for running the stack by hand.
 
 ---
 
@@ -34,25 +35,26 @@ It is reachable inside the cluster at `harbor.harbor.svc.cluster.local`.
 ## Directory Structure
 
 ```
-cloud-harbor/
+harbor/
 ├── main.go                      # Entry point; delegates to pkg/iac/harbor
 ├── deployment/
 │   ├── Pulumi.yaml               # Project descriptor
 │   └── Pulumi.<stack>.yaml       # Per-cluster stack configs (run pulumi from here)
 ├── scripts/
-│   ├── harbor-setup.sh           # Post-deploy: creates projects + robot account
 │   ├── harbor-validate.sh        # Validates admin and robot credentials
-│   ├── harbor-reset-robot-secret.sh  # Resets robot password without recreating account
-│   └── harbor-image-upload.sh    # One-off manual image upload (see also Image mirroring)
-└── charts/
+│   └── harbor-reset-robot-secret.sh  # Resets robot password without recreating account
+└── charts/                       # Not committed; see Step 0
     └── harbor-1.18.2.tgz         # Harbor Helm chart
 
 pkg/iac/harbor/                   # Actual Pulumi program logic, shared via Go module
-├── harbor.go                     # Namespace + Helm release + pull secret + HTTPS port fix
-├── setup.go                      # Configures Harbor itself: projects (public) + robot account,
-│                                  # via the pulumiverse/pulumi-harbor provider
-├── node_trust.go                 # Node-trust DaemonSet (see Node registry trust)
-└── mirror.go                     # Image mirror Jobs/CronJob (see Image mirroring)
+├── harbor.go, stack.go           # Entry points for the CLI and the installer
+└── internal/
+    ├── chart/                    # Namespace + Helm release + values
+    ├── setup/                    # Projects (public) + robot account, via the
+    │                             # pulumiverse/pulumi-harbor provider
+    ├── registry/                 # Pull secret + node-trust DaemonSet (see Node registry trust)
+    ├── mirror/                   # Image mirror Jobs/CronJob (see Image mirroring)
+    └── storage/                  # PVCs, or hostPath PVs on-prem
 
 pkg/kube/                         # Port-forward helpers setup.go uses to reach Harbor's
                                    # ClusterIP-only Service from wherever pulumi up runs
@@ -72,13 +74,13 @@ The chart tarball is not committed to the repository. Create the `charts/` direc
 and download it before running `pulumi up`.
 
 ```bash
-mkdir -p infra/cloud-harbor/charts
+mkdir -p harbor/charts
 ```
 
 ```bash
 HARBOR_CHART_VERSION=1.18.2
 
-curl -Lo infra/cloud-harbor/charts/harbor-${HARBOR_CHART_VERSION}.tgz \
+curl -Lo harbor/charts/harbor-${HARBOR_CHART_VERSION}.tgz \
   https://github.com/goharbor/harbor-helm/releases/download/v${HARBOR_CHART_VERSION}/harbor-${HARBOR_CHART_VERSION}.tgz
 ```
 
@@ -89,7 +91,7 @@ HARBOR_CHART_VERSION=1.18.2
 
 helm repo add harbor https://helm.goharbor.io
 helm repo update
-helm pull harbor/harbor --version ${HARBOR_CHART_VERSION} --destination infra/cloud-harbor/charts/
+helm pull harbor/harbor --version ${HARBOR_CHART_VERSION} --destination harbor/charts/
 ```
 
 ### Step 1 — Deploy and configure Harbor
@@ -98,7 +100,7 @@ One `pulumi up`. Set the admin password, the robot password, and which projects
 to create — then run.
 
 ```bash
-cd infra/cloud-harbor/deployment
+cd harbor/deployment
 
 pulumi config set --secret harbor:adminPassword <password> --stack <stack-name>
 pulumi config set --secret harbor:robotPassword <robot-password> --stack <stack-name>
@@ -147,7 +149,7 @@ kill "${PF_PID}"
 Then, for each project and the robot account:
 
 ```bash
-cd infra/cloud-harbor/deployment
+cd harbor/deployment
 
 pulumi import harbor:index/project:Project harbor-project-<name> /projects/<project_id> --stack <stack-name>
 pulumi import harbor:index/robotAccount:RobotAccount harbor-robot-k8s-harbor-sa /robots/<robot_id> --stack <stack-name>
@@ -169,7 +171,7 @@ For an out-of-band rotation without touching Pulumi config first (credentials
 compromised, need it rotated immediately):
 
 ```bash
-cd infra/cloud-harbor
+cd harbor
 
 HARBOR_ADMIN_PASSWORD=<password> \
 HARBOR_ROBOT_PASSWORD=<new-robot-password> \
@@ -179,7 +181,7 @@ HARBOR_ROBOT_PASSWORD=<new-robot-password> \
 Then reconcile Pulumi's config with what Harbor now actually has:
 
 ```bash
-cd infra/cloud-harbor/deployment
+cd harbor/deployment
 
 pulumi config set --secret harbor:robotPassword <new-robot-password> --stack <stack-name>
 pulumi up --stack <stack-name>
@@ -187,30 +189,14 @@ pulumi up --stack <stack-name>
 
 ---
 
-## Manual setup (optional fallback)
-
-`pulumi up` (Step 1 above) creates Harbor's projects and robot account on its
-own — this is not required on a normal deploy. Kept for cases where scripting
-around Harbor's REST API directly is more convenient (debugging, a one-off
-cluster that shouldn't be Pulumi-managed, etc).
+## Validating credentials
 
 ```bash
-cd infra/cloud-harbor
+cd harbor
 
 HARBOR_ADMIN_PASSWORD=<password> \
 HARBOR_ROBOT_PASSWORD=<robot-password> \
-  bash scripts/harbor-setup.sh
-```
-
-Creates the same projects and robot account `setup.go` would, via the Harbor
-REST API over a `kubectl port-forward`. Validate the result:
-
-```bash
-cd infra/cloud-harbor
-
-HARBOR_ADMIN_PASSWORD=<password> \
-HARBOR_ROBOT_PASSWORD=<robot-password> \
-  bash ../scripts/harbor-validate.sh
+  bash scripts/harbor-validate.sh
 ```
 
 Runs four checks: admin REST API, admin token service, robot REST API, robot token service.
@@ -285,7 +271,7 @@ jsonpath='{range .items[*]}{.spec.clusterIP}{"\n"}{end}'` for what's already tak
 `.1` address, reserved for the `kubernetes` Service itself).
 
 ```bash
-cd infra/cloud-harbor/deployment
+cd harbor/deployment
 
 pulumi config set harbor:staticClusterIP <chosen-ip> --stack <stack-name>
 pulumi up --stack <stack-name>
@@ -295,33 +281,11 @@ pulumi up --stack <stack-name>
 
 ## Uploading Container Images
 
-For ongoing, declarative mirroring driven by stack config, use the image mirror described in
-[Image mirroring](../operations/image-mirroring.md) (`harbor:mirrorEnabled`) instead — it runs as part of
-`pulumi up`, no manual script invocation needed. The steps below remain useful for a one-off,
-ad hoc upload outside that declared list.
-
-After Harbor is running and its projects exist (`pulumi up`, or the manual fallback
-above), mirror all required container images from public registries into Harbor:
-
-```bash
-cd infra/cloud-harbor
-
-KUBECONFIG=~/.kube/<stack>.yaml \
-HARBOR_ROBOT_PASSWORD=<robot-password> \
-  bash ../scripts/harbor-image-upload.sh
-```
-
-**Prerequisites:**
-
-- `skopeo` installed on the provisioner
-- `kubectl` configured for the target cluster
-- `gh` CLI installed and authenticated (`gh auth login`) — required to pull
-  private images from `ghcr.io/axem-solutions`
-
-The script opens a `kubectl port-forward` to Harbor, logs in to `ghcr.io` via the
-`gh` CLI token, then copies each image directly from the public registry into Harbor
-using `skopeo copy`. Images are grouped by use case; MetalLB and GPU Operator images
-are commented out (not needed on GKE).
+The installer copies the platform's container images into Harbor in its
+[`Populate Harbor` stage](../installation/installer-guide.md#populate-harbor-stage). For
+ongoing, declarative mirroring driven by stack config, use the image mirror described in
+[Image mirroring](../operations/image-mirroring.md) (`harbor:mirrorEnabled`). It runs as part
+of `pulumi up`.
 
 ---
 
@@ -338,12 +302,12 @@ and pushes them as OCI artifacts to Harbor. See
 ```
 cluster creation (per-cloud, outside this repo)
        ↓
-infra/cloud-harbor                       ← this stack
+harbor                                   ← this stack
        ↓
 infra/gateway-provider                   ← Istio + Gateway API
        ↓
 app_serving                              ← model serving
 ```
 
-`cloud-harbor` does not depend on any cloud-specific stack reference — it only
+`harbor` does not depend on any cloud-specific stack reference — it only
 needs a reachable Kubernetes cluster.

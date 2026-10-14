@@ -1,8 +1,7 @@
 # Stack: <stack-name> -- <short description>
 #
-# Works on any cloud provider (GCP, AWS, Azure) or any cluster reachable via kubeconfig.
-# On-prem Harbor (hostPath PVs, pre-loaded images) is a separate stack — see
-# infra/on-prem/pulumi/services/.
+# Works on any cloud provider (GCP, AWS, Azure), on-prem, or any cluster reachable via
+# kubeconfig.
 #
 # Required config:
 #   harbor:adminPassword — Harbor admin password (set via
@@ -32,7 +31,7 @@
 #   harbor:namespace      — Kubernetes namespace for Harbor; default: harbor
 #
 # To create a new stack:
-#   cd infra/cloud-harbor/deployment
+#   cd harbor/deployment
 #   pulumi stack init <stack-name>
 #   pulumi config set --secret harbor:adminPassword <password>
 #   pulumi up

@@ -23,7 +23,9 @@ metal or VMs, with a GPU-ready worker node, for LLM inference workloads.
 
 ## 1. Install the first server (control plane) node
 
-SSH into the node that will be the first control-plane node, then:
+SSH into the node that will be the first control-plane node. To use a CNI other than
+the default Canal, configure it now, before the first start; see
+[RKE2 CNI selection](rke2-cni.md#configuring-the-cni). Then:
 
 ```bash
 curl -sfL https://get.rke2.io | sh -
@@ -123,7 +125,7 @@ This is the label convention `app_serving`/`app_shaide`/`monitoring` expect for
 `nodeSelector: {nodegroup: gpu}` in their stack configs.
 
 The GPU Operator itself (which exposes `nvidia.com/gpu` as a schedulable resource) is
-installed by the on-prem services stack, not here — see "Next steps" below.
+installed in [step 10](#10-gpu-operator).
 
 ## Uninstall
 

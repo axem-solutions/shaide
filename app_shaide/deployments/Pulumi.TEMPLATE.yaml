@@ -55,8 +55,7 @@
 #   pvNodeHostname    — required when storageClassName is "hostpath": the Kubernetes node
 #                       (kubernetes.io/hostname label) backing the static hostPath PVs for
 #                       shaide-server, rustfs, and qdrant (one PV each, pre-bound via claimRef).
-#                       Host directories are NOT created automatically — provision them first
-#                       (e.g. via the on-prem Ansible hostpath_dirs role).
+#                       Host directories are NOT created automatically — provision them first.
 #   shaidePVSize, rustfsPVSize, qdrantPVSize
 #                     — PV/PVC size per component; default: 5Gi each
 #

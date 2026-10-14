@@ -23,7 +23,7 @@ shaide is built in layers, each an independent Pulumi program.
 ## Deployment order
 
 ```
-1. Internal OCI registry       infra/cloud-harbor
+1. Internal OCI registry       harbor
 2. Gateway + Istio             infra/gateway-provider
 3. Model serving               app_serving
 4. Application layer           app_shaide

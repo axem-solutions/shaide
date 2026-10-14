@@ -311,7 +311,7 @@ A node's pool is the one its platform names:
 | AKS | node pool (`kubernetes.azure.com/agentpool`) |
 | EKS | node group (`eks.amazonaws.com/nodegroup`) |
 | GKE | node pool (`cloud.google.com/gke-nodepool`) |
-| On-prem | the `nodegroup` label from the Ansible inventory, or the node on its own |
+| On-prem | the `nodegroup` node label, or the node on its own |
 
 During this stage, the installer:
 
