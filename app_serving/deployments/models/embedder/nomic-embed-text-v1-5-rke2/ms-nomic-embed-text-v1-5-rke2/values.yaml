@@ -3,10 +3,9 @@
 # Tuned for a single-GPU embedder deployment using vLLM pooling runner.
 # Images served from internal Harbor; no internet access required on cluster nodes.
 #
-# Image upload (run on provisioner laptop before pulumi up):
+# Image upload, before pulumi up: copy the image into the Harbor project referenced below.
 #   skopeo copy docker://ghcr.io/llm-d/llm-d-cuda:v0.7.0 \
-#     oci-archive:infra/on-prem/ansible/artifacts/images/llm-d-cuda-v0.7.0.tar
-#   ansible-playbook -i inventory-dev harbor_upload.yml
+#     docker://<harbor-host>/<project>/llm-d-cuda:v0.7.0
 multinode: false
 
 modelArtifacts:

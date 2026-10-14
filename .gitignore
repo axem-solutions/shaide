@@ -16,7 +16,7 @@ PLAN.md
 app_mcp/app_mcp
 app_serving/app_serving
 app_shaide/app_shaide
-harbor/cloud-harbor
+harbor/harbor
 infra/gateway-provider/gateway-provider
 installer/installer
 monitoring/monitoring
@@ -38,13 +38,6 @@ __pycache__/
 
 # Node
 node_modules/
-
-# Ansible
-*.retry
-.ansible/
-ansible.log
-ansible/tmp
-inventory-dev/
 
 # Kubernetes artifacts / local outputs
 *.tgz

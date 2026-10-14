@@ -127,8 +127,7 @@ docker exec vcluster.node.local-k8s.worker-1 ls /mnt/models/gemma-4
 
 ### 3. Create a static-provisioning StorageClass
 
-Mirrors the on-prem module's pattern
-(`infra/on-prem/pulumi/infra/components/storageclass/storageclass.go`) —
+Mirrors the `hostpath` StorageClass on-prem clusters use —
 `no-provisioner` means Kubernetes won't try to dynamically create the
 volume; you're supplying it yourself.
 

@@ -179,7 +179,7 @@ When a model has a `modelSource` block in the stack config, Pulumi creates:
 
 1. On on-prem with `hostpathNode` set: a static `PersistentVolume` (`<slug>-model-pv`) backed
    by `/var/lib/hostpath/models/<slug>` on the specified node. The directory must exist before
-   `pulumi up` (managed by the `hostpath_dirs` Ansible role).
+   `pulumi up`.
 2. A `PersistentVolumeClaim` (`<slug>-model`) — RWO; `hostpath` StorageClass on-prem, cluster
    default on cloud.
 3. A `batch/v1 Job` (`<slug>-model-pull`) — runs ORAS once to pull the model artifact
@@ -393,7 +393,7 @@ app-serving:harborToken:
 | Cluster | RKE2; provider uses `~/.kube/rke2-cluster.yaml` |
 | Harbor pull secret | Created as `harbor-creds` in each model namespace |
 | Model weights | Pulled from Harbor by ORAS Job into PVC (models with `modelSource`) |
-| Model PV | hostpath PV auto-created by Pulumi when `hostpathNode` is set; directory managed by `hostpath_dirs` Ansible role |
+| Model PV | hostpath PV auto-created by Pulumi when `hostpathNode` is set; the directory must already exist on the node |
 | GPU scheduling | The installer passes each model's placement: the node pools assigned to it in the `Assign node pools` stage, matched on the pool label the platform maintains (e.g. `kubernetes.azure.com/agentpool`, or `nodegroup` on-prem), one `nodeSelectorTerm` per label. Without a placement the stack falls back to `nodegroup=generative`. Models tolerate `nvidia.com/gpu=present:NoSchedule`; the stack writes the toleration as `gpuToleration`, applied to model pods and the ORAS pull Job |
 | Images | Pulled from `harbor.harbor.svc.cluster.local/images-shaide/...` by cluster nodes (no internet) |
 | ORAS image | `harbor.harbor.svc.cluster.local/services/oras-project/oras:v1.3.1`, mirrored by the installer |
@@ -403,20 +403,17 @@ app-serving:harborToken:
 
 **Before `pulumi up` — image preparation on provisioner laptop:**
 
-The full list of images and their skopeo download commands is maintained in
-`infra/on-prem/ansible/group_vars/all/images.yaml`. Run after adding any new entry:
+The installer copies the images of supported models into Harbor in its
+[`Populate Harbor` stage](../installation/installer-guide.md#populate-harbor-stage)
+(see `installer/build/manifests/images.yaml`). Images only a manual stack uses, such as
+the simulator, must be copied by hand:
 
 ```bash
-# Download image archives (see images.yaml for full list and download commands)
 skopeo copy docker://ghcr.io/llm-d/llm-d-inference-sim:v0.7.1 \
-  oci-archive:infra/on-prem/ansible/artifacts/images/llm-d-inference-sim-v0.7.1.tar
+  docker://<harbor-host>/<project>/llm-d-inference-sim:v0.7.1
 
 skopeo copy docker://registry.k8s.io/gateway-api-inference-extension/epp:v1.2.0 \
-  oci-archive:infra/on-prem/ansible/artifacts/images/epp-v1.2.0.tar
-
-# Upload all archives to Harbor
-cd infra/on-prem/ansible
-ansible-playbook -i inventory/hosts.yml harbor_upload.yml
+  docker://<harbor-host>/<project>/epp:v1.2.0
 ```
 
 **Before `pulumi up` — model weight preparation (real models only, not sim):**
@@ -485,7 +482,7 @@ unique within a cluster.
    ```
 
 For on-prem air-gap deployments, additionally:
-- Upload model container images to Harbor (see `infra/on-prem/ansible/group_vars/all/images.yaml`).
+- Make sure the model's container images are in Harbor (see image preparation above).
 - Set `harborHostname`, `harborUser`, `harborToken`, and `kubeconfig` in the stack config.
 - Use Harbor image references in the model's `values.yaml` files.
 

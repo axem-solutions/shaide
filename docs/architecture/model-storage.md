@@ -58,8 +58,7 @@ Each model can optionally declare a `modelSource` block in the stack YAML. When 
 
 1. Creates a RWO PVC for that model (`<slug>-model`).
 2. On on-prem with `hostpathNode` set: auto-creates a static `PersistentVolume` bound to that node
-   under `/var/lib/hostpath/models/<slug>` (the directory must exist — managed by the
-   `hostpath_dirs` Ansible role).
+   under `/var/lib/hostpath/models/<slug>` (the directory must already exist on the node).
 3. Creates a one-time ORAS pull Job that populates the PVC from Harbor.
 4. Overrides `modelArtifacts.uri` in the Helm chart with `pvc+hf://<slug>-model/<modelUri>`.
 5. Makes the ModelService chart depend on the Job, preventing the pod from starting with an empty PVC.

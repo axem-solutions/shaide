@@ -30,8 +30,7 @@
 #                                      hostpathNode — on-prem only: node hostname to pin the PV to
 #                                                     via nodeAffinity (kubernetes.io/hostname).
 #                                                     Pulumi creates the PV; the backing directory
-#                                                     must already exist on that node (Ansible
-#                                                     hostpath_dirs role).
+#                                                     must already exist on that node.
 #                                      hostpathDir  — on-prem only, optional: absolute path on the
 #                                                     node; default: /var/lib/hostpath/models/<slug>
 #
@@ -39,8 +38,8 @@
 #   kubeconfig    — path to RKE2 kubeconfig on provisioner laptop
 #   gpuToleration — {key, operator, value, effect}; one toleration applied stack-wide to every
 #                   model's pods (decode, prefill) and to the ORAS pull Job, so they can schedule
-#                   onto tainted GPU nodes. Must match the taint applied to the GPU node (Ansible
-#                   node_taints). Omit if GPU nodes carry no taint.
+#                   onto tainted GPU nodes. Must match the taint applied to the GPU node.
+#                   Omit if GPU nodes carry no taint.
 #
 # Harbor config (required on-prem; required on cloud only when any model uses modelSource):
 #   harborHostname — internal Harbor hostname — on-prem, e.g. harbor.internal.lan (must match the
