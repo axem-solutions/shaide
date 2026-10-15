@@ -59,7 +59,7 @@ monitoring/
 │   └── prometheus-29.21.0.tgz
 ├── deployments/                    # Pulumi stack definitions (one file per deployment target)
 │   ├── Pulumi.yaml
-│   └── Pulumi.kalmannemeth.yaml
+│   └── Pulumi.TEMPLATE.yaml
 ├── main.go                         # Stack entrypoint — calls monitoring.DeployMonitoring
 └── README.md
 
@@ -622,7 +622,7 @@ Prerequisites:
 
 ```bash
 cd monitoring/deployments
-pulumi stack select kalmannemeth
+pulumi stack select <stack-name>
 
 # First-time only — set encrypted secrets
 # s3Password MUST exactly match app_shaide's own s3Password for this stack — RustFS is
