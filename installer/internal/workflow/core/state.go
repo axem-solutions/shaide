@@ -19,6 +19,7 @@ type GlobalState struct {
 	Models    ModelsState
 	// Placement is the node pools assigned to each model and to CPU work.
 	Placement placement.Assignment
+	WebApp    WebAppState
 	Artifact  ArtifactState
 	Pulumi    PulumiState
 }
@@ -55,6 +56,11 @@ type ModelsState struct {
 	// Uninstall is the installed models being removed, from app-serving and
 	// from Harbor.
 	Uninstall []catalog.Model
+}
+
+// WebAppState is the operator's answer to whether the webapp is installed.
+type WebAppState struct {
+	Enabled bool
 }
 
 type ArtifactState struct {

@@ -74,6 +74,10 @@ func Deploy(ctx *pulumi.Context, deps *runtime.DeploymentContext, cfg appconfig.
 									Name:  pulumi.String("KNOWLEDGE_CENTER_ENABLED"),
 									Value: pulumi.String(strconv.FormatBool(cfg.KnowledgeCenterEnabled)),
 								},
+								&corev1.EnvVarArgs{
+									Name:  pulumi.String("APP_ENABLED"),
+									Value: pulumi.String(strconv.FormatBool(cfg.WebAppEnabled)),
+								},
 							},
 							Ports: corev1.ContainerPortArray{
 								&corev1.ContainerPortArgs{

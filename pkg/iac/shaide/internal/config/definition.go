@@ -16,6 +16,7 @@ const (
 
 const (
 	KeyCloudProvider  stackconfig.Key = "cloudProvider"
+	KeyWebappEnabled  stackconfig.Key = "webappEnabled"
 	KeyKubeconfig     stackconfig.Key = "kubeconfig"
 	KeyContext        stackconfig.Key = "context"
 	KeyNamespace      stackconfig.Key = "namespace"
@@ -95,6 +96,9 @@ const (
 	DefaultRustfsService       = "rustfs"
 	DefaultQdrantService       = "qdrant"
 
+	// WebAppPort is where the webapp listens and its Service is exposed.
+	WebAppPort = 8787
+
 	DefaultShaideServerUiFqdn       = "control-panel"
 	DefaultShaideServerUiPort       = "3000"
 	DefaultShaideServerS3Fqdn       = "rustfs"
@@ -129,6 +133,10 @@ const (
 // not written, so a Pulumi stack value set by hand is left intact.
 type Sources struct {
 	GatewayHostname string
+
+	// WebAppEnabled is the operator's answer to whether the webapp is
+	// installed. Nil leaves the stack value, or the default of leaving it out.
+	WebAppEnabled *bool
 
 	// Placement names the nodes the components prefer to run on. The
 	// installer sets it to the node pools assigned to CPU work.
@@ -221,6 +229,15 @@ func runtimeEntries(opts stack.Options, sources Sources) []stackconfig.Entry[Val
 			},
 		},
 		{
+			// Declared before the images, since the webapp image is required
+			// only when the webapp is installed.
+			Key:    KeyWebappEnabled,
+			Source: stackconfig.Source{Value: optionalBool(sources.WebAppEnabled), Default: false},
+			Setter: func(cfg *Values, root *pulumiconfig.Config) {
+				cfg.WebAppEnabled = root.GetBool(KeyWebappEnabled.String())
+			},
+		},
+		{
 			Key:    KeyNamespace,
 			Source: stackconfig.Source{Default: DefaultNamespace},
 			Policy: stackconfig.Policy{Required: true},
@@ -264,7 +281,7 @@ func imageEntries(sources Sources) []stackconfig.Entry[Values] {
 		{
 			Key:    KeyWebappImage,
 			Source: stackconfig.Source{Value: optionalSource(sources.Images[WebappImageName])},
-			Policy: stackconfig.Policy{Required: true},
+			Policy: stackconfig.Policy{Required: true, When: stackconfig.WhenEquals(KeyWebappEnabled, true)},
 			Setter: func(cfg *Values, root *pulumiconfig.Config) {
 				cfg.Images.WebApp = root.Get(KeyWebappImage.String())
 			},
@@ -301,6 +318,14 @@ func optionalPlacement(terms []PlacementTerm) any {
 	}
 
 	return terms
+}
+
+func optionalBool(value *bool) any {
+	if value == nil {
+		return nil
+	}
+
+	return *value
 }
 
 func optionalSource(value string) any {

@@ -76,6 +76,7 @@ func deployAppShaide(ctx *pulumi.Context, stackConfig appconfig.Config) error {
 		pulumi.DependsOn([]pulumi.Resource{shaideConfig, shaideSecrets}),
 		pulumi.DependsOn(serviceAccountDeps),
 	)
+	deps.ConfigChecksum = platform.ConfigChecksum(appConfig)
 
 	// --- Cloud provider (selects cloud-specific resource implementations) ---
 	cp := cloudprovider.New(appConfig.CloudProvider)
@@ -96,8 +97,12 @@ func deployAppShaide(ctx *pulumi.Context, stackConfig appconfig.Config) error {
 	if err := controlpanel.Deploy(ctx, deps, appConfig); err != nil {
 		return err
 	}
-	if err := webapp.Deploy(ctx, deps, appConfig); err != nil {
-		return err
+	// Leaving the webapp out of the program also removes one an earlier
+	// deployment installed.
+	if appConfig.WebAppEnabled {
+		if err := webapp.Deploy(ctx, deps, appConfig); err != nil {
+			return err
+		}
 	}
 	if err := rustfs.Deploy(ctx, deps, appConfig); err != nil {
 		return err

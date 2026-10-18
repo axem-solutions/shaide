@@ -26,6 +26,8 @@ func shaidePlacement(pools []placement.Pool) []shaide.PlacementTerm {
 }
 
 func DeployAppShaide(rt *core.Runtime) error {
+	webAppEnabled := rt.WebApp.Enabled
+
 	shaideStack := shaide.NewStack(
 		filepath.Join(rt.Bootstrap.Config.Paths.ProjectsDir, projectAppShaide),
 		stackpkg.Options{
@@ -35,6 +37,7 @@ func DeployAppShaide(rt *core.Runtime) error {
 		},
 		shaide.Options{
 			GatewayHostname: rt.Bootstrap.GatewayHostname,
+			WebAppEnabled:   &webAppEnabled,
 			Images:          mirroredImages(rt.Bootstrap.Catalog.ServiceImages, harborRegistryHostname(rt)),
 
 			// Prefer the node pools assigned to CPU work. The preference is

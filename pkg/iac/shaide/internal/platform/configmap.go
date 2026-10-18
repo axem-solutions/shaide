@@ -10,6 +10,11 @@
 package platform
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"sort"
+
 	appconfig "github.com/axem-solutions/ai_platform/pkg/iac/shaide/internal/config"
 	corev1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/core/v1"
 	metav1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/meta/v1"
@@ -18,37 +23,12 @@ import (
 
 // CreateAppShaideConfig creates the shared ConfigMap and Secret for the app-shaide stack.
 func CreateAppShaideConfig(ctx *pulumi.Context, cfg appconfig.Values, providerOpt, nsOpt pulumi.ResourceOption) (*corev1.ConfigMap, *corev1.Secret, error) {
-	// --- ConfigMap: service discovery and application settings ---
-	// Keys are injected as env vars into shaide-server via envFrom.
-	configData := pulumi.StringMap{
-		"SHAIDE_SERVER_UI_FQDN":        pulumi.String(cfg.ShaideEnv.ShaideServerUiFQDN),
-		"SHAIDE_SERVER_UI_PORT":        pulumi.String(cfg.ShaideEnv.ShaideServerUiPort),
-		"DATABASE_URL":                 pulumi.String(cfg.ShaideEnv.DatabaseURL),
-		"S3_USER":                      pulumi.String(cfg.ShaideEnv.S3User),
-		"SHAIDE_SERVER_S3_FQDN":        pulumi.String(cfg.ShaideEnv.S3FQDN),
-		"SHAIDE_SERVER_S3_PORT":        pulumi.String(cfg.ShaideEnv.S3Port),
-		"S3_UPLOAD_PROXY_ROUTE_PREFIX": pulumi.String(cfg.ShaideEnv.S3UploadProxyRoutePrefix),
-		"RUSTFS_WEBHOOK_ARN":           pulumi.String(cfg.ShaideEnv.RustFSWebhookARN),
-		"VECTOR_DB_URL":                pulumi.String(cfg.ShaideEnv.VectorDBUrl),
-		"RUST_LIB_BACKTRACE":           pulumi.String(cfg.ShaideEnv.RustLibBacktrace),
-		"RUST_SPANTRACE":               pulumi.String(cfg.ShaideEnv.RustSpantrace),
-		"CONTROL_PANEL_SERVICE":        pulumi.String(cfg.Services.ControlPanel),
-		"WEBAPP_SERVICE":               pulumi.String(cfg.Services.WebApp),
-		"RUSTFS_SERVICE":               pulumi.String(cfg.Services.Rustfs),
-		"QDRANT_SERVICE":               pulumi.String(cfg.Services.Qdrant),
-		"TRIAL":                        pulumi.String(cfg.ShaideEnv.Trial),
-	}
-	// MCP deployment is optional — only wire the namespace through when configured.
-	if cfg.ShaideEnv.MCPNamespace != "" {
-		configData["MCP_NAMESPACE"] = pulumi.String(cfg.ShaideEnv.MCPNamespace)
-	}
-
 	shaideConfig, err := corev1.NewConfigMap(ctx, "shaide-config", &corev1.ConfigMapArgs{
 		Metadata: &metav1.ObjectMetaArgs{
 			Name:      pulumi.String("shaide-config"),
 			Namespace: pulumi.String(cfg.Namespace),
 		},
-		Data: configData,
+		Data: pulumi.ToStringMap(appConfigData(cfg)),
 	}, providerOpt, nsOpt)
 	if err != nil {
 		return nil, nil, err
@@ -70,6 +50,59 @@ func CreateAppShaideConfig(ctx *pulumi.Context, cfg appconfig.Values, providerOp
 	}
 
 	return shaideConfig, shaideSecrets, nil
+}
+
+// appConfigData is the service discovery and application settings ConfigMap.
+// Keys are injected as env vars into shaide-server via envFrom.
+func appConfigData(cfg appconfig.Values) map[string]string {
+	configData := map[string]string{
+		"SHAIDE_SERVER_UI_FQDN":        cfg.ShaideEnv.ShaideServerUiFQDN,
+		"SHAIDE_SERVER_UI_PORT":        cfg.ShaideEnv.ShaideServerUiPort,
+		"DATABASE_URL":                 cfg.ShaideEnv.DatabaseURL,
+		"S3_USER":                      cfg.ShaideEnv.S3User,
+		"SHAIDE_SERVER_S3_FQDN":        cfg.ShaideEnv.S3FQDN,
+		"SHAIDE_SERVER_S3_PORT":        cfg.ShaideEnv.S3Port,
+		"S3_UPLOAD_PROXY_ROUTE_PREFIX": cfg.ShaideEnv.S3UploadProxyRoutePrefix,
+		"RUSTFS_WEBHOOK_ARN":           cfg.ShaideEnv.RustFSWebhookARN,
+		"VECTOR_DB_URL":                cfg.ShaideEnv.VectorDBUrl,
+		"RUST_LIB_BACKTRACE":           cfg.ShaideEnv.RustLibBacktrace,
+		"RUST_SPANTRACE":               cfg.ShaideEnv.RustSpantrace,
+		"CONTROL_PANEL_SERVICE":        cfg.Services.ControlPanel,
+		"WEBAPP_SERVICE":               cfg.Services.WebApp,
+		"RUSTFS_SERVICE":               cfg.Services.Rustfs,
+		"QDRANT_SERVICE":               cfg.Services.Qdrant,
+		"TRIAL":                        cfg.ShaideEnv.Trial,
+	}
+	// MCP deployment is optional — only wire the namespace through when configured.
+	if cfg.ShaideEnv.MCPNamespace != "" {
+		configData["MCP_NAMESPACE"] = cfg.ShaideEnv.MCPNamespace
+	}
+	// shaide-server proxies /app to the webapp only when WEBAPP_URL is set.
+	if cfg.WebAppEnabled {
+		configData["WEBAPP_URL"] = cfg.WebAppURL()
+	}
+
+	return configData
+}
+
+// ConfigChecksum identifies the shaide-config data. shaide-server reads the
+// ConfigMap as env vars only at start, so its pods carry the checksum and
+// roll when the data changes.
+func ConfigChecksum(cfg appconfig.Values) string {
+	data := appConfigData(cfg)
+
+	keys := make([]string, 0, len(data))
+	for key := range data {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	hash := sha256.New()
+	for _, key := range keys {
+		fmt.Fprintf(hash, "%s=%s\n", key, data[key])
+	}
+
+	return hex.EncodeToString(hash.Sum(nil))
 }
 
 func appSecretData(cfg appconfig.Values) pulumi.StringMap {

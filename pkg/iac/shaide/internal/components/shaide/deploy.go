@@ -61,6 +61,11 @@ func Deploy(ctx *pulumi.Context, deps *runtime.DeploymentContext, cfg appconfig.
 			Template: &corev1.PodTemplateSpecArgs{
 				Metadata: &metav1.ObjectMetaArgs{
 					Labels: podLabels,
+					// envFrom is read only at start, so a shaide-config change
+					// has to roll the pod to reach the server.
+					Annotations: pulumi.StringMap{
+						"axem.dev/config-checksum": pulumi.String(deps.ConfigChecksum),
+					},
 				},
 				Spec: &corev1.PodSpecArgs{
 					ServiceAccountName: pulumi.String(cfg.ServiceAccountName),
