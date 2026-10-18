@@ -12,6 +12,9 @@ type DeploymentContext struct {
 	NsOpt              pulumi.ResourceOption
 	ConfigDeps         pulumi.ResourceOption
 	ServiceAccountDeps pulumi.ResourceOption
+	// ConfigChecksum identifies the shaide-config data. Pods that read the
+	// ConfigMap as env vars carry it, so a change rolls them.
+	ConfigChecksum string
 	// StorageDeps is populated by the cloud provider's ProvisionStorage call.
 	// StatefulSets depend on it so PersistentVolumes exist before PVCs are created.
 	// Defaults to an empty DependsOn (no-op) for clouds with dynamic provisioning.

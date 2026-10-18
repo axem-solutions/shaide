@@ -93,6 +93,11 @@
 #   knowledgeCenterEnabled
 #                     — boolean; presence of the Knowledge Center feature; injected into
 #                        control-panel as the KNOWLEDGE_CENTER_ENABLED env var; default: false
+#   webappEnabled      — boolean; whether the webapp is deployed; injected into control-panel
+#                        as the APP_ENABLED env var; when true, shaide-config also gets
+#                        WEBAPP_URL so shaide-server proxies /app to the webapp;
+#                        webappImage is required only when true;
+#                        default: false
 #
 # To create a new stack:
 #   cd app_shaide/deployments
@@ -152,6 +157,7 @@ config:
   # app-shaide:trial: "FALSE"
   # app-shaide:rustfsConsoleEnabled: false
   # app-shaide:knowledgeCenterEnabled: false
+  # app-shaide:webappEnabled: false
   app-shaide:rustfsNotifyWebhookEnableShaide: "on"
   app-shaide:rustfsNotifyWebhookEndpointShaide: "http://shaide-server/v1/object-storage/event"
   app-shaide:rustfsNotifyWebhookQueueDirShaide: "/data/deploy/logs/notify"

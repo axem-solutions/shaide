@@ -11,6 +11,11 @@ import (
 type Options struct {
 	GatewayHostname string
 
+	// WebAppEnabled says whether the webapp is installed. The control panel
+	// learns the answer through its APP_ENABLED env var. Nil leaves the stack
+	// value, or the default of leaving it out.
+	WebAppEnabled *bool
+
 	// Placement names the nodes the components prefer (soft node affinity),
 	// for example the node pools assigned to CPU work. A node matching any
 	// term is preferred.
@@ -37,6 +42,7 @@ func NewStack(projectDir string, common stackpkg.Options, options ...Options) *S
 		common,
 		appconfig.Sources{
 			GatewayHostname: shaideOptions.GatewayHostname,
+			WebAppEnabled:   shaideOptions.WebAppEnabled,
 			Placement:       placement(shaideOptions.Placement),
 			Images:          shaideOptions.Images,
 		},
@@ -81,3 +87,11 @@ const (
 	Namespace          = appconfig.DefaultNamespace
 	ServiceAccountName = appconfig.DefaultServiceAccount
 )
+
+// WebAppName names the webapp Deployment, so the installer can tell from the
+// cluster whether an earlier install included it.
+const WebAppName = appconfig.DefaultWebappService
+
+// WebAppImage is the catalog name of the webapp image, so the installer can
+// leave it out of the Harbor upload when the webapp is not installed.
+const WebAppImage = appconfig.WebappImageName

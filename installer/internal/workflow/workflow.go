@@ -14,6 +14,7 @@ import (
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/stages/models"
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/stages/nodes"
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/stages/pulumi"
+	"github.com/axem-solutions/ai_platform/installer/internal/workflow/stages/webapp"
 )
 
 func Run() error {
@@ -35,6 +36,7 @@ func defaultStages() []core.Stage {
 		bootstrap.Stage(),
 		kubernetes.Stage(),
 		models.Stage(),
+		webapp.Stage(),
 		nodes.Stage(),
 		discovery.Stage(),
 		artifact.Stage(),

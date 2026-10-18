@@ -60,7 +60,7 @@ func Deploy(ctx *pulumi.Context, deps *runtime.DeploymentContext, cfg appconfig.
 							},
 							Ports: corev1.ContainerPortArray{
 								&corev1.ContainerPortArgs{
-									ContainerPort: pulumi.Int(8787),
+									ContainerPort: pulumi.Int(appconfig.WebAppPort),
 									Name:          pulumi.String("http"),
 								},
 							},
@@ -93,8 +93,8 @@ func Deploy(ctx *pulumi.Context, deps *runtime.DeploymentContext, cfg appconfig.
 			Ports: corev1.ServicePortArray{
 				&corev1.ServicePortArgs{
 					Name:       pulumi.String("http"),
-					Port:       pulumi.Int(8787),
-					TargetPort: pulumi.Int(8787),
+					Port:       pulumi.Int(appconfig.WebAppPort),
+					TargetPort: pulumi.Int(appconfig.WebAppPort),
 					Protocol:   pulumi.String("TCP"),
 				},
 			},

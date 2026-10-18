@@ -152,6 +152,7 @@ type Values struct {
 	RustfsPVSize             string          // optional — rustfs PV/PVC size (default: 5Gi)
 	QdrantPVSize             string          // optional — qdrant PV/PVC size (default: 5Gi)
 	KnowledgeCenterEnabled   bool            // optional — presence of the Knowledge Center feature; injected into control-panel as KNOWLEDGE_CENTER_ENABLED; default: false
+	WebAppEnabled            bool            // whether the webapp is deployed; injected into control-panel as APP_ENABLED; default: false
 
 	ServiceAccountAnnotations map[string]string
 	ServiceAccountName        string
@@ -161,6 +162,11 @@ type Values struct {
 	ShaideEnv                 AppEnv
 	RustEnv                   RustFSEnv
 	Secrets                   AppSecrets
+}
+
+// WebAppURL is where shaide-server reaches the webapp it proxies under /app.
+func (v Values) WebAppURL() string {
+	return fmt.Sprintf("http://%s:%d", v.Services.WebApp, WebAppPort)
 }
 
 func getWithDefault(cfg *pulumiconfig.Config, key, fallback string) string {

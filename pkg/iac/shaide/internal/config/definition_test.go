@@ -116,9 +116,12 @@ func TestSecretsAreMarkedSecret(t *testing.T) {
 }
 
 // The images the installer mirrored must reach the stack verbatim; a hand-typed
-// tag is exactly what this removes.
+// tag is exactly what this removes. The webapp is chosen, so its image is
+// written too.
 func TestImagesComeFromTheInstaller(t *testing.T) {
+	webAppEnabled := true
 	sources := completeSources()
+	sources.WebAppEnabled = &webAppEnabled
 	values, _, _ := resolve(t, sources)
 
 	for key, want := range map[string]string{

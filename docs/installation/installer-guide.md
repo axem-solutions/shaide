@@ -114,6 +114,7 @@ The installation has two parts:
 | `Bootstrap`           | Validate storage, installer state, and the manifests.       |
 | `Kubernetes`          | Load kubeconfig and connect to the target cluster.          |
 | `Select models`       | Choose which supported models to install, keep or uninstall. |
+| `Select webapp`       | Choose whether to install the WebApp.                       |
 | `Assign node pools`   | Assign node pools to each model and to CPU work.            |
 | `Discovery`           | Discover Harbor and determine the installation type.         |
 | `Populate Harbor`     | Upload images and selected model artifacts.                 |
@@ -298,6 +299,15 @@ Uninstalling a model removes it from the serving stack, which deletes its volume
 weights on it, and deletes its artifact from Harbor. Uninstalling the last served model
 destroys the serving stack.
 
+### `Select webapp` stage
+
+This stage decides whether the WebApp is installed. It runs before Harbor is populated, so
+a declined WebApp's image is not uploaded.
+
+| Prompt | Options / Input |
+|---|---|
+| `Install the WebApp?` | `Yes` or `No`. The WebApp is available from axem as part of a subscription. **Default** `No`, which leaves the end-user web application out, skips uploading its image, and removes one an earlier install deployed. The control panel learns the answer through its `APP_ENABLED` env var. `Yes` is pre-selected when the cluster already runs the webapp |
+
 ### `Assign node pools` stage
 
 This stage decides which node pools each workload runs on. You assign one or more pools to
@@ -424,7 +434,7 @@ During this stage, the installer:
 - checks that the installer storage directory on the provisioning host has room for the missing ones
 - downloads them from Hugging Face
 - uploads model artifacts to Harbor
-- copies container images from their origin registries into Harbor
+- copies container images from their origin registries into Harbor, leaving out the WebApp image when the WebApp is not installed
 - deletes the artifacts of uninstalled models from Harbor
 
 

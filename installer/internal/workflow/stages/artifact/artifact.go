@@ -20,6 +20,7 @@ import (
 	"github.com/axem-solutions/ai_platform/installer/internal/progress"
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/core"
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/stages/discovery"
+	"github.com/axem-solutions/ai_platform/pkg/iac/shaide"
 )
 
 func Stage() core.Stage {
@@ -198,8 +199,23 @@ func uploadImages(rt *core.Runtime) error {
 	return uploader.UploadImages(
 		context.Background(),
 		rt.Bootstrap.Catalog.ImagesDir,
-		rt.Bootstrap.Catalog.ServiceImages,
+		imagesToUpload(rt),
 	)
+}
+
+// imagesToUpload is the service images this run deploys. The webapp image is
+// left out when the webapp is not installed.
+func imagesToUpload(rt *core.Runtime) []catalog.Image {
+	images := make([]catalog.Image, 0, len(rt.Bootstrap.Catalog.ServiceImages))
+	for _, image := range rt.Bootstrap.Catalog.ServiceImages {
+		if image.Name == shaide.WebAppImage && !rt.WebApp.Enabled {
+			rt.Detailf("not uploading %s: the webapp is not installed", image.Name)
+			continue
+		}
+		images = append(images, image)
+	}
+
+	return images
 }
 
 func artifactUploader(rt *core.Runtime) (*oras.Uploader, error) {
