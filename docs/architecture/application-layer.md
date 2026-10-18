@@ -92,9 +92,11 @@ The stack orchestrator and dependency coordinator:
 - `webapp/deploy.go`: Deploys the end-user facing web application as a Deployment
   (single replica, no persistence) with a `ClusterIP` Service on port `8787`. Same shape
   as the control panel — internal-only, points at `shaide-server` via
-  `SHAIDE_SERVER_FQDN`/`SHAIDE_SERVER_PORT` env vars. Deployed only when `webappEnabled`
-  is true, which the installer asks for. shaide-server then serves it under `/app`, proxying
-  to the `WEBAPP_URL` set in `shaide-config` (`http://webapp:8787`).
+  `SHAIDE_SERVER_FQDN`/`SHAIDE_SERVER_PORT` env vars. `SHAIDE_SERVER_URL`
+  (`http://shaide-server`) fixes the shaide server the webapp signs users in to, so they
+  enter only a username and password. Deployed only when `webappEnabled` is true, which
+  the installer asks for. shaide-server then serves it under `/app`, proxying to the
+  `WEBAPP_URL` set in `shaide-config` (`http://webapp:8787`).
 - `rustfs/deploy.go`: Deploys `rustfs` as a StatefulSet with a PVC for `/data`, an
   `emptyDir` for `/logs`, and a `ClusterIP` Service on port `9000` (plus `9001` when
   `rustfsConsoleEnabled` is set). The container runs as UID/GID `10001` and is
