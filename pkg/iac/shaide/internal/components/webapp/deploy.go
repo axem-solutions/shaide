@@ -57,6 +57,12 @@ func Deploy(ctx *pulumi.Context, deps *runtime.DeploymentContext, cfg appconfig.
 									Name:  pulumi.String("SHAIDE_SERVER_PORT"),
 									Value: pulumi.String("80"),
 								},
+								// The webapp's server signs users in to this shaide server, so they
+								// enter only a username and password.
+								&corev1.EnvVarArgs{
+									Name:  pulumi.String("SHAIDE_SERVER_URL"),
+									Value: pulumi.String("http://shaide-server"),
+								},
 							},
 							Ports: corev1.ContainerPortArray{
 								&corev1.ContainerPortArgs{
