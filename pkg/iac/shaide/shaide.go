@@ -6,6 +6,7 @@ import (
 	iackube "github.com/axem-solutions/ai_platform/pkg/iac/kubernetes"
 	"github.com/axem-solutions/ai_platform/pkg/iac/shaide/internal/cloudprovider"
 	"github.com/axem-solutions/ai_platform/pkg/iac/shaide/internal/components/controlpanel"
+	"github.com/axem-solutions/ai_platform/pkg/iac/shaide/internal/components/knowledgecenter"
 	"github.com/axem-solutions/ai_platform/pkg/iac/shaide/internal/components/qdrant"
 	"github.com/axem-solutions/ai_platform/pkg/iac/shaide/internal/components/rustfs"
 	"github.com/axem-solutions/ai_platform/pkg/iac/shaide/internal/components/shaide"
@@ -57,6 +58,15 @@ func deployAppShaide(ctx *pulumi.Context, stackConfig appconfig.Config) error {
 	if err != nil {
 		return err
 	}
+	storageSecret, err := platform.CreateStorageSecret(ctx, appConfig, providerOpt, nsOpt)
+	if err != nil {
+		return err
+	}
+	kcSecrets, err := platform.CreateKnowledgeCenterSecrets(ctx, appConfig, providerOpt, nsOpt)
+	if err != nil {
+		return err
+	}
+	configResources := append([]pulumi.Resource{shaideConfig, shaideSecrets, storageSecret}, kcSecrets...)
 
 	// --- ServiceAccount and RBAC for shaide-server ---
 	serviceAccount, err := platform.CreateShaideServiceAccount(ctx, appConfig, providerOpt, nsOpt)
@@ -73,7 +83,7 @@ func deployAppShaide(ctx *pulumi.Context, stackConfig appconfig.Config) error {
 	deps := runtime.NewDeploymentContext(
 		providerOpt,
 		nsOpt,
-		pulumi.DependsOn([]pulumi.Resource{shaideConfig, shaideSecrets}),
+		pulumi.DependsOn(configResources),
 		pulumi.DependsOn(serviceAccountDeps),
 	)
 	deps.ConfigChecksum = platform.ConfigChecksum(appConfig)
@@ -109,6 +119,17 @@ func deployAppShaide(ctx *pulumi.Context, stackConfig appconfig.Config) error {
 	}
 	if err := qdrant.Deploy(ctx, deps, appConfig); err != nil {
 		return err
+	}
+	// Like the webapp, leaving KC out of the program also removes one an
+	// earlier deployment installed. Its documents and vectors stay in RustFS
+	// and Qdrant.
+	if appConfig.KnowledgeCenterEnabled {
+		if err := knowledgecenter.Deploy(ctx, deps, appConfig); err != nil {
+			return err
+		}
+		if err := knowledgecenter.DeployNetworkPolicies(ctx, deps, appConfig); err != nil {
+			return err
+		}
 	}
 
 	return nil

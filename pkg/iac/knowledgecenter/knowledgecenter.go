@@ -1,0 +1,391 @@
+// Package knowledgecenter is the contract the app-shaide and app-mcp stacks
+// share for the optional Knowledge Center (KC) and its MCP server (KC-MCP).
+//
+// One selection enables both. KC runs in app-shaide next to shaide-server,
+// RustFS and Qdrant; KC-MCP runs in app-mcp, where shaide-server discovers MCP
+// servers. The installer generates the Credentials once, keeps them, and hands
+// the same values to both stacks, so neither stack invents a secret and the
+// two never read each other's state.
+//
+// Signed retrieval runs agent -> shaide-server MCP gateway -> KC-MCP -> KC.
+// Each hop has its own credential:
+//
+//	shaide-server -> KC        InternalToken (storage and lifecycle APIs)
+//	RustFS        -> server    WebhookToken  (object notifications)
+//	shaide-server -> KC-MCP    GatewayToken  (plus a context signed with ContextSigningKey)
+//	KC-MCP        -> KC        ScopedToken   (scoped search only)
+//	KC            -> server    EmbeddingUsername/EmbeddingPassword (an ordinary user account)
+//
+// Only shaide-server receives ContextSigningKey. KC and KC-MCP verify with
+// ContextPublicKey.
+package knowledgecenter
+
+import (
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/json"
+	"encoding/pem"
+	"errors"
+	"fmt"
+	"sort"
+	"strings"
+	"unicode"
+)
+
+// Upstream image names, as the image manifest lists them. They key the
+// Images map both stacks take, which the installer fills with Harbor
+// references.
+const (
+	ImageName    = "axem-solutions/shaide_knowledge_center"
+	MCPImageName = "axem-solutions/shaide_knowledge_center_mcp"
+)
+
+// Kubernetes namespaces. They are fixed: KC-MCP's network policy admits KC
+// callers from Namespace, and shaide-server discovers MCP servers in
+// MCPNamespace.
+const (
+	Namespace    = "app-shaide"
+	MCPNamespace = "app-mcp"
+)
+
+// In-cluster names and addresses.
+const (
+	ServiceName    = "knowledge-center"
+	MCPServiceName = "kc-mcp"
+	Port           = 8080
+	MCPPort        = 8080
+
+	// HealthPath answers once the KC HTTP listener is up. It does not check
+	// RustFS, Qdrant or the embedding account.
+	HealthPath = "/v1/health"
+)
+
+// Collection-context settings. shaide-server signs a short-lived context for
+// each KC-MCP request; KC-MCP and KC verify it against these values.
+const (
+	// ServerID is the MCP server id clients use in
+	// /v1/mcp/proxy/{ServerID}/mcp. KC-MCP's discovery annotation and the
+	// signed target both carry it.
+	ServerID    = "knowledge-center"
+	Issuer      = "shaide-platform"
+	KeyID       = "kc-context-v1"
+	KCAudience  = "kc:" + ServerID
+	MCPAudience = "kc-mcp:" + ServerID
+)
+
+// MCPURL is KC-MCP's stable Service origin. shaide-server only forwards a
+// signed request when the discovered URL is this origin.
+func MCPURL() string {
+	return fmt.Sprintf("http://%s.%s.svc.cluster.local:%d", MCPServiceName, MCPNamespace, MCPPort)
+}
+
+// MCPHost is the Host header KC-MCP receives from shaide-server.
+func MCPHost() string {
+	return fmt.Sprintf("%s.%s.svc.cluster.local", MCPServiceName, MCPNamespace)
+}
+
+// URL is where KC-MCP reaches KC across namespaces.
+func URL() string {
+	return fmt.Sprintf("http://%s.%s.svc.cluster.local:%d", ServiceName, Namespace, Port)
+}
+
+// LocalURL is where shaide-server reaches KC inside app-shaide.
+func LocalURL() string {
+	return fmt.Sprintf("http://%s:%d", ServiceName, Port)
+}
+
+// File names of the mounted secrets, and where they are mounted.
+const (
+	SecretMountPath      = "/run/secrets/kc-context"
+	PublicKeyFile        = "public.pem"
+	SigningKeyFile       = "private.pem"
+	GatewayTokenFile     = "gateway_token"
+	ScopedTokenFile      = "scoped_token"
+	SigningKeyFilePath   = SecretMountPath + "/" + SigningKeyFile
+	PublicKeyFilePath    = SecretMountPath + "/" + PublicKeyFile
+	GatewayTokenFilePath = SecretMountPath + "/" + GatewayTokenFile
+	ScopedTokenFilePath  = SecretMountPath + "/" + ScopedTokenFile
+)
+
+// RuntimeUID is the user and group both KC images run as.
+const RuntimeUID = 10001
+
+// ContextTarget is one entry of shaide-server's
+// MCP_COLLECTION_CONTEXT_TARGETS. The server rejects unknown fields.
+type ContextTarget struct {
+	ServerID         string `json:"server_id"`
+	URL              string `json:"url"`
+	Issuer           string `json:"issuer"`
+	KCAudience       string `json:"kc_audience"`
+	KID              string `json:"kid"`
+	SigningKeyFile   string `json:"signing_key_file"`
+	GatewayTokenFile string `json:"gateway_token_file"`
+}
+
+// ContextTargetsJSON is the MCP_COLLECTION_CONTEXT_TARGETS value: KC-MCP is
+// the only target.
+func ContextTargetsJSON() string {
+	data, _ := json.Marshal([]ContextTarget{{
+		ServerID:         ServerID,
+		URL:              MCPURL(),
+		Issuer:           Issuer,
+		KCAudience:       KCAudience,
+		KID:              KeyID,
+		SigningKeyFile:   SigningKeyFilePath,
+		GatewayTokenFile: GatewayTokenFilePath,
+	}})
+	return string(data)
+}
+
+// Credentials are generated by the installer once and passed unchanged to
+// both stacks on every run. app-mcp reads only GatewayToken, ScopedToken and
+// ContextPublicKey.
+type Credentials struct {
+	// InternalToken authenticates shaide-server to KC. At least 32
+	// characters, no whitespace.
+	InternalToken string
+	// WebhookToken authenticates RustFS object notifications to
+	// shaide-server. At least 32 characters, no whitespace.
+	WebhookToken string
+	// GatewayToken authenticates shaide-server to KC-MCP. Unpadded
+	// base64url of at least 32 random bytes.
+	GatewayToken string
+	// ScopedToken authenticates KC-MCP to KC's scoped search. Unpadded
+	// base64url of at least 32 random bytes.
+	ScopedToken string
+	// ContextSigningKey is the RSA private key (PEM, 2048 to 8192 bits)
+	// shaide-server signs collection contexts with.
+	ContextSigningKey string
+	// ContextPublicKey is the matching public key (PEM).
+	ContextPublicKey string
+	// EmbeddingUsername and EmbeddingPassword sign KC in to shaide-server to
+	// request embeddings. The account must exist as an ordinary user before
+	// KC indexes anything; the deployment does not create it.
+	EmbeddingUsername string
+	EmbeddingPassword string
+}
+
+// Field names, used in errors so a rejected value is never echoed.
+const (
+	FieldInternalToken     = "internal token"
+	FieldWebhookToken      = "webhook token"
+	FieldGatewayToken      = "gateway token"
+	FieldScopedToken       = "scoped token"
+	FieldContextSigningKey = "context signing key"
+	FieldContextPublicKey  = "context public key"
+	FieldEmbeddingUsername = "embedding username"
+	FieldEmbeddingPassword = "embedding password"
+)
+
+const minTokenLength = 32
+
+// ValidateServiceToken checks a token shaide-server compares verbatim:
+// KNOWLEDGE_CENTER_INTERNAL_TOKEN and S3_WEBHOOK_TOKEN.
+func ValidateServiceToken(value string) error {
+	if len(value) < minTokenLength {
+		return fmt.Errorf("must be at least %d characters", minTokenLength)
+	}
+	if strings.IndexFunc(value, unicode.IsSpace) >= 0 {
+		return errors.New("must not contain whitespace")
+	}
+	return nil
+}
+
+// ValidateHopToken checks a KC-MCP hop token: unpadded base64url that decodes
+// to at least 32 bytes, as shaide-server and KC-MCP both require.
+func ValidateHopToken(value string) error {
+	// Go's decoder skips CR and LF; the Rust decoders in shaide-server and
+	// KC-MCP reject them, so the value must not contain any.
+	if strings.ContainsAny(value, "\r\n") {
+		return errors.New("must be unpadded base64url")
+	}
+	decoded, err := base64.RawURLEncoding.Strict().DecodeString(value)
+	if err != nil {
+		return errors.New("must be unpadded base64url")
+	}
+	if len(decoded) < minTokenLength {
+		return fmt.Errorf("must decode to at least %d bytes", minTokenLength)
+	}
+	return nil
+}
+
+// MaxGatewayTokenFileBytes is shaide-server's gateway_token_file byte ceiling.
+const MaxGatewayTokenFileBytes = 4096
+
+// ValidateGatewayToken checks the hop format and the encoded file size. The
+// scoped token has no corresponding server file limit, so ValidateHopToken
+// deliberately keeps its own contract.
+func ValidateGatewayToken(value string) error {
+	if len(value) > MaxGatewayTokenFileBytes {
+		return fmt.Errorf("must be at most %d bytes", MaxGatewayTokenFileBytes)
+	}
+	return ValidateHopToken(value)
+}
+
+// ValidateSigningKey checks the private key is RSA PEM of a size shaide-server
+// can sign with.
+func ValidateSigningKey(value string) error {
+	_, err := parsePrivateKey(value)
+	return err
+}
+
+// ValidatePublicKey checks the public key is RSA PEM of a size KC accepts.
+func ValidatePublicKey(value string) error {
+	_, err := parsePublicKey(value)
+	return err
+}
+
+// ValidateUsername checks the embedding account name.
+func ValidateUsername(value string) error {
+	if strings.TrimSpace(value) == "" {
+		return errors.New("must not be empty")
+	}
+	if strings.IndexFunc(value, unicode.IsSpace) >= 0 {
+		return errors.New("must not contain whitespace")
+	}
+	return nil
+}
+
+// ValidatePassword checks the embedding account password.
+func ValidatePassword(value string) error {
+	if value == "" {
+		return errors.New("must not be empty")
+	}
+	return nil
+}
+
+// ValidateKeyPair checks the public key belongs to the private key.
+func ValidateKeyPair(private, public string) error {
+	key, err := parsePrivateKey(private)
+	if err != nil {
+		return fmt.Errorf("%s: %w", FieldContextSigningKey, err)
+	}
+	pub, err := parsePublicKey(public)
+	if err != nil {
+		return fmt.Errorf("%s: %w", FieldContextPublicKey, err)
+	}
+	if !key.PublicKey.Equal(pub) {
+		return fmt.Errorf("%s does not match %s", FieldContextPublicKey, FieldContextSigningKey)
+	}
+	return nil
+}
+
+// ValidateDistinct rejects reuse of one value for two credentials. Each hop
+// is authenticated separately, so a leaked token must not open another hop.
+// Empty values are skipped; required-ness is checked elsewhere.
+func ValidateDistinct(values map[string]string) error {
+	seen := map[string]string{}
+	names := make([]string, 0, len(values))
+	for name := range values {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		value := values[name]
+		if value == "" {
+			continue
+		}
+		if other, ok := seen[value]; ok {
+			return fmt.Errorf("%s and %s must differ", other, name)
+		}
+		seen[value] = name
+	}
+	return nil
+}
+
+func parsePrivateKey(value string) (*rsa.PrivateKey, error) {
+	// shaide-server bounds the original encoded signing file, before parsing
+	// or trimming any whitespace. Accepted resource bytes remain unchanged.
+	if len(value) > 32768 {
+		return nil, errors.New("must be at most 32768 bytes")
+	}
+
+	// Match shaide-server's envelope parser: the delimiter begins at byte
+	// zero; only whitespace may surround the DER body or follow the end.
+	// Decode a local copy for validation without rewriting the supplied PEM.
+	kind := "PRIVATE KEY"
+	if !strings.HasPrefix(value, "-----BEGIN PRIVATE KEY-----") {
+		kind = "RSA PRIVATE KEY"
+	}
+	begin, end := "-----BEGIN "+kind+"-----", "-----END "+kind+"-----"
+	body, ok := strings.CutPrefix(value, begin)
+	if !ok {
+		return nil, errors.New("must be a PEM-encoded RSA private key")
+	}
+	body, ok = strings.CutSuffix(strings.TrimSpace(body), end)
+	if !ok {
+		return nil, errors.New("must be a PEM-encoded RSA private key")
+	}
+	der, err := base64.StdEncoding.Strict().DecodeString(strings.Join(strings.Fields(body), ""))
+	if err != nil {
+		return nil, errors.New("must be a PEM-encoded RSA private key")
+	}
+	block := &pem.Block{Type: kind, Bytes: der}
+	var key *rsa.PrivateKey
+	switch block.Type {
+	case "PRIVATE KEY":
+		parsed, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+		if err != nil {
+			return nil, errors.New("must be a PEM-encoded RSA private key")
+		}
+		rsaKey, ok := parsed.(*rsa.PrivateKey)
+		if !ok {
+			return nil, errors.New("must be an RSA key")
+		}
+		key = rsaKey
+	case "RSA PRIVATE KEY":
+		parsed, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+		if err != nil {
+			return nil, errors.New("must be a PEM-encoded RSA private key")
+		}
+		key = parsed
+	default:
+		return nil, errors.New("must be a PEM-encoded RSA private key")
+	}
+	if err := checkSize(key.N.BitLen()); err != nil {
+		return nil, err
+	}
+	return key, nil
+}
+
+func parsePublicKey(value string) (*rsa.PublicKey, error) {
+	block, _ := pem.Decode([]byte(value))
+	if block == nil {
+		return nil, errors.New("must be a PEM-encoded RSA public key")
+	}
+	var key *rsa.PublicKey
+	switch block.Type {
+	case "PUBLIC KEY":
+		parsed, err := x509.ParsePKIXPublicKey(block.Bytes)
+		if err != nil {
+			return nil, errors.New("must be a PEM-encoded RSA public key")
+		}
+		rsaKey, ok := parsed.(*rsa.PublicKey)
+		if !ok {
+			return nil, errors.New("must be an RSA key")
+		}
+		key = rsaKey
+	case "RSA PUBLIC KEY":
+		parsed, err := x509.ParsePKCS1PublicKey(block.Bytes)
+		if err != nil {
+			return nil, errors.New("must be a PEM-encoded RSA public key")
+		}
+		key = parsed
+	default:
+		return nil, errors.New("must be a PEM-encoded RSA public key")
+	}
+	if err := checkSize(key.N.BitLen()); err != nil {
+		return nil, err
+	}
+	return key, nil
+}
+
+// shaide-server signs with 2048- to 8192-bit keys; KC verifies 2048 bits and
+// up.
+func checkSize(bits int) error {
+	if bits < 2048 || bits > 8192 {
+		return errors.New("must be 2048 to 8192 bits")
+	}
+	return nil
+}

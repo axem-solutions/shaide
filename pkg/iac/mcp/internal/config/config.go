@@ -3,6 +3,7 @@ package appconfig
 import (
 	"fmt"
 
+	"github.com/axem-solutions/ai_platform/pkg/iac/knowledgecenter"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 	pulumiconfig "github.com/pulumi/pulumi/sdk/v3/go/pulumi/config"
 )
@@ -43,6 +44,8 @@ type SecretEnvVar struct {
 
 // Config is the typed view of Pulumi stack config used by this stack.
 type Values struct {
+	datasourceLoadError error
+
 	Namespace                string   // mcp namespace
 	ShaideNamespace          string   // app-shaide namespace — where the Shaide Server ServiceAccount lives
 	ShaideServiceAccountName string   // Shaide Server ServiceAccount name in ShaideNamespace; must match app_shaide stack config
@@ -75,15 +78,92 @@ type Values struct {
 	LivenessProbeTimeout           int // probe timeout in seconds; default 5
 	LivenessProbeFailureThreshold  int // consecutive failures before pod is restarted; default 3
 
-	Datasources []Datasource // one entry per MCP data source to deploy
+	Datasources []Datasource // one entry per MCP data source to deploy; optional with KC-MCP
+
+	// KnowledgeCenterEnabled runs KC-MCP, the Knowledge Center's MCP server.
+	KnowledgeCenterEnabled bool
+	KnowledgeCenterMCP     KnowledgeCenterMCPValues
+	Images                 Images
+	Placement              []PlacementTerm // nodes KC-MCP prefers (soft affinity)
 
 	Secrets AppSecrets
+}
+
+type Images struct {
+	KnowledgeCenterMCP string // only set when the Knowledge Center is installed
+}
+
+// PlacementTerm admits the nodes whose Key label is one of Values.
+type PlacementTerm struct {
+	Key    string   `json:"key"`
+	Values []string `json:"values"`
+}
+
+// Resources are a container's requests and limits.
+type Resources struct {
+	CPURequest    string
+	MemoryRequest string
+	CPULimit      string
+	MemoryLimit   string
+}
+
+type KnowledgeCenterMCPValues struct {
+	Resources Resources
 }
 
 type AppSecrets struct {
 	AtlassianOAuthClientSecret    pulumi.StringOutput
 	HasAtlassianOAuthClientSecret bool
+
+	// KC-MCP credentials, set only with the Knowledge Center. KC-MCP never
+	// holds the signing key, the KC internal token or storage credentials.
+	KCGatewayToken     pulumi.StringOutput
+	KCScopedToken      pulumi.StringOutput
+	KCContextPublicKey pulumi.StringOutput
 }
+
+// Validate rejects combinations the deployment cannot serve. It runs on every
+// load, so a direct pulumi up is checked as well as an installer run.
+func (v Values) Validate() error {
+	if v.datasourceLoadError != nil {
+		return fmt.Errorf("%s:%s must be a valid datasource list", Namespace, KeyDatasources)
+	}
+	if !v.KnowledgeCenterEnabled && len(v.Datasources) == 0 {
+		return fmt.Errorf("%s:%s is required when KC-MCP is disabled", Namespace, KeyDatasources)
+	}
+
+	if !v.KnowledgeCenterEnabled {
+		return nil
+	}
+
+	// shaide-server signs for, and discovers, KC-MCP at its app-mcp Service
+	// origin. A stack pinned to another namespace is not moved silently.
+	if v.Namespace != knowledgecenter.MCPNamespace {
+		return fmt.Errorf(
+			"KC-MCP runs in namespace %q, but this stack deploys to %q; "+
+				"move its MCP servers and set %s:%s=%s deliberately",
+			knowledgecenter.MCPNamespace, v.Namespace, Namespace, KeyNamespace, knowledgecenter.MCPNamespace,
+		)
+	}
+	// KC-MCP admits shaide-server and reaches KC in app-shaide.
+	if v.ShaideNamespace != knowledgecenter.Namespace {
+		return fmt.Errorf("KC-MCP expects shaide-server and KC in namespace %q, not %q", knowledgecenter.Namespace, v.ShaideNamespace)
+	}
+	if v.Images.KnowledgeCenterMCP == "" {
+		return fmt.Errorf("%s is required when the Knowledge Center is installed", KeyKnowledgeCenterMCPImage)
+	}
+
+	return nil
+}
+
+// KC-MCP resource defaults: a thin proxy that verifies a context and
+// forwards one search to KC.
+const (
+	DefaultKCMCPCPURequest    = "50m"
+	DefaultKCMCPMemoryRequest = "64Mi"
+	DefaultKCMCPCPULimit      = "1"
+	DefaultKCMCPMemoryLimit   = "256Mi"
+)
 
 func getWithDefault(cfg *pulumiconfig.Config, key, fallback string) string {
 	v := cfg.Get(key)
@@ -105,12 +185,20 @@ func getIntOrDefault(cfg *pulumiconfig.Config, key string, fallback int) int {
 // definition, then applies the deployment defaults the definition does not
 // write, so a direct pulumi up behaves like an installer-driven one.
 func (c Config) Load(ctx *pulumi.Context) (Values, error) {
+	if err := validateLoadedKnowledgeCenter(ctx); err != nil {
+		return Values{}, err
+	}
+
 	values, err := c.definition.Load(ctx)
 	if err != nil {
 		return Values{}, fmt.Errorf("load stack config: %w", err)
 	}
 
 	applyDefaults(&values)
+
+	if err := values.Validate(); err != nil {
+		return Values{}, err
+	}
 
 	return values, nil
 }
@@ -120,6 +208,11 @@ func applyDefaults(cfg *Values) {
 		field *string
 		value string
 	}{
+		{&cfg.Namespace, DefaultNamespace},
+		{&cfg.KnowledgeCenterMCP.Resources.CPURequest, DefaultKCMCPCPURequest},
+		{&cfg.KnowledgeCenterMCP.Resources.MemoryRequest, DefaultKCMCPMemoryRequest},
+		{&cfg.KnowledgeCenterMCP.Resources.CPULimit, DefaultKCMCPCPULimit},
+		{&cfg.KnowledgeCenterMCP.Resources.MemoryLimit, DefaultKCMCPMemoryLimit},
 		{&cfg.NodeSelectorKey, "nodegroup"},
 		{&cfg.ImagePullPolicy, "Always"},
 		{&cfg.HealthPath, "/health"},

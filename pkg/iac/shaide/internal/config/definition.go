@@ -1,8 +1,10 @@
 package appconfig
 
 import (
+	"fmt"
 	"strings"
 
+	"github.com/axem-solutions/ai_platform/pkg/iac/knowledgecenter"
 	"github.com/axem-solutions/ai_platform/pkg/stack"
 	stackconfig "github.com/axem-solutions/ai_platform/pkg/stack/config"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
@@ -22,12 +24,13 @@ const (
 	KeyNamespace      stackconfig.Key = "namespace"
 	KeyServiceAccount stackconfig.Key = "shaideServiceAccountName"
 
-	KeyShaideServerImage stackconfig.Key = "shaideServerImage"
-	KeyControlPanelImage stackconfig.Key = "controlPanelImage"
-	KeyWebappImage       stackconfig.Key = "webappImage"
-	KeyRustfsImage       stackconfig.Key = "rustfsImage"
-	KeyQdrantImage       stackconfig.Key = "qdrantImage"
-	KeyBusyboxImage      stackconfig.Key = "busyboxImage"
+	KeyShaideServerImage    stackconfig.Key = "shaideServerImage"
+	KeyControlPanelImage    stackconfig.Key = "controlPanelImage"
+	KeyWebappImage          stackconfig.Key = "webappImage"
+	KeyRustfsImage          stackconfig.Key = "rustfsImage"
+	KeyQdrantImage          stackconfig.Key = "qdrantImage"
+	KeyBusyboxImage         stackconfig.Key = "busyboxImage"
+	KeyKnowledgeCenterImage stackconfig.Key = "knowledgeCenterImage"
 
 	KeyControlPanelService stackconfig.Key = "controlPanelService"
 	KeyWebappService       stackconfig.Key = "webappService"
@@ -39,19 +42,18 @@ const (
 	KeyGatewayName      stackconfig.Key = "gatewayName"
 	KeyGatewayNamespace stackconfig.Key = "gatewayNamespace"
 
-	KeyShaideServerUiFqdn       stackconfig.Key = "shaideServerUiFqdn"
-	KeyShaideServerUiPort       stackconfig.Key = "shaideServerUiPort"
-	KeyDatabaseURL              stackconfig.Key = "databaseUrl"
-	KeyS3User                   stackconfig.Key = "s3User"
-	KeyShaideServerS3Fqdn       stackconfig.Key = "shaideServerS3Fqdn"
-	KeyShaideServerS3Port       stackconfig.Key = "shaideServerS3Port"
-	KeyS3UploadProxyRoutePrefix stackconfig.Key = "s3UploadProxyRoutePrefix"
-	KeyRustfsWebhookArn         stackconfig.Key = "rustfsWebhookArn"
-	KeyVectorDBURL              stackconfig.Key = "vectorDBUrl"
-	KeyMCPNamespace             stackconfig.Key = "mcpNamespace"
-	KeyRustLibBacktrace         stackconfig.Key = "rustLibBacktrace"
-	KeyRustSpantrace            stackconfig.Key = "rustSpantrace"
-	KeyTrial                    stackconfig.Key = "trial"
+	KeyShaideServerUiFqdn stackconfig.Key = "shaideServerUiFqdn"
+	KeyShaideServerUiPort stackconfig.Key = "shaideServerUiPort"
+	KeyDatabaseURL        stackconfig.Key = "databaseUrl"
+	KeyS3User             stackconfig.Key = "s3User"
+	KeyShaideServerS3Fqdn stackconfig.Key = "shaideServerS3Fqdn"
+	KeyShaideServerS3Port stackconfig.Key = "shaideServerS3Port"
+	KeyRustfsWebhookArn   stackconfig.Key = "rustfsWebhookArn"
+	KeyVectorDBURL        stackconfig.Key = "vectorDBUrl"
+	KeyMCPNamespace       stackconfig.Key = "mcpNamespace"
+	KeyRustLibBacktrace   stackconfig.Key = "rustLibBacktrace"
+	KeyRustSpantrace      stackconfig.Key = "rustSpantrace"
+	KeyTrial              stackconfig.Key = "trial"
 
 	KeyRustfsConsoleEnabled  stackconfig.Key = "rustfsConsoleEnabled"
 	KeyRustfsWebhookEnable   stackconfig.Key = "rustfsNotifyWebhookEnableShaide"
@@ -63,6 +65,21 @@ const (
 	KeyJWTSecret     stackconfig.Key = "jwtSecret"
 	KeySessionSecret stackconfig.Key = "sessionSecret"
 
+	KeyKCInternalToken     stackconfig.Key = "kcInternalToken"
+	KeyKCWebhookToken      stackconfig.Key = "kcWebhookToken"
+	KeyKCGatewayToken      stackconfig.Key = "kcGatewayToken"
+	KeyKCScopedToken       stackconfig.Key = "kcScopedToken"
+	KeyKCContextSigningKey stackconfig.Key = "kcContextSigningKey"
+	KeyKCContextPublicKey  stackconfig.Key = "kcContextPublicKey"
+	KeyKCEmbeddingUsername stackconfig.Key = "kcEmbeddingUsername"
+	KeyKCEmbeddingPassword stackconfig.Key = "kcEmbeddingPassword"
+
+	KeyKnowledgeCenterCPURequest    stackconfig.Key = "knowledgeCenterCpuRequest"
+	KeyKnowledgeCenterMemoryRequest stackconfig.Key = "knowledgeCenterMemoryRequest"
+	KeyKnowledgeCenterCPULimit      stackconfig.Key = "knowledgeCenterCpuLimit"
+	KeyKnowledgeCenterMemoryLimit   stackconfig.Key = "knowledgeCenterMemoryLimit"
+	KeyRustfsClientNamespaces       stackconfig.Key = "rustfsClientNamespaces"
+
 	KeyPlacement                stackconfig.Key = "placement"
 	KeyNodeSelectorKey          stackconfig.Key = "nodeSelectorKey"
 	KeyNodeSelector             stackconfig.Key = "nodeSelector"
@@ -71,6 +88,7 @@ const (
 	KeyNodeSelectorWebapp       stackconfig.Key = "nodeSelectorWebapp"
 	KeyNodeSelectorRustfs       stackconfig.Key = "nodeSelectorRustfs"
 	KeyNodeSelectorQdrant       stackconfig.Key = "nodeSelectorQdrant"
+	KeyNodeSelectorKC           stackconfig.Key = "nodeSelectorKnowledgeCenter"
 
 	KeyStorageClassName       stackconfig.Key = "storageClassName"
 	KeyPVNodeHostname         stackconfig.Key = "pvNodeHostname"
@@ -85,11 +103,19 @@ const (
 // address each other inside the cluster, so they are the same wherever the
 // platform is installed.
 const (
-	DefaultNamespace        = "app-shaide"
-	DefaultServiceAccount   = "shaide-server"
-	DefaultMCPNamespace     = "mcp-gateway"
-	DefaultGatewayName      = "shared-gateway"
-	DefaultGatewayNamespace = "gateway-system"
+	DefaultNamespace      = "app-shaide"
+	DefaultServiceAccount = "shaide-server"
+	DefaultGatewayName    = "shared-gateway"
+
+	// DefaultMCPNamespace is where shaide-server discovers MCP servers, and
+	// where KC-MCP runs. It is a program default rather than a written one,
+	// so a stack that pinned the former mcp-gateway namespace keeps it.
+	DefaultMCPNamespace = knowledgecenter.MCPNamespace
+
+	// DefaultRustfsClientNamespace holds Loki, which keeps its chunks in
+	// RustFS. It is admitted when KC restricts RustFS ingress.
+	DefaultRustfsClientNamespace = "monitoring"
+	DefaultGatewayNamespace      = "gateway-system"
 
 	DefaultControlPanelService = "control-panel"
 	DefaultWebappService       = "webapp"
@@ -99,15 +125,14 @@ const (
 	// WebAppPort is where the webapp listens and its Service is exposed.
 	WebAppPort = 8787
 
-	DefaultShaideServerUiFqdn       = "control-panel"
-	DefaultShaideServerUiPort       = "3000"
-	DefaultShaideServerS3Fqdn       = "rustfs"
-	DefaultShaideServerS3Port       = "9000"
-	DefaultS3User                   = "rustfsuser"
-	DefaultS3UploadProxyRoutePrefix = "/s3"
-	DefaultVectorDBURL              = "http://qdrant:6334"
-	DefaultDatabaseURL              = "sqlite:///root/.config/axem/shaide/db/shaide.sqlite"
-	DefaultRustfsWebhookArn         = "arn:rustfs:sqs:eu-central-1:shaide:webhook"
+	DefaultShaideServerUiFqdn = "control-panel"
+	DefaultShaideServerUiPort = "3000"
+	DefaultShaideServerS3Fqdn = "rustfs"
+	DefaultShaideServerS3Port = "9000"
+	DefaultS3User             = "rustfsuser"
+	DefaultVectorDBURL        = "http://qdrant:6334"
+	DefaultDatabaseURL        = "sqlite:///root/.config/axem/shaide/db/shaide.sqlite"
+	DefaultRustfsWebhookArn   = "arn:rustfs:sqs:eu-central-1:shaide:webhook"
 
 	DefaultRustfsWebhookEnable   = "on"
 	DefaultRustfsWebhookEndpoint = "http://shaide-server/v1/object-storage/event"
@@ -127,6 +152,8 @@ const (
 	RustfsImageName       = "rustfs/rustfs"
 	QdrantImageName       = "qdrant/qdrant"
 	BusyboxImageName      = "busybox"
+
+	KnowledgeCenterImageName = knowledgecenter.ImageName
 )
 
 // Sources are app-shaide values the installer already knows. An empty value is
@@ -146,6 +173,15 @@ type Sources struct {
 	// it from. It may hold images other stacks deploy; only the ones named
 	// above are read.
 	Images map[string]string
+
+	// KnowledgeCenterEnabled is the operator's single answer to whether the
+	// Knowledge Center (KC and KC-MCP) is installed. app-mcp receives the
+	// same answer. Nil leaves it out.
+	KnowledgeCenterEnabled *bool
+
+	// KnowledgeCenter are the credentials the installer generated once and
+	// keeps. They are read only when the Knowledge Center is installed.
+	KnowledgeCenter knowledgecenter.Credentials
 }
 
 type Config struct {
@@ -175,11 +211,13 @@ func newDefinition(opts stack.Options, sources Sources) stackconfig.Config[Value
 	entries = append(entries, imageEntries(sources)...)
 	entries = append(entries, serviceEntries()...)
 	entries = append(entries, secretEntries()...)
+	entries = append(entries, knowledgeCenterEntries(sources.KnowledgeCenter)...)
 	entries = append(entries, optionalEntries()...)
 
 	return stackconfig.Config[Values]{
 		Namespace: Namespace,
 		Entries:   entries,
+		Checks:    []stackconfig.Check{checkKnowledgeCenterCredentials},
 	}
 }
 
@@ -235,6 +273,16 @@ func runtimeEntries(opts stack.Options, sources Sources) []stackconfig.Entry[Val
 			Source: stackconfig.Source{Value: optionalBool(sources.WebAppEnabled), Default: false},
 			Setter: func(cfg *Values, root *pulumiconfig.Config) {
 				cfg.WebAppEnabled = root.GetBool(KeyWebappEnabled.String())
+			},
+		},
+		{
+			// Declared before the images and credentials, which are required
+			// only when the Knowledge Center is installed. The control panel
+			// shows the answer through KNOWLEDGE_CENTER_ENABLED.
+			Key:    KeyKnowledgeCenterEnabled,
+			Source: stackconfig.Source{Value: optionalBool(sources.KnowledgeCenterEnabled), Default: false},
+			Setter: func(cfg *Values, root *pulumiconfig.Config) {
+				cfg.KnowledgeCenterEnabled = root.GetBool(KeyKnowledgeCenterEnabled.String())
 			},
 		},
 		{
@@ -309,6 +357,14 @@ func imageEntries(sources Sources) []stackconfig.Entry[Values] {
 				cfg.Images.Busybox = root.Get(KeyBusyboxImage.String())
 			},
 		},
+		{
+			Key:    KeyKnowledgeCenterImage,
+			Source: stackconfig.Source{Value: optionalSource(sources.Images[KnowledgeCenterImageName])},
+			Policy: stackconfig.Policy{Required: true, When: stackconfig.WhenEquals(KeyKnowledgeCenterEnabled, true)},
+			Setter: func(cfg *Values, root *pulumiconfig.Config) {
+				cfg.Images.KnowledgeCenter = root.Get(KeyKnowledgeCenterImage.String())
+			},
+		},
 	}
 }
 
@@ -359,11 +415,9 @@ func serviceEntries() []stackconfig.Entry[Values] {
 		{KeyShaideServerS3Fqdn, DefaultShaideServerS3Fqdn, true, func(c *Values, v string) { c.ShaideEnv.S3FQDN = v }},
 		{KeyShaideServerS3Port, DefaultShaideServerS3Port, true, func(c *Values, v string) { c.ShaideEnv.S3Port = v }},
 		{KeyS3User, DefaultS3User, true, func(c *Values, v string) { c.ShaideEnv.S3User = v }},
-		{KeyS3UploadProxyRoutePrefix, DefaultS3UploadProxyRoutePrefix, true, func(c *Values, v string) { c.ShaideEnv.S3UploadProxyRoutePrefix = v }},
 		{KeyVectorDBURL, DefaultVectorDBURL, true, func(c *Values, v string) { c.ShaideEnv.VectorDBUrl = v }},
 		{KeyDatabaseURL, DefaultDatabaseURL, true, func(c *Values, v string) { c.ShaideEnv.DatabaseURL = v }},
 		{KeyRustfsWebhookArn, DefaultRustfsWebhookArn, true, func(c *Values, v string) { c.ShaideEnv.RustFSWebhookARN = v }},
-		{KeyMCPNamespace, DefaultMCPNamespace, false, func(c *Values, v string) { c.ShaideEnv.MCPNamespace = v }},
 		{KeyRustLibBacktrace, DefaultRustLibBacktrace, false, func(c *Values, v string) { c.ShaideEnv.RustLibBacktrace = v }},
 		{KeyRustSpantrace, DefaultRustSpantrace, false, func(c *Values, v string) { c.ShaideEnv.RustSpantrace = v }},
 		{KeyTrial, DefaultTrial, false, func(c *Values, v string) { c.ShaideEnv.Trial = v }},
@@ -427,6 +481,170 @@ func secretEntries() []stackconfig.Entry[Values] {
 	return entries
 }
 
+// knowledgeCenterEntries carry the credentials the installer generated for
+// the Knowledge Center. They are never asked for and never generated here:
+// an enabled KC without them fails at resolve time, and a declined KC
+// neither needs nor writes them.
+func knowledgeCenterEntries(c knowledgecenter.Credentials) []stackconfig.Entry[Values] {
+	whenEnabled := stackconfig.WhenEquals(KeyKnowledgeCenterEnabled, true)
+
+	items := []struct {
+		key      stackconfig.Key
+		value    string
+		secret   bool
+		validate func(string) error
+		set      func(*Values, *pulumiconfig.Config, string)
+	}{
+		{KeyKCInternalToken, c.InternalToken, true, knowledgecenter.ValidateServiceToken, secretSetter(func(v *Values, s pulumi.StringOutput) { v.Secrets.KCInternalToken = s })},
+		{KeyKCWebhookToken, c.WebhookToken, true, knowledgecenter.ValidateServiceToken, secretSetter(func(v *Values, s pulumi.StringOutput) { v.Secrets.KCWebhookToken = s })},
+		{KeyKCGatewayToken, c.GatewayToken, true, knowledgecenter.ValidateGatewayToken, secretSetter(func(v *Values, s pulumi.StringOutput) { v.Secrets.KCGatewayToken = s })},
+		{KeyKCScopedToken, c.ScopedToken, true, knowledgecenter.ValidateHopToken, secretSetter(func(v *Values, s pulumi.StringOutput) { v.Secrets.KCScopedToken = s })},
+		{KeyKCContextSigningKey, c.ContextSigningKey, true, knowledgecenter.ValidateSigningKey, secretSetter(func(v *Values, s pulumi.StringOutput) { v.Secrets.KCContextSigningKey = s })},
+		{KeyKCContextPublicKey, c.ContextPublicKey, true, knowledgecenter.ValidatePublicKey, secretSetter(func(v *Values, s pulumi.StringOutput) { v.Secrets.KCContextPublicKey = s })},
+		{KeyKCEmbeddingPassword, c.EmbeddingPassword, true, knowledgecenter.ValidatePassword, secretSetter(func(v *Values, s pulumi.StringOutput) { v.Secrets.KCEmbeddingPassword = s })},
+		{KeyKCEmbeddingUsername, c.EmbeddingUsername, false, knowledgecenter.ValidateUsername, func(v *Values, root *pulumiconfig.Config, key string) {
+			v.KnowledgeCenter.EmbeddingUsername = root.Get(key)
+		}},
+	}
+
+	entries := make([]stackconfig.Entry[Values], 0, len(items))
+	for _, item := range items {
+		key, set := item.key, item.set
+		entries = append(entries, stackconfig.Entry[Values]{
+			Key:    key,
+			Source: stackconfig.Source{Value: optionalSecretSource(item.value)},
+			Policy: stackconfig.Policy{
+				Required: true,
+				Secret:   item.secret,
+				When:     whenEnabled,
+				Validate: item.validate,
+			},
+			Setter: func(cfg *Values, root *pulumiconfig.Config) {
+				set(cfg, root, key.String())
+			},
+		})
+	}
+
+	return entries
+}
+
+// secretSetter reads a secret only when it is present, so a declined KC
+// loads without it.
+func secretSetter(assign func(*Values, pulumi.StringOutput)) func(*Values, *pulumiconfig.Config, string) {
+	return func(v *Values, root *pulumiconfig.Config, key string) {
+		if value, err := root.TrySecret(key); err == nil {
+			assign(v, value)
+		}
+	}
+}
+
+// optionalSecretSource keeps a secret's exact bytes and only drops an absent
+// value; a password may legitimately contain surrounding spaces.
+func optionalSecretSource(value string) any {
+	if value == "" {
+		return nil
+	}
+
+	return value
+}
+
+// validateLoadedKnowledgeCenter checks the exact decrypted stack config bytes
+// synchronously before deployment. Plaintext stays local to validation; the
+// entry setters still retain Secret outputs for all resource inputs.
+func validateLoadedKnowledgeCenter(ctx *pulumi.Context) error {
+	root := pulumiconfig.New(ctx, Namespace)
+	if !root.GetBool(KeyKnowledgeCenterEnabled.String()) {
+		return nil
+	}
+	values := stackconfig.Values{KeyKnowledgeCenterEnabled: true}
+	for _, entry := range knowledgeCenterEntries(knowledgecenter.Credentials{}) {
+		value, ok := ctx.GetConfig(Namespace + ":" + entry.Key.String())
+		if !ok || value == "" {
+			return fmt.Errorf("%s:%s is required", Namespace, entry.Key)
+		}
+		if entry.Policy.Validate != nil {
+			if err := entry.Policy.Validate(value); err != nil {
+				return fmt.Errorf("%s: %w", entry.Key, err)
+			}
+		}
+		values[entry.Key] = value
+	}
+	for _, key := range []stackconfig.Key{KeyJWTSecret, KeyAdminAuthKey} {
+		values[key], _ = ctx.GetConfig(Namespace + ":" + key.String())
+	}
+	return checkKnowledgeCenterCredentials(values)
+}
+
+// checkKnowledgeCenterCredentials applies the rules that span entries. It
+// also repeats the format checks on the exact values written, since
+// Policy.Validate sees them trimmed. Errors name fields, never values.
+func checkKnowledgeCenterCredentials(values stackconfig.Values) error {
+	if values[KeyKnowledgeCenterEnabled] != true {
+		return nil
+	}
+
+	text := func(key stackconfig.Key) string {
+		s, _ := values[key].(string)
+		return s
+	}
+
+	formats := []struct {
+		key   stackconfig.Key
+		check func(string) error
+	}{
+		{KeyKCInternalToken, knowledgecenter.ValidateServiceToken},
+		{KeyKCWebhookToken, knowledgecenter.ValidateServiceToken},
+		{KeyKCGatewayToken, knowledgecenter.ValidateGatewayToken},
+		{KeyKCScopedToken, knowledgecenter.ValidateHopToken},
+		{KeyKCEmbeddingUsername, knowledgecenter.ValidateUsername},
+	}
+	for _, format := range formats {
+		if err := format.check(text(format.key)); err != nil {
+			return fmt.Errorf("%s: %w", format.key, err)
+		}
+	}
+
+	// shaide-server requires a dedicated context signing key, including when
+	// the PEM and JWT secret differ only in surrounding whitespace.
+	signing, jwt := text(KeyKCContextSigningKey), text(KeyJWTSecret)
+	if signing == jwt || strings.TrimSpace(signing) == strings.TrimSpace(jwt) {
+		return fmt.Errorf("%s and %s must differ", KeyKCContextSigningKey, KeyJWTSecret)
+	}
+
+	if err := knowledgecenter.ValidateKeyPair(text(KeyKCContextSigningKey), text(KeyKCContextPublicKey)); err != nil {
+		return err
+	}
+
+	// Every hop has its own credential.
+	own := map[string]string{
+		KeyKCInternalToken.String():     text(KeyKCInternalToken),
+		KeyKCWebhookToken.String():      text(KeyKCWebhookToken),
+		KeyKCGatewayToken.String():      text(KeyKCGatewayToken),
+		KeyKCScopedToken.String():       text(KeyKCScopedToken),
+		KeyKCEmbeddingPassword.String(): text(KeyKCEmbeddingPassword),
+	}
+	if err := knowledgecenter.ValidateDistinct(own); err != nil {
+		return err
+	}
+
+	// None doubles as a core secret: shaide-server refuses KC tokens equal to
+	// JWT_SECRET, and the embedding account must not share the admin
+	// password. Core secrets are not compared with each other here.
+	for _, core := range []stackconfig.Key{KeyJWTSecret, KeyAdminAuthKey} {
+		value := text(core)
+		if value == "" {
+			continue
+		}
+		for name, kc := range own {
+			if kc == value {
+				return fmt.Errorf("%s and %s must differ", name, core)
+			}
+		}
+	}
+
+	return nil
+}
+
 // optionalEntries are per-deployment refinements. They are neither asked for
 // nor written, so the program's own defaults apply unless someone sets them by
 // hand in Pulumi.<stack>.yaml, which Resolve then leaves alone.
@@ -443,6 +661,12 @@ func optionalEntries() []stackconfig.Entry[Values] {
 		{KeyNodeSelectorWebapp, func(c *Values, v string) { c.NodeSelectorWebApp = v }},
 		{KeyNodeSelectorRustfs, func(c *Values, v string) { c.NodeSelectorRustfs = v }},
 		{KeyNodeSelectorQdrant, func(c *Values, v string) { c.NodeSelectorQdrant = v }},
+		{KeyNodeSelectorKC, func(c *Values, v string) { c.NodeSelectorKnowledgeCenter = v }},
+		{KeyMCPNamespace, func(c *Values, v string) { c.ShaideEnv.MCPNamespace = v }},
+		{KeyKnowledgeCenterCPURequest, func(c *Values, v string) { c.KnowledgeCenter.Resources.CPURequest = v }},
+		{KeyKnowledgeCenterMemoryRequest, func(c *Values, v string) { c.KnowledgeCenter.Resources.MemoryRequest = v }},
+		{KeyKnowledgeCenterCPULimit, func(c *Values, v string) { c.KnowledgeCenter.Resources.CPULimit = v }},
+		{KeyKnowledgeCenterMemoryLimit, func(c *Values, v string) { c.KnowledgeCenter.Resources.MemoryLimit = v }},
 		{KeyStorageClassName, func(c *Values, v string) { c.StorageClassName = v }},
 		{KeyPVNodeHostname, func(c *Values, v string) { c.PVNodeHostname = v }},
 		{KeyShaidePVSize, func(c *Values, v string) { c.ShaidePVSize = v }},
@@ -460,9 +684,11 @@ func optionalEntries() []stackconfig.Entry[Values] {
 
 	return append(entries,
 		stackconfig.Entry[Values]{
-			Key: KeyKnowledgeCenterEnabled,
+			// Namespaces whose pods may still reach RustFS once the Knowledge
+			// Center restricts its ingress. Default: monitoring (Loki).
+			Key: KeyRustfsClientNamespaces,
 			Setter: func(cfg *Values, root *pulumiconfig.Config) {
-				cfg.KnowledgeCenterEnabled = root.GetBool(KeyKnowledgeCenterEnabled.String())
+				_ = root.TryObject(KeyRustfsClientNamespaces.String(), &cfg.RustfsClientNamespaces)
 			},
 		},
 		stackconfig.Entry[Values]{

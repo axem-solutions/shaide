@@ -515,5 +515,5 @@ the discovered model Service. The values file configures vLLM; the endpoint
 reports the running process's resolved settings. It does not read a YAML copy,
 run inference probes, or enable vLLM development APIs.
 
-See the [runtime metadata module](../../pkg/iac/serving/internal/components/modelservice/metadata/README.md)
+See the [runtime metadata module](https://github.com/axem-solutions/shaide/blob/main/pkg/iac/serving/internal/components/modelservice/metadata/README.md)
 for the schema, authentication behavior, missing-dimension handling, and tests.

@@ -26,16 +26,20 @@
 #   Application settings (injected as ConfigMap env vars into shaide-server):
 #     shaideServerUiFqdn, shaideServerUiPort   — control-panel Service name/port
 #     databaseUrl                              — sqlite:///root/.config/axem/shaide/db/<name>.sqlite
-#     s3User, shaideServerS3Fqdn, shaideServerS3Port, s3UploadProxyRoutePrefix
-#     rustfsWebhookArn                         — arbitrary ARN-shaped string; RustFS requires the
-#                                                field but does not validate it against real AWS
-#     vectorDBUrl                              — e.g. http://qdrant:6334
+#     vectorDBUrl                              — e.g. http://qdrant:6334 (shaide-server and KC)
+#
+#   Object storage (RustFS). Not given to shaide-server; RustFS and the Knowledge
+#   Center read them from the storage-owned rustfs-credentials Secret:
+#     s3User                                   — RustFS access key
+#     shaideServerS3Fqdn, shaideServerS3Port   — RustFS address as KC reaches it
+#     rustfsWebhookArn                         — arbitrary ARN-shaped string KC uses when it
+#                                                configures bucket notifications
 #     rustfsNotifyWebhookEnableShaide, rustfsNotifyWebhookEndpointShaide,
 #     rustfsNotifyWebhookQueueDirShaide        — RustFS → shaide-server event webhook
 #
 #   Secrets (set via `pulumi config set --secret <key> <value>`):
 #     adminAuthKey  — shaide-server admin auth key
-#     s3Password    — RustFS S3 credential (paired with s3User above)
+#     s3Password    — RustFS secret key (paired with s3User above)
 #     jwtSecret     — shaide-server JWT signing secret; random string, at least 32 characters
 #     sessionSecret — control-panel session signing secret; random string, at least 32 characters
 #
@@ -80,10 +84,10 @@
 #
 #   busyboxImage       — init-container image used by rustfs for permission fixup; default: busybox:1.37
 #
-#   mcpNamespace       — namespace where the app_mcp stack is deployed (e.g. mcp-gateway).
-#                        Optional: when set, MCP_NAMESPACE is injected into shaide-config and
-#                        shaide-server can discover/watch MCP pods there. When unset,
-#                        MCP_NAMESPACE is omitted entirely and no app_mcp deployment is required.
+#   mcpNamespace       — namespace where shaide-server discovers MCP servers (MCP_NAMESPACE);
+#                        default: app-mcp. A stack that set the former mcp-gateway keeps it;
+#                        the Knowledge Center requires app-mcp and refuses to deploy otherwise,
+#                        so moving an existing installation is a deliberate operator step.
 #   rustLibBacktrace, rustSpantrace
 #                     — RUST_LIB_BACKTRACE / RUST_SPANTRACE env vars for shaide-server
 #   trial              — "TRUE"/"FALSE"; injected as the TRIAL env var; default: FALSE
@@ -91,8 +95,24 @@
 #                     — boolean; exposes the RustFS console on port 9001 in addition to the
 #                        S3 API on port 9000; default: false
 #   knowledgeCenterEnabled
-#                     — boolean; presence of the Knowledge Center feature; injected into
-#                        control-panel as the KNOWLEDGE_CENTER_ENABLED env var; default: false
+#                     — boolean; installs the Knowledge Center (KC) here and must equal
+#                        app-mcp:knowledgeCenterEnabled, which runs KC-MCP. Injected into
+#                        control-panel as KNOWLEDGE_CENTER_ENABLED (configured presence, not
+#                        health); default: false. When true, these are required and come from
+#                        the installer, which generates them once (see docs/operations/knowledge-center.md):
+#                          knowledgeCenterImage
+#                          kcInternalToken, kcWebhookToken        (secret; >=32 chars, no whitespace)
+#                          kcGatewayToken, kcScopedToken          (secret; unpadded base64url, >=32 bytes)
+#                          kcContextSigningKey, kcContextPublicKey (secret; RSA PEM pair, 2048-8192 bit)
+#                          kcEmbeddingUsername, kcEmbeddingPassword (ordinary shaide user; password secret)
+#   knowledgeCenterCpuRequest, knowledgeCenterMemoryRequest, knowledgeCenterCpuLimit,
+#   knowledgeCenterMemoryLimit
+#                     — KC resources; default: 250m / 512Mi / 2 / 2Gi
+#   nodeSelectorKnowledgeCenter
+#                     — per-component node override for KC
+#   rustfsClientNamespaces
+#                     — namespaces still admitted to RustFS once KC restricts its ingress;
+#                        default: [monitoring] (Loki)
 #   webappEnabled      — boolean; whether the webapp is deployed; injected into control-panel
 #                        as the APP_ENABLED env var; when true, shaide-config also gets
 #                        WEBAPP_URL so shaide-server proxies /app to the webapp;
@@ -150,7 +170,6 @@ config:
   app-shaide:rustfsWebhookArn: "arn:rustfs:sqs:eu-central-1:shaide:webhook"
   app-shaide:databaseUrl: "sqlite:///root/.config/axem/shaide/db/<stack-name>-db.sqlite"
   app-shaide:s3User: rustfsuser
-  app-shaide:s3UploadProxyRoutePrefix: "/s3"
   app-shaide:vectorDBUrl: "http://qdrant:6334"
   # app-shaide:rustLibBacktrace: "1"
   # app-shaide:rustSpantrace: "0"
@@ -169,7 +188,15 @@ config:
   app-shaide:qdrantService: qdrant
 
   # --- Optional MCP integration (see app_mcp) ---
-  # app-shaide:mcpNamespace: mcp-gateway
+  # app-shaide:mcpNamespace: app-mcp
+
+  # --- Optional Knowledge Center (installer-supplied; see knowledgeCenterEnabled above) ---
+  # app-shaide:knowledgeCenterImage: "<harbor>/axem-solutions/shaide_knowledge_center:<tag>"
+  # app-shaide:kcEmbeddingUsername: <ordinary-user-account>
+  # app-shaide:kcInternalToken / kcWebhookToken / kcGatewayToken / kcScopedToken /
+  #   kcContextSigningKey / kcContextPublicKey / kcEmbeddingPassword:
+  #     secure: <installer-generated>
+  # app-shaide:knowledgeCenterMemoryLimit: 2Gi
 
   # --- Secrets (encrypted, set per stack via CLI) ---
   #   pulumi config set --secret adminAuthKey <value>

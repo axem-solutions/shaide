@@ -72,7 +72,15 @@ The stack orchestrator and dependency coordinator:
   per-model namespaces, `app_mcp`'s namespace, etc.), not just its own namespace. See
   [Installed Model Discovery](#installed-model-discovery) below.
 - `configmap.go`: Creates the shared `shaide-config` ConfigMap (non-secret runtime
-  settings, service discovery) and `shaide-secrets` Secret (`adminAuthKey`, `s3Password`, `jwtSecret`, `sessionSecret`).
+  settings, service discovery) and `shaide-secrets` Secret (`adminAuthKey`, `jwtSecret`,
+  `sessionSecret`, plus the KC internal and webhook tokens with the Knowledge Center).
+  shaide-server receives no object-storage settings or credentials.
+- `storage.go`: Creates the storage-owned `rustfs-credentials` Secret (`s3User`,
+  `s3Password`, and with KC the notification token). RustFS and KC read it;
+  shaide-server does not.
+- `knowledgecenter.go`: With the Knowledge Center, creates `knowledge-center` (KC env),
+  `knowledge-center-context` (KC files) and `kc-context-signer` (shaide-server's signing
+  key and KC-MCP gateway token).
 
 ### `pkg/iac/shaide/internal/components/`
 
@@ -99,10 +107,15 @@ The stack orchestrator and dependency coordinator:
   `WEBAPP_URL` set in `shaide-config` (`http://webapp:8787`).
 - `rustfs/deploy.go`: Deploys `rustfs` as a StatefulSet with a PVC for `/data`, an
   `emptyDir` for `/logs`, and a `ClusterIP` Service on port `9000` (plus `9001` when
-  `rustfsConsoleEnabled` is set). The container runs as UID/GID `10001` and is
-  configured via values from the shared ConfigMap and Secret.
+  `rustfsConsoleEnabled` is set). The container runs as UID/GID `10001` and takes its
+  credentials from `rustfs-credentials`. With KC it also authenticates its object
+  notifications to shaide-server.
 - `qdrant/deploy.go`: Deploys `qdrant` as a StatefulSet with a PVC for
   `/qdrant/storage` and a `ClusterIP` Service exposing REST `6333` and gRPC `6334`.
+- `knowledgecenter/`: Only with `knowledgeCenterEnabled`. Deploys the Knowledge Center
+  (Deployment and `ClusterIP` Service `knowledge-center:8080`, UID/GID `10001`, read-only
+  root) and the NetworkPolicies that narrow KC, Qdrant and RustFS traffic. KC reuses
+  RustFS and Qdrant. See [Knowledge Center](../operations/knowledge-center.md).
 
 ### `pkg/iac/shaide/internal/cloudprovider/`
 
@@ -130,6 +143,7 @@ LoadBalancer at all.
 | Web app | `webapp` | `8787` | Internal only |
 | RustFS | `rustfs` | `9000` (`9001` when `app_shaide:rustfsConsoleEnabled=true`) | Internal only |
 | Qdrant | `qdrant` | `6333`, `6334` | Internal only |
+| Knowledge Center (optional) | `knowledge-center` | `8080` | Internal only |
 
 ## emptyDir Permissions Note (RustFS)
 
@@ -172,7 +186,10 @@ All parameters are defined in the active stack's `deployments/Pulumi.<stack>.yam
 - Namespace and platform behavior (`app_shaide:namespace`, `app_shaide:cloudProvider`,
   `app_shaide:infraStackRef`, `app_shaide:nodeSelector`, `app_shaide:shaideServiceAccountName`).
 - Container images (`shaideServerImage`, `controlPanelImage`, `webappImage`, `rustfsImage`, `qdrantImage`).
-- Runtime config (`shaideServerS3Fqdn`, `shaideServerS3Port`, `databaseUrl`, `vectorDBUrl`).
+- Runtime config (`databaseUrl`, `vectorDBUrl`; RustFS address `shaideServerS3Fqdn`,
+  `shaideServerS3Port` for KC).
+- Knowledge Center (`knowledgeCenterEnabled`, its image and installer-supplied
+  credentials — see [Knowledge Center](../operations/knowledge-center.md)).
 - Trial deployment flag (`trial`, defaults to `FALSE`; injected into shaide-server as the
   `TRIAL` env var — only the `trial` stack sets it to `TRUE`).
 - RustFS console exposure (`rustfsConsoleEnabled`).
@@ -212,11 +229,11 @@ or the equivalent role on the target cloud.
 ## MCP Integration (optional)
 
 `app_shaide:mcpNamespace` points `shaide-server` at the namespace where the `app_mcp`
-stack is deployed (e.g. `mcp-gateway`). It is optional:
-- If set, `MCP_NAMESPACE` is injected into `shaide-config` and `shaide-server` can
-  discover/watch MCP pods in that namespace.
-- If left unset, `MCP_NAMESPACE` is omitted from `shaide-config` entirely and
-  `shaide-server` runs without MCP support — no `app_mcp` deployment is required.
+stack is deployed. It defaults to `app-mcp` and is injected as `MCP_NAMESPACE`; no
+`app_mcp` deployment is required, and an empty namespace simply lists no MCP servers.
+A stack that set the former `mcp-gateway` keeps it. The Knowledge Center requires `app-mcp`
+and refuses to deploy otherwise, so migrating is a deliberate operator step.
+`MCP_SERVERS` is never set, so discovery stays in Kubernetes.
 
 ## Security Notes
 

@@ -1,12 +1,14 @@
 // rustfs: S3-compatible object storage.
 // StatefulSet with PVC and ClusterIP Service (port 9000 plus optional 9001 console).
-// Credentials sourced from shaide-config ConfigMap and shaide-secrets Secret.
+// Credentials sourced from the storage-owned rustfs-credentials Secret.
 package rustfs
 
 import (
 	"fmt"
+	"net/url"
 
 	appconfig "github.com/axem-solutions/ai_platform/pkg/iac/shaide/internal/config"
+	"github.com/axem-solutions/ai_platform/pkg/iac/shaide/internal/platform"
 	"github.com/axem-solutions/ai_platform/pkg/iac/shaide/internal/runtime"
 	appsv1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/apps/v1"
 	corev1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/core/v1"
@@ -32,45 +34,24 @@ func Deploy(ctx *pulumi.Context, deps *runtime.DeploymentContext, cfg appconfig.
 			Name:          pulumi.String("s3"),
 		},
 	}
+	storageKey := func(name, key string) *corev1.EnvVarArgs {
+		return &corev1.EnvVarArgs{
+			Name: pulumi.String(name),
+			ValueFrom: &corev1.EnvVarSourceArgs{
+				SecretKeyRef: &corev1.SecretKeySelectorArgs{
+					Name: pulumi.String(platform.StorageSecretName),
+					Key:  pulumi.String(key),
+				},
+			},
+		}
+	}
 	env := corev1.EnvVarArray{
-		&corev1.EnvVarArgs{
-			// rustfs 1.0.0-alpha.82 reads ACCESS_KEY/SECRET_KEY.
-			// Keep ROOT_* too for compatibility across versions.
-			Name: pulumi.String("RUSTFS_ACCESS_KEY"),
-			ValueFrom: &corev1.EnvVarSourceArgs{
-				ConfigMapKeyRef: &corev1.ConfigMapKeySelectorArgs{
-					Name: pulumi.String("shaide-config"),
-					Key:  pulumi.String("S3_USER"),
-				},
-			},
-		},
-		&corev1.EnvVarArgs{
-			Name: pulumi.String("RUSTFS_SECRET_KEY"),
-			ValueFrom: &corev1.EnvVarSourceArgs{
-				SecretKeyRef: &corev1.SecretKeySelectorArgs{
-					Name: pulumi.String("shaide-secrets"),
-					Key:  pulumi.String("S3_PASSWORD"),
-				},
-			},
-		},
-		&corev1.EnvVarArgs{
-			Name: pulumi.String("RUSTFS_ROOT_USER"),
-			ValueFrom: &corev1.EnvVarSourceArgs{
-				ConfigMapKeyRef: &corev1.ConfigMapKeySelectorArgs{
-					Name: pulumi.String("shaide-config"),
-					Key:  pulumi.String("S3_USER"),
-				},
-			},
-		},
-		&corev1.EnvVarArgs{
-			Name: pulumi.String("RUSTFS_ROOT_PASSWORD"),
-			ValueFrom: &corev1.EnvVarSourceArgs{
-				SecretKeyRef: &corev1.SecretKeySelectorArgs{
-					Name: pulumi.String("shaide-secrets"),
-					Key:  pulumi.String("S3_PASSWORD"),
-				},
-			},
-		},
+		// rustfs 1.0.0-alpha.82 reads ACCESS_KEY/SECRET_KEY.
+		// Keep ROOT_* too for compatibility across versions.
+		storageKey("RUSTFS_ACCESS_KEY", platform.StorageAccessKey),
+		storageKey("RUSTFS_SECRET_KEY", platform.StorageSecretKey),
+		storageKey("RUSTFS_ROOT_USER", platform.StorageAccessKey),
+		storageKey("RUSTFS_ROOT_PASSWORD", platform.StorageSecretKey),
 		&corev1.EnvVarArgs{
 			Name:  pulumi.String("RUSTFS_NOTIFY_WEBHOOK_ENABLE_SHAIDE"),
 			Value: pulumi.String(cfg.RustEnv.WebhookEnableShaide),
@@ -83,6 +64,22 @@ func Deploy(ctx *pulumi.Context, deps *runtime.DeploymentContext, cfg appconfig.
 			Name:  pulumi.String("RUSTFS_NOTIFY_WEBHOOK_QUEUE_DIR_SHAIDE"),
 			Value: pulumi.String(cfg.RustEnv.WebhookQueueDirShaide),
 		},
+	}
+	// With the Knowledge Center, notifications of new objects drive
+	// ingestion. shaide-server accepts them only with the webhook token, and
+	// RustFS delivers only to an allowed origin.
+	if cfg.KnowledgeCenterEnabled {
+		env = append(env,
+			&corev1.EnvVarArgs{
+				Name:  pulumi.String("RUSTFS_NOTIFY_ENABLE"),
+				Value: pulumi.String("true"),
+			},
+			storageKey("RUSTFS_NOTIFY_WEBHOOK_AUTH_TOKEN_SHAIDE", platform.StorageWebhookToken),
+			&corev1.EnvVarArgs{
+				Name:  pulumi.String("RUSTFS_OUTBOUND_ALLOW_ORIGINS"),
+				Value: pulumi.String(webhookOrigin(cfg.RustEnv.WebhookEndpointShaide)),
+			},
+		)
 	}
 	servicePorts := corev1.ServicePortArray{
 		&corev1.ServicePortArgs{
@@ -245,4 +242,13 @@ func Deploy(ctx *pulumi.Context, deps *runtime.DeploymentContext, cfg appconfig.
 	}
 
 	return nil
+}
+
+// webhookOrigin is the scheme and host of the notification endpoint.
+func webhookOrigin(endpoint string) string {
+	parsed, err := url.Parse(endpoint)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return endpoint
+	}
+	return parsed.Scheme + "://" + parsed.Host
 }

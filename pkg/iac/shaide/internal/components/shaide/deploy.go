@@ -8,8 +8,10 @@
 package shaide
 
 import (
+	"github.com/axem-solutions/ai_platform/pkg/iac/knowledgecenter"
 	"github.com/axem-solutions/ai_platform/pkg/iac/shaide/internal/cloudprovider"
 	appconfig "github.com/axem-solutions/ai_platform/pkg/iac/shaide/internal/config"
+	"github.com/axem-solutions/ai_platform/pkg/iac/shaide/internal/platform"
 	"github.com/axem-solutions/ai_platform/pkg/iac/shaide/internal/runtime"
 	kubernetes "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes"
 	apiext "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/apiextensions"
@@ -41,6 +43,32 @@ func Deploy(ctx *pulumi.Context, deps *runtime.DeploymentContext, cfg appconfig.
 	}
 	if cfg.StorageClassName != "" {
 		shaidePVCSpec.StorageClassName = pulumi.StringPtr(cfg.StorageClassName)
+	}
+
+	volumeMounts := corev1.VolumeMountArray{
+		&corev1.VolumeMountArgs{
+			Name:      pulumi.String("shaide-server-data"),
+			MountPath: pulumi.String("/root/.config"),
+		},
+	}
+	var volumes corev1.VolumeArray
+	// With the Knowledge Center, the server signs KC-MCP requests with the
+	// private key and authenticates with the gateway token, both read from
+	// files named in MCP_COLLECTION_CONTEXT_TARGETS. Only the server mounts
+	// them. 0440 with the pod's fsGroup lets a non-root server read them too.
+	if cfg.KnowledgeCenterEnabled {
+		volumeMounts = append(volumeMounts, &corev1.VolumeMountArgs{
+			Name:      pulumi.String("kc-context"),
+			MountPath: pulumi.String(knowledgecenter.SecretMountPath),
+			ReadOnly:  pulumi.Bool(true),
+		})
+		volumes = append(volumes, &corev1.VolumeArgs{
+			Name: pulumi.String("kc-context"),
+			Secret: &corev1.SecretVolumeSourceArgs{
+				SecretName:  pulumi.String(platform.ServerContextSecretName),
+				DefaultMode: pulumi.Int(0o440),
+			},
+		})
 	}
 
 	_, err := appsv1.NewStatefulSet(ctx, "shaide-server", &appsv1.StatefulSetArgs{
@@ -115,14 +143,10 @@ func Deploy(ctx *pulumi.Context, deps *runtime.DeploymentContext, cfg appconfig.
 									"memory": pulumi.String("128Mi"),
 								},
 							},
-							VolumeMounts: corev1.VolumeMountArray{
-								&corev1.VolumeMountArgs{
-									Name:      pulumi.String("shaide-server-data"),
-									MountPath: pulumi.String("/root/.config"),
-								},
-							},
+							VolumeMounts: volumeMounts,
 						},
 					},
+					Volumes: volumes,
 				},
 			},
 			VolumeClaimTemplates: corev1.PersistentVolumeClaimTypeArray{

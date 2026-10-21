@@ -10,20 +10,26 @@ shaide can run **MCP (Model Context Protocol) servers** as datasources — conta
 connectors that give models access to systems such as issue trackers, wikis or internal
 APIs.
 
-Each datasource runs as its own deployment in a dedicated namespace (`mcp-gateway`), with
-its own network policies and, where needed, its own CA trust.
+Each datasource runs as its own deployment in a dedicated namespace (`app-mcp`), with
+its own network policies and, where needed, its own CA trust. The optional
+[Knowledge Center](knowledge-center.md) adds its own MCP server, KC-MCP, to the same
+namespace.
 
 ## Enabling MCP support
 
-MCP is optional. The shaide server only discovers datasources when it is told which
-namespace to watch:
+MCP is optional. The shaide server discovers MCP servers in one namespace, `app-mcp` by
+default:
 
 ```yaml
-app_shaide:mcpNamespace: mcp-gateway
+app-shaide:mcpNamespace: app-mcp
 ```
 
-Leave it unset and shaide runs without MCP support entirely — no datasource deployment is
-required.
+No datasource deployment is required; with none, shaide simply lists no MCP servers.
+
+> Earlier installations used `mcp-gateway`. A stack that set that namespace explicitly
+> keeps it — nothing is moved or deleted. To migrate, redeploy the MCP servers into
+> `app-mcp` and set both `app-shaide:mcpNamespace` and `app-mcp:namespace` to `app-mcp`.
+> The Knowledge Center refuses to deploy until this is done.
 
 ## Adding a datasource
 
@@ -31,10 +37,9 @@ Datasources are declared as a list in the MCP stack configuration. The minimum i
 and an image:
 
 ```yaml
-app_mcp:namespace: mcp-gateway
-app_mcp:shaideNamespace: app-shaide
-app_mcp:shaideServiceAccountName: shaide-server
-app_mcp:datasources:
+app-mcp:shaideNamespace: app-shaide
+app-mcp:shaideServiceAccountName: shaide-server
+app-mcp:datasources:
   - name: example
     image: <registry>/mcp-example:<tag>
     port: 8080
@@ -99,11 +104,11 @@ When a datasource presents a certificate signed by an internal CA, supply the CA
 the container runtime which variable to trust it through:
 
 ```yaml
-app_mcp:companyCACert: |
+app-mcp:companyCACert: |
   -----BEGIN CERTIFICATE-----
   ...
   -----END CERTIFICATE-----
-app_mcp:companyCATrustEnvVar: NODE_EXTRA_CA_CERTS
+app-mcp:companyCATrustEnvVar: NODE_EXTRA_CA_CERTS
 ```
 
 Pick the variable that matches the image's runtime:
@@ -121,13 +126,15 @@ A single datasource can override this with its own `caCert` and `caTrustEnvVar`.
 Apply the MCP stack after `app_shaide`. Datasources appear as pods in the MCP namespace:
 
 ```bash
-kubectl -n mcp-gateway get pods
+kubectl -n app-mcp get pods
 ```
 
 ## How shaide uses them
 
-The shaide server watches the MCP namespace for pods labelled
-`app.kubernetes.io/component: mcp-server`. The watch is event-driven, so state changes are
+The shaide server watches the MCP namespace for pods annotated with
+`mcp.shaide/datasource` (the server id) and `mcp.shaide/url` (where to reach it). Every
+MCP pod this stack creates also carries `app.kubernetes.io/component: mcp-server`. Do not
+set `MCP_SERVERS` on the server: a static list replaces this discovery. The watch is event-driven, so state changes are
 reflected immediately — shaide distinguishes **Starting**, **Running** and **Restarting**
 per datasource rather than polling.
 
@@ -138,7 +145,7 @@ Datasource status is surfaced in the control panel.
 
 | Symptom | Cause |
 | --- | --- |
-| Datasource never appears in shaide | `app_shaide:mcpNamespace` unset, or points at the wrong namespace |
+| Datasource never appears in shaide | `app-shaide:mcpNamespace` differs from `app-mcp:namespace` |
 | `403 Forbidden` on the pod watch | `shaideServiceAccountName` does not match the `app_shaide` stack |
 | Pod killed during startup | Slow datasource — raise `startupProbeFailureThreshold` (default 30 checks ≈ 150s) |
 | Pod never becomes ready | Image has no `/health` endpoint — set a `healthPath` or `disableProbes: true` |

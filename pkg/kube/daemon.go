@@ -164,8 +164,8 @@ func runDaemon() {
 	}
 
 	clientset, restCfg, err := connection.NewK8sClient(connection.Connection{
-		kubeconfigPath,
-		contextName,
+		KubeconfigPath: kubeconfigPath,
+		Context:        contextName,
 	})
 	if err != nil {
 		return

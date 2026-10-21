@@ -1,15 +1,29 @@
 # Stack: <stack-name> -- <short description>
 #
 # Required config:
-#   namespace                — Kubernetes namespace for MCP resources; this stack creates it (always: mcp-gateway)
 #   shaideNamespace          — Shaide Server namespace; must already exist, owned by app_shaide (always: app-shaide)
 #   shaideServiceAccountName — ServiceAccount name of the Shaide Server pod in shaideNamespace
 #                              must match the value in the corresponding app_shaide stack config —
 #                              the mcp-pod-reader Role is bound to this SA; a mismatch causes 403 Forbidden
 #                              on the Kubernetes API Watch
-#   datasources              — list of MCP data source deployments (see Datasource fields below)
+#   datasources              — list of MCP data source deployments (see Datasource fields below);
+#                              optional when knowledgeCenterEnabled is true
 #
 # Optional config:
+#   namespace                — Kubernetes namespace for MCP resources; this stack creates it;
+#                              default: app-mcp. Must match app_shaide's mcpNamespace. A stack that
+#                              pinned the former mcp-gateway keeps it; KC-MCP refuses to deploy there.
+#   knowledgeCenterEnabled   — boolean; runs KC-MCP, the Knowledge Center's MCP server, and must equal
+#                              app-shaide:knowledgeCenterEnabled. When true, these are required
+#                              (installer-generated, identical to the app-shaide values):
+#                                knowledgeCenterMcpImage
+#                                kcGatewayToken, kcScopedToken (secret; unpadded base64url, >=32 bytes, distinct)
+#                                kcContextPublicKey            (secret; RSA public key PEM)
+#                              KC-MCP never receives the signing key or storage credentials.
+#   placement                — [{key, values}] nodes KC-MCP prefers (soft affinity), e.g. CPU pools
+#   knowledgeCenterMcpCpuRequest, knowledgeCenterMcpMemoryRequest, knowledgeCenterMcpCpuLimit,
+#   knowledgeCenterMcpMemoryLimit
+#                            — KC-MCP resources; default: 50m / 64Mi / 1 / 256Mi
 #   kubeconfig               — path to kubeconfig file; omit to use KUBECONFIG env / ~/.kube/config
 #   nodeSelectorKey          — Kubernetes node label key used by nodeSelector; default: nodegroup
 #   nodeSelector             — node label value applied to all MCP pods unless datasource overrides it
@@ -90,26 +104,26 @@
 #   cd app_mcp/deployments
 #   pulumi stack init <stack-name>
 config:
-  app_mcp:namespace: mcp-gateway
-  app_mcp:shaideNamespace: app-shaide
-  app_mcp:shaideServiceAccountName: shaide-server  # must match shaideServiceAccountName in the app_shaide stack
-  # app_mcp:nodeSelectorKey: nodegroup
-  # app_mcp:nodeSelector: general
-  # app_mcp:imagePullSecrets:
+  # app-mcp:namespace: app-mcp   # default; existing stacks may still pin mcp-gateway
+  app-mcp:shaideNamespace: app-shaide
+  app-mcp:shaideServiceAccountName: shaide-server  # must match shaideServiceAccountName in the app_shaide stack
+  # app-mcp:nodeSelectorKey: nodegroup
+  # app-mcp:nodeSelector: general
+  # app-mcp:imagePullSecrets:
   #   - ghcr-creds
   # Optional managed Secret created in the MCP namespace as mcp-secrets.
   # Only takes effect if a datasource below is named exactly "atlassian" —
   # the value is auto-attached to that datasource as the
   # ATLASSIAN_OAUTH_CLIENT_SECRET env var (see internal/config/config.go).
-  # app_mcp:mcpAtlassianOAuthClientSecret:
+  # app-mcp:mcpAtlassianOAuthClientSecret:
   #   secure: <encrypted-secret>
   # company-wide CA cert — set when datasources use a certificate signed by an internal CA:
-  # app_mcp:companyCACert: |
+  # app-mcp:companyCACert: |
   #   -----BEGIN CERTIFICATE-----
   #   <base64-encoded-CA-cert>
   #   -----END CERTIFICATE-----
-  # app_mcp:companyCATrustEnvVar: NODE_EXTRA_CA_CERTS
-  app_mcp:datasources:
+  # app-mcp:companyCATrustEnvVar: NODE_EXTRA_CA_CERTS
+  app-mcp:datasources:
     # Simple example — a public MCP server image, no egress policy needed
     # (the datasource is reached over the public internet, not a private network).
     - name: example-public
@@ -152,15 +166,15 @@ config:
       # cpuLimit: 500m
       # memoryLimit: 512Mi
       # startupProbeFailureThreshold: 30
-  # app_mcp:kubeconfig: ~/.kube/rke2-cluster.yaml
-  # app_mcp:imagePullPolicy: IfNotPresent
+  # app-mcp:kubeconfig: ~/.kube/rke2-cluster.yaml
+  # app-mcp:imagePullPolicy: IfNotPresent
   # Probe timing (tune when datasources are slow to start):
-  # app_mcp:startupProbePeriod: 5
-  # app_mcp:startupProbeFailureThreshold: 30
-  # app_mcp:readinessProbeInitialDelay: 5
-  # app_mcp:readinessProbePeriod: 10
-  # app_mcp:livenessProbeInitialDelay: 15
-  # app_mcp:livenessProbePeriod: 30
+  # app-mcp:startupProbePeriod: 5
+  # app-mcp:startupProbeFailureThreshold: 30
+  # app-mcp:readinessProbeInitialDelay: 5
+  # app-mcp:readinessProbePeriod: 10
+  # app-mcp:livenessProbeInitialDelay: 15
+  # app-mcp:livenessProbePeriod: 30
 #
 # Managed by Pulumi.
 # Do not edit or remove the following line — required to decrypt secret config values.
