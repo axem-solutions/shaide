@@ -57,6 +57,12 @@ func (c Config[T]) Resolve(p Prompter) (auto.ConfigMap, error) {
 		}
 	}
 
+	for _, check := range c.Checks {
+		if err := check(values); err != nil {
+			return nil, fmt.Errorf("%s config: %w", c.Namespace, err)
+		}
+	}
+
 	return result, nil
 }
 

@@ -10,15 +10,15 @@ weight: 80
 > [MCP servers](../operations/mcp-servers.md).
 
 
-Pulumi stack that deploys all Kubernetes infrastructure for MCP Server instances in the `mcp-gateway` namespace. One stack deployment covers all MCP datasources for a single customer cluster.
+Pulumi stack that deploys all Kubernetes infrastructure for MCP Server instances in the `app-mcp` namespace. One stack deployment covers all MCP datasources for a single customer cluster.
 
 ## What it does
 
 MCP Servers are per-datasource bridges (e.g. `example-public`, `example-internal` — see `deployments/Pulumi.TEMPLATE.yaml`) that the Shaide Server calls to answer user queries. This stack creates:
 
-- The `mcp-gateway` namespace
+- The `app-mcp` namespace
 - RBAC so the Shaide Server can watch MCP pod state via the Kubernetes API
-- NetworkPolicies that isolate the `mcp-gateway` namespace and control egress per datasource
+- NetworkPolicies that isolate the `app-mcp` namespace and control egress per datasource
 - A Deployment + Service per datasource
 
 ## How it works
@@ -44,9 +44,15 @@ Container starts
 
 ### State observation (Shaide → MCP)
 
-The Shaide Server opens a Kubernetes API Watch on the `mcp-gateway` namespace filtered by label `app.kubernetes.io/component: mcp-server`. This is event-driven — no polling lag — and lets Shaide distinguish `Starting`, `Running`, and `Restarting` states in real time.
+The Shaide Server opens a Kubernetes API Watch on its `MCP_NAMESPACE` (`app-mcp` by default), optionally filtered by `MCP_LABEL_SELECTOR`, and lists every pod annotated with `mcp.shaide/datasource` (server id) and `mcp.shaide/url` (target). This is event-driven — no polling lag — and lets Shaide distinguish `Starting`, `Running`, and `Restarting` states in real time. Setting `MCP_SERVERS` on the server replaces this discovery with a static list, so the platform never sets it.
 
-This stack provides the prerequisite: every MCP pod carries the required label and the Shaide Server ServiceAccount has `watch` + `list` permission on pods in the `mcp-gateway` namespace.
+This stack provides the prerequisite: every MCP pod carries the annotations and the `app.kubernetes.io/component: mcp-server` label, and the Shaide Server ServiceAccount has `watch` + `list` permission on pods in the `app-mcp` namespace.
+
+The namespace is a program default rather than a written value. A stack that pinned the former `mcp-gateway` keeps it; nothing is moved or deleted.
+
+### KC-MCP (with the Knowledge Center)
+
+When `knowledgeCenterEnabled` is true, the stack also runs **KC-MCP** (`kc-mcp`). Generic datasources then become optional. KC-MCP is discovered like any MCP server, under the id `knowledge-center` and the URL `http://kc-mcp.app-mcp.svc.cluster.local:8080`. Requests to it are signed: the server forwards only when the discovered URL equals the origin of its `MCP_COLLECTION_CONTEXT_TARGETS` entry. It adds a gateway token and a short-lived RS256 context, and KC-MCP calls KC's scoped search with a separate scoped token. KC-MCP mounts only the public key and its two tokens (`kc-mcp-context`). It has no HTTP health route, so its probes are TCP. Its own NetworkPolicy admits `app-shaide/shaide-server` and allows egress only to KC and DNS. See [Knowledge Center](../operations/knowledge-center.md).
 
 ### CA certificate trust
 
@@ -89,7 +95,7 @@ Loads and validates all Pulumi stack config. Key behaviour:
 
 ### `internal/components/rbac/deploy.go`
 
-Creates namespace-scoped Role and RoleBinding in the `mcp-gateway` namespace:
+Creates namespace-scoped Role and RoleBinding in the `app-mcp` namespace:
 
 - `Role` `mcp-pod-reader` — `watch` + `list` on `pods`
 - `RoleBinding` `shaide-mcp-pod-reader` — binds the Shaide Server ServiceAccount (`shaide-server` in `app-shaide`) to the role
@@ -98,7 +104,7 @@ The Shaide ServiceAccount is **not created here** — it is owned by the `app_sh
 
 ### `internal/components/networkpolicy/ingress.go`
 
-Creates `allow-shaide-ingress` in the `mcp-gateway` namespace. Namespace-level policy (empty `podSelector`) that allows ingress only from the `app-shaide` namespace. All other ingress to any pod in `mcp-gateway` is implicitly denied.
+Creates `allow-shaide-ingress` in the `app-mcp` namespace. Namespace-level policy (empty `podSelector`) that allows ingress only from the `app-shaide` namespace. All other ingress to any pod in `app-mcp` is implicitly denied.
 
 ### `internal/components/networkpolicy/egress.go`
 
@@ -132,7 +138,7 @@ Layers 1–3 are prerequisites owned by external teams (Cluster Admin, Network, 
 
 ### `internal/components/caconfigmap/deploy.go`
 
-Creates the `company-internal-ca` ConfigMap in the `mcp-gateway` namespace. Skipped entirely when `companyCACert` is empty. Returns the created resource so `main.go` can add it to `DependsOn` before datasource deployments reference it.
+Creates the `company-internal-ca` ConfigMap in the `app-mcp` namespace. Skipped entirely when `companyCACert` is empty. Returns the created resource so `main.go` can add it to `DependsOn` before datasource deployments reference it.
 
 ### `internal/components/mcpdeployment/deploy.go`
 
@@ -146,7 +152,7 @@ Creates the ConfigMap (per-datasource cert), Deployment, and Service for one dat
 
 **Probes** — all three probes (startup, readiness, liveness) use the same `healthPath`. The startup probe's `failureThreshold` is per-datasource overridable because different datasources have different startup times. Readiness and liveness probes use global timing only.
 
-**Service** — `ClusterIP`, named `mcp-<name>`, reachable at `mcp-<name>.mcp-gateway.svc.cluster.local`. Created after the Deployment via `DependsOn`.
+**Service** — `ClusterIP`, named `mcp-<name>`, reachable at `mcp-<name>.app-mcp.svc.cluster.local`. Created after the Deployment via `DependsOn`.
 
 ---
 
@@ -166,7 +172,7 @@ pulumi stack select <stack-name>
 pulumi config set companyCACert "$(cat /path/to/company-ca.crt)"
 ```
 
-The cert is stored in Pulumi stack state (encrypted at rest). On the next `pulumi up`, Pulumi creates the `company-internal-ca` ConfigMap in the `mcp-gateway` namespace.
+The cert is stored in Pulumi stack state (encrypted at rest). On the next `pulumi up`, Pulumi creates the `company-internal-ca` ConfigMap in the `app-mcp` namespace.
 
 ### Step 3 — Set the trust env var
 
@@ -204,7 +210,7 @@ Kubernetes propagates the updated ConfigMap to running pods within ~60 seconds (
 
 See [`app_mcp/deployments/Pulumi.TEMPLATE.yaml`](https://github.com/axem-solutions/shaide/blob/main/app_mcp/deployments/Pulumi.TEMPLATE.yaml) for full documentation of every config key with examples.
 
-Required keys: `namespace`, `shaideNamespace`, `shaideServiceAccountName`, `datasources`.
+Required keys: `shaideNamespace`, `shaideServiceAccountName`, and `datasources` unless `knowledgeCenterEnabled` is true. `namespace` defaults to `app-mcp`.
 
 ## Deploying
 
@@ -213,8 +219,7 @@ cd app_mcp/deployments
 
 # First time
 pulumi stack init <stack-name>
-pulumi config set app_mcp:namespace mcp-gateway
-# ... set remaining required keys and datasources
+# ... set the required keys and datasources
 
 # Deploy
 pulumi up
