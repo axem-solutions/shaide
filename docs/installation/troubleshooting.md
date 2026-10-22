@@ -12,7 +12,7 @@ weight: 50
 | --- | --- |
 | Terminal errors | Add `-it` - the installer is interactive |
 | Permission denied on Docker | Add the user to the `docker` group |
-| A model is missing from the selector | The log at the start of `Select models` names each skipped model directory and why, usually a missing `shaide.revision` |
+| A model is missing from the selector | The log at the start of `Select models` names each skipped model directory and why, usually a missing `revision` in its `model.yaml` |
 
 ## State
 
@@ -59,10 +59,9 @@ is missing or unreadable, the installer fails at bootstrap with a message naming
 path; this indicates a broken image build.
 
 A packaged model that fails validation is not offered, and the run continues. The reason
-is logged at the start of the `Select models` stage, for example a missing or duplicate
-`ms-<slug>/values.yaml`, an unpinned `shaide.revision`, a missing
-`modelArtifacts.name` or `modelArtifacts.size`, or a decode GPU limit that is not a
-whole number.
+is logged at the start of the `Select models` stage, for example a missing or
+malformed `model.yaml` (unknown fields are rejected), an unpinned `revision`, a missing
+`model.name` or `model.size`, or a server GPU limit that is not a whole number.
 
 ## Cluster connectivity
 

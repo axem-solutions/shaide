@@ -136,20 +136,20 @@ host path of its bind mount.
 
 ### Add A Model
 
-1. Add `app_serving/deployments/models/<generative|embedder>/<Name>/` with
-   `ms-<slug>/values.yaml` and `gaie-<slug>/values.yaml`.
-2. Pin the Hugging Face commit in the `ms-*` values file:
+1. Add `app_serving/deployments/models/<generative|embedder>/<Name>/model.yaml`.
+2. Pin the Hugging Face commit in it:
 
    ```yaml
-   shaide:
-     revision: "<full commit sha>"
+   revision: "<full commit sha>"
    ```
 
 3. Rebuild the installer image. The model is offered in the `select models` stage and
    published as `ai-models/<slug>:<first 12 characters of the revision>`.
 
-Bumping `shaide.revision` changes the Harbor tag, so the next run uploads and serves the
-new weights. Directories matching the variant patterns in
+Bumping `revision` changes the Harbor tag, so the next run uploads and serves the
+new weights. A generative model with `server.engine: sim` needs no revision: the
+installer offers it without weights, and mirrors the simulator image only when it is
+served. Directories matching the variant patterns in
 `installer/build/Dockerfile.dockerignore` never reach the image.
 
 ### Add A Service Image

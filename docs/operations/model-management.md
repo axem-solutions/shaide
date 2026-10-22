@@ -10,20 +10,19 @@ weight: 10
 
 ```bash
 curl https://<endpoint>/v1/models -H "Authorization: Bearer <key>"
-kubectl -n shaide-serving get pods -l app.kubernetes.io/component=modelservice
+kubectl get pods -A -l app.kubernetes.io/part-of=app-serving,llm-d.ai/role=decode
 ```
 
 ## Adding
 
-1. Pin the Hugging Face revision in the model's `ms-<slug>/values.yaml`; the installer
+1. Pin the Hugging Face revision in the model's `model.yaml`; the installer
    publishes the weights to the internal registry - see [Model registry](model-registry.md).
 2. Add the model definition under the serving stack's model deployments.
 3. Reference it in the stack configuration.
 4. Apply the serving stack.
 
-Convention-based discovery: a `gaie-<slug>` / `ms-<slug>` folder pair under
-`deployments/models/<category>/<model>/` is picked up automatically once referenced in
-stack config.
+Convention-based discovery: a `model.yaml` in `deployments/models/<category>/<model>/` is
+picked up automatically once referenced in stack config.
 
 Detail: [Model deployment flow](../architecture/model-deployment-flow.md).
 

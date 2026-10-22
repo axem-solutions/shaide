@@ -12,20 +12,21 @@ weight: 15
 Public ingress (cloud LB or MetalLB on-prem)
   → shaide server
   → per-model Istio Gateway
-  → GAIE endpoint picker (InferencePool)
-  → ModelService decode pod
+  → llm-d router endpoint picker (InferencePool)
+  → model server pod
 ```
 
-The endpoint picker selects a replica per request, accounting for KV-cache locality and
-load rather than round-robin.
+The endpoint picker selects a replica per request, accounting for prefix-cache affinity and
+token load rather than round-robin. If it is unavailable the Gateway still forwards the
+request to a pod (`FailOpen`).
 
 ## Embedding
 
-Embedding traffic bypasses the Gateway and GAIE - the inference gateway understands
-chat-completion requests only:
+shaide server reaches embedders through a dedicated Service. The llm-d v1.0 router
+also accepts `/v1/embeddings`, so the Gateway path works for embedders as well:
 
 ```
-shaide server → ms-<slug>-embeddings ClusterIP → ModelService decode pod
+shaide server → ms-<slug>-embeddings ClusterIP → model server pod
 ```
 
 Transparent to clients: both paths are reached through the same OpenAI-compatible

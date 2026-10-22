@@ -40,19 +40,29 @@ installer image. You choose which ones to serve in the `Select models` stage; th
 nothing to prepare beforehand.
 
 A model directory is `<category>/<Name>/`, where the category is `generative` or
-`embedder`, and it holds a `ms-<slug>/values.yaml` (the llm-d-modelservice chart values)
-and a `gaie-<slug>/values.yaml`. The installer reads what it needs from the `ms-*` file:
+`embedder`, and it holds a `model.yaml`: the model definition the app-serving stack also
+deploys from (see [Model serving](../architecture/model-serving.md#adding-a-new-model)).
+The installer reads:
 
 | Field | Meaning |
 | --- | --- |
-| `shaide.revision` | Hugging Face commit to download. Required; a full commit sha |
-| `shaide.dependencies` | Optional extra Hugging Face repos (`id`, `revision`) fetched alongside the model |
-| `modelArtifacts.name` | Hugging Face model repository ID |
-| `modelArtifacts.size` | Size of the volume holding the weights |
-| `decode.containers[0].resources.limits["nvidia.com/gpu"]` | GPUs per pod, shown in the selector |
+| `slug` | Names the model's namespace, resources and Harbor artifact |
+| `revision` | Hugging Face commit to download. Required; a full commit sha |
+| `dependencies` | Optional extra Hugging Face repos (`id`, `revision`) fetched alongside the model |
+| `model.name` | Hugging Face model repository ID |
+| `model.size` | Size of the volume holding the weights |
+| `server.resources.limits["nvidia.com/gpu"]` | GPUs per pod, shown in the selector |
+| `server.replicas` | Model server replicas, shown in the selector |
 
-The `shaide` block is ignored by the chart. A directory without a pinned revision is not
-offered, and the reason is logged at the start of the `Select models` stage.
+A directory without a pinned revision is not offered, and the reason is logged at the
+start of the `Select models` stage.
+
+The `Simulator` model is the exception: it runs llm-d's inference simulator
+(`server.engine: sim`) behind the same Gateway, router and routes as a real model, but
+needs no GPU and no weights. It has no `revision` or `model.size`; nothing is downloaded,
+uploaded to Harbor or stored for it. It is listed with `-` as its size, and like any model
+it needs a node pool of its own in the `Assign node pools` stage, which can be one without
+GPUs. Use it to test the serving path on a cluster without GPU capacity.
 
 Each model is published to the internal registry as
 `<registry-host>/ai-models/<slug>:<first 12 characters of the revision>`, as an OCI
@@ -434,7 +444,7 @@ During this stage, the installer:
 - checks that the installer storage directory on the provisioning host has room for the missing ones
 - downloads them from Hugging Face
 - uploads model artifacts to Harbor
-- copies container images from their origin registries into Harbor, leaving out the WebApp image when the WebApp is not installed
+- copies container images from their origin registries into Harbor, leaving out the WebApp image when the WebApp is not installed and the simulator image when the `Simulator` model is not served
 - deletes the artifacts of uninstalled models from Harbor
 
 
@@ -593,8 +603,7 @@ Do not delete the persistent installer storage directory unless you intentionall
 | `Hugging Face token was not set`      | `HF_TOKEN` is required during bootstrap.                                               |
 | Image pull failures in the artifact stage | The provisioning machine cannot reach the registry named by an entry's `source`.   |
 | `models must be non-empty`            | `app-serving:models` has no enabled generative or embedder entries.                    |
-| `no gaie-*` / `no ms-* subdirectory found` | The model folder does not satisfy the values directory contract.                  |
-| `slug mismatch`                       | The `gaie-*` and `ms-*` directory suffixes do not match.                               |
+| `no model.yaml` / `parse model definition` | The model folder has no `model.yaml`, or it is malformed or has an unknown field. |
 | Pulumi stack lock errors              | A previous run left a lock under `<STORAGE_PATH>/pulumi-state`. Inspect the state before removing locks. |
 
 If installer state unlock fails, use the original passphrase. Starting with a new passphrase requires discarding the existing deployment state and re-adopting cluster resources.

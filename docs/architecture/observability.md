@@ -793,7 +793,7 @@ kubectl run loki-check -n monitoring --rm -i --restart=Never --image=curlimages/
 When label mappings or dashboards change after a `pulumi up`:
 
 - **app_shaide pods** — pod template labels changed → Kubernetes triggers rolling restarts automatically as part of the StatefulSet/Deployment update
-- **app_serving pods** — modelservice Helm values changed → Helm triggers pod rollouts automatically
+- **app_serving pods** — model server pod template changed → Kubernetes rolls the Deployment automatically
 - **Grafana dashboards** — ConfigMaps with `grafana_dashboard: "1"` are watched by the Grafana sidecar and picked up automatically without a restart
 
 **Alloy** requires a manual restart. The Alloy Helm chart may or may not annotate the pod template with a config checksum, so changes to the River config are not guaranteed to trigger a rollout. To be safe:

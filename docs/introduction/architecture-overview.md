@@ -34,7 +34,7 @@ The installer performs all five.
 ## Request path
 
 ```
-client → ingress → shaide server → inference gateway → GAIE → model replica
+client → ingress → shaide server → inference gateway → llm-d router → model replica
 ```
 
 Embedding requests go directly from the shaide server to the embedding service,
