@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/axem-solutions/ai_platform/installer/internal/config/catalog"
 	harborapi "github.com/axem-solutions/ai_platform/installer/internal/harbor/api"
 	"github.com/axem-solutions/ai_platform/installer/internal/harbor/auth"
 	"github.com/axem-solutions/ai_platform/installer/internal/httpapi"
@@ -62,7 +63,7 @@ func HarborProjectForTarget(rt *core.Runtime, target string) string {
 			return image.Project
 		}
 	}
-	for _, model := range rt.Bootstrap.Catalog.Models {
+	for _, model := range catalog.WithWeights(rt.Bootstrap.Catalog.Models) {
 		if model.HarborName == target {
 			return model.HarborProject
 		}

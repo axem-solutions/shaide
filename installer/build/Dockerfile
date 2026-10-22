@@ -52,8 +52,6 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 FROM alpine:3.23 AS chart-downloader
 
 ARG HARBOR_CHART_VERSION=1.18.2
-ARG LLMD_INFRA_CHART_VERSION=v1.4.0
-ARG LLMD_INFRA_CHART_SHA256=ced44359ddfb9a7795aee2a2bf0f1c317f21deb5e1e1dfeca3d677afee6a07d1
 ARG LOKI_CHART_VERSION=14.1.0
 ARG GRAFANA_CHART_VERSION=12.3.2
 ARG ALLOY_CHART_VERSION=1.8.1
@@ -62,17 +60,11 @@ ARG PROMETHEUS_CHART_VERSION=29.21.0
 RUN apk add --no-cache ca-certificates curl \
     && mkdir -p \
         /opt/shaide-installer/projects/harbor/charts \
-        /opt/shaide-installer/projects/monitoring/charts \
-        /opt/shaide-installer/projects/app-serving/charts
+        /opt/shaide-installer/projects/monitoring/charts
 
 RUN curl -fsSL --retry 3 \
     -o "/opt/shaide-installer/projects/harbor/charts/harbor-${HARBOR_CHART_VERSION}.tgz" \
     "https://helm.goharbor.io/harbor-${HARBOR_CHART_VERSION}.tgz"
-
-RUN curl -fsSL --retry 3 \
-    -o "/opt/shaide-installer/projects/app-serving/charts/llm-d-infra-${LLMD_INFRA_CHART_VERSION}.tgz" \
-    "https://github.com/llm-d-incubation/llm-d-infra/releases/download/${LLMD_INFRA_CHART_VERSION}/llm-d-infra-${LLMD_INFRA_CHART_VERSION}.tgz" \
-    && echo "${LLMD_INFRA_CHART_SHA256}  /opt/shaide-installer/projects/app-serving/charts/llm-d-infra-${LLMD_INFRA_CHART_VERSION}.tgz" | sha256sum -c -
 
 RUN curl -fsSL --retry 3 \
     -o "/opt/shaide-installer/projects/monitoring/charts/loki-${LOKI_CHART_VERSION}.tgz" \
@@ -166,16 +158,14 @@ COPY --from=builder /installer /bin/installer
 # App Serving
 COPY app_serving/deployments/Pulumi.yaml \
     /opt/shaide-installer/projects/app-serving/Pulumi.yaml
-# app-serving resolves model values as <project>/deployments/models/<category>/<name>
+# app-serving resolves each model as <project>/deployments/models/<category>/<name>/model.yaml
 # (config.go resolveModelPaths), so the deployments/ level must be preserved.
 # The installer offers these directories as the supported models; see
 # Dockerfile.dockerignore for the variants left out.
 COPY app_serving/deployments/models/ \
     /opt/shaide-installer/projects/app-serving/deployments/models/
+# The vendored llm-d-router-gateway chart; see app_serving/charts/README.md.
 COPY app_serving/charts/ \
-    /opt/shaide-installer/projects/app-serving/charts/
-COPY --from=chart-downloader \
-    /opt/shaide-installer/projects/app-serving/charts/ \
     /opt/shaide-installer/projects/app-serving/charts/
 
 # App Shaide

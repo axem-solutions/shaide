@@ -19,7 +19,6 @@ const (
 	NVIDIARequireCUDAEnv = "NVIDIA_REQUIRE_CUDA"
 
 	cudaRequirementPrefix = "cuda>="
-	cudaImageName         = "llm-d/llm-d-cuda"
 )
 
 type GPUNodeCapability struct {

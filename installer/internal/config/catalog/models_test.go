@@ -8,38 +8,41 @@ import (
 )
 
 const gptOSSValues = `
-shaide:
-  revision: "6cee5e81ee83917806bbde320786a8fb61efebee"
+slug: gpt-oss-20b
+revision: "6cee5e81ee83917806bbde320786a8fb61efebee"
 
-modelArtifacts:
+model:
   name: "openai/gpt-oss-20b"
-  uri: "hf://openai/gpt-oss-20b"
   size: 60Gi
 
-decode:
+server:
   replicas: 2
-  containers:
-  - name: "vllm"
-    resources:
-      limits:
-        nvidia.com/gpu: "1"
+  resources:
+    limits:
+      nvidia.com/gpu: "1"
 `
 
-func writeModel(t *testing.T, root, category, name, msDir, values string) {
+// writeModel packages a model.yaml for name. The slug comes from the
+// definition itself; a non-empty slug replaces the fixture's.
+func writeModel(t *testing.T, root, category, name, slug, values string) {
 	t.Helper()
 
-	dir := filepath.Join(root, category, name, msDir)
+	if slug != "" {
+		values = strings.Replace(values, "slug: gpt-oss-20b", "slug: "+slug, 1)
+	}
+
+	dir := filepath.Join(root, category, name)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("create %s: %v", dir, err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "values.yaml"), []byte(values), 0o644); err != nil {
-		t.Fatalf("write values: %v", err)
+	if err := os.WriteFile(filepath.Join(dir, "model.yaml"), []byte(values), 0o644); err != nil {
+		t.Fatalf("write model definition: %v", err)
 	}
 }
 
 func TestLoadModelsReadsValuesFile(t *testing.T) {
 	root := t.TempDir()
-	writeModel(t, root, CategoryGenerative, "GPT-OSS-20B", "ms-gpt-oss-20b", gptOSSValues)
+	writeModel(t, root, CategoryGenerative, "GPT-OSS-20B", "gpt-oss-20b", gptOSSValues)
 
 	models, skipped, err := LoadModels(root)
 	if err != nil {
@@ -77,10 +80,48 @@ func TestLoadModelsReadsValuesFile(t *testing.T) {
 
 // A new pin must produce a new tag, or the "already in Harbor" check would
 // keep serving the old weights.
+// The simulator has no weights: nothing to pin, mirror or store.
+func TestLoadModelsOffersTheSimulator(t *testing.T) {
+	root := t.TempDir()
+	writeModel(t, root, CategoryGenerative, "Simulator", "", "slug: simulator\nmodel: {name: shaide/simulator}\nserver: {engine: sim}\n")
+
+	models, skipped, err := LoadModels(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(skipped) != 0 || len(models) != 1 {
+		t.Fatalf("models = %+v, skipped = %+v", models, skipped)
+	}
+
+	sim := models[0]
+	if !sim.Simulated || sim.HasWeights() || sim.GPUsPerPod != 0 || sim.Replicas != 1 {
+		t.Errorf("simulator = %+v", sim)
+	}
+	if sim.Revision != "" || sim.StorageSize != "" || sim.HarborProject != "" || sim.HarborName != "" || sim.HarborTag != "" {
+		t.Errorf("simulator has weight fields: %+v", sim)
+	}
+	if got := WithWeights(models); len(got) != 0 {
+		t.Errorf("WithWeights = %+v, want none", got)
+	}
+}
+
+func TestLoadModelsSkipsASimulatedEmbedder(t *testing.T) {
+	root := t.TempDir()
+	writeModel(t, root, CategoryEmbedder, "sim-emb", "", "slug: sim-emb\nmodel: {name: random/model}\nserver: {engine: sim}\n")
+
+	models, skipped, err := LoadModels(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(models) != 0 || len(skipped) != 1 {
+		t.Errorf("models = %+v, skipped = %+v, want the embedder skipped", models, skipped)
+	}
+}
+
 func TestHarborTagFollowsRevision(t *testing.T) {
 	root := t.TempDir()
 	bumped := strings.Replace(gptOSSValues, "6cee5e81ee83917806bbde320786a8fb61efebee", "0123456789abcdef0123456789abcdef01234567", 1)
-	writeModel(t, root, CategoryGenerative, "GPT-OSS-20B", "ms-gpt-oss-20b", bumped)
+	writeModel(t, root, CategoryGenerative, "GPT-OSS-20B", "gpt-oss-20b", bumped)
 
 	models, _, err := LoadModels(root)
 	if err != nil {
@@ -93,17 +134,17 @@ func TestHarborTagFollowsRevision(t *testing.T) {
 
 func TestLoadModelsSkipsIncompleteDirectories(t *testing.T) {
 	root := t.TempDir()
-	writeModel(t, root, CategoryGenerative, "GPT-OSS-20B", "ms-gpt-oss-20b", gptOSSValues)
+	writeModel(t, root, CategoryGenerative, "GPT-OSS-20B", "gpt-oss-20b", gptOSSValues)
 
 	unpinned := strings.Replace(gptOSSValues, `revision: "6cee5e81ee83917806bbde320786a8fb61efebee"`, "", 1)
-	writeModel(t, root, CategoryGenerative, "Unpinned", "ms-unpinned", unpinned)
+	writeModel(t, root, CategoryGenerative, "Unpinned", "unpinned", unpinned)
 
 	branch := strings.Replace(gptOSSValues, "6cee5e81ee83917806bbde320786a8fb61efebee", "main", 1)
-	writeModel(t, root, CategoryGenerative, "Branch", "ms-branch", branch)
+	writeModel(t, root, CategoryGenerative, "Branch", "branch", branch)
 
-	writeModel(t, root, CategoryEmbedder, "Broken", "ms-broken", "modelArtifacts: [")
+	writeModel(t, root, CategoryEmbedder, "Broken", "broken", "model: [")
 
-	if err := os.MkdirAll(filepath.Join(root, CategoryEmbedder, "NoValues", "gaie-no-values"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, CategoryEmbedder, "NoValues"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -120,10 +161,10 @@ func TestLoadModelsSkipsIncompleteDirectories(t *testing.T) {
 		reasons[s.Dir] = s.Reason
 	}
 	for dir, want := range map[string]string{
-		"generative/Unpinned": "shaide.revision is required",
+		"generative/Unpinned": "revision is required",
 		"generative/Branch":   "not a commit sha",
 		"embedder/Broken":     "parse",
-		"embedder/NoValues":   "no ms-*/values.yaml",
+		"embedder/NoValues":   "no model.yaml",
 	} {
 		if !strings.Contains(reasons[dir], want) {
 			t.Errorf("skip reason for %s = %q, want it to mention %q", dir, reasons[dir], want)
@@ -133,9 +174,9 @@ func TestLoadModelsSkipsIncompleteDirectories(t *testing.T) {
 
 func TestLoadModelsOrdersGenerativeFirstThenByName(t *testing.T) {
 	root := t.TempDir()
-	writeModel(t, root, CategoryEmbedder, "BGE-M3", "ms-bge-m3", gptOSSValues)
-	writeModel(t, root, CategoryGenerative, "qwen", "ms-qwen", gptOSSValues)
-	writeModel(t, root, CategoryGenerative, "GLM", "ms-glm", gptOSSValues)
+	writeModel(t, root, CategoryEmbedder, "BGE-M3", "bge-m3", gptOSSValues)
+	writeModel(t, root, CategoryGenerative, "qwen", "qwen", gptOSSValues)
+	writeModel(t, root, CategoryGenerative, "GLM", "glm", gptOSSValues)
 
 	models, _, err := LoadModels(root)
 	if err != nil {

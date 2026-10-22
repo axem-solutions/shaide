@@ -5,10 +5,9 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 
-	"go.yaml.in/yaml/v2"
+	"github.com/axem-solutions/ai_platform/pkg/iac/serving/modeldef"
 )
 
 // Model categories, named after the directories under deployments/models/.
@@ -26,9 +25,6 @@ const (
 	// Twelve characters of a commit sha is what git itself considers
 	// unambiguous for large repositories.
 	harborTagLength = 12
-
-	modelServicePrefix = "ms-"
-	gpuResource        = "nvidia.com/gpu"
 )
 
 // modelCategories lists the directories scanned for supported models, in the
@@ -42,37 +38,14 @@ type SkippedModel struct {
 	Reason string
 }
 
-// modelValues is the part of a model's ms-*/values.yaml the installer reads.
-// The file itself is the llm-d-modelservice chart's values; the shaide block
-// is ignored by the chart, whose schema allows unknown top-level keys.
-type modelValues struct {
-	Shaide struct {
-		Revision     string       `yaml:"revision"`
-		Dependencies []Dependency `yaml:"dependencies"`
-	} `yaml:"shaide"`
-
-	ModelArtifacts struct {
-		Name string `yaml:"name"`
-		Size string `yaml:"size"`
-	} `yaml:"modelArtifacts"`
-
-	Decode struct {
-		Replicas   int `yaml:"replicas"`
-		Containers []struct {
-			Resources struct {
-				Limits map[string]any `yaml:"limits"`
-			} `yaml:"resources"`
-		} `yaml:"containers"`
-	} `yaml:"decode"`
-}
-
 // LoadModels lists the supported models packaged under modelsDir, the
 // app-serving project's deployments/models directory.
 //
-// A model is a <category>/<Name>/ directory with exactly one ms-<slug>/
-// subdirectory holding a values.yaml that pins its Hugging Face revision. Any
-// other directory is reported as skipped rather than failing the run, so one
-// incomplete model does not block installing the rest.
+// A model is a <category>/<Name>/ directory holding a model.yaml that pins its
+// Hugging Face revision, or a generative model the simulator serves. The app-serving stack deploys from the same file, so
+// both read it with the shared modeldef package. Any other directory is
+// reported as skipped rather than failing the run, so one incomplete model
+// does not block installing the rest.
 func LoadModels(modelsDir string) ([]Model, []SkippedModel, error) {
 	var models []Model
 	var skipped []SkippedModel
@@ -117,40 +90,55 @@ func LoadModels(modelsDir string) ([]Model, []SkippedModel, error) {
 }
 
 func loadModel(categoryDir, category, name string) (Model, error) {
-	slug, valuesPath, err := findModelValues(filepath.Join(categoryDir, name))
+	path := modeldef.Path(filepath.Join(categoryDir, name))
+	if _, err := os.Stat(path); err != nil {
+		return Model{}, fmt.Errorf("no %s", modeldef.FileName)
+	}
+
+	def, err := modeldef.Load(path)
 	if err != nil {
 		return Model{}, err
 	}
 
-	data, err := os.ReadFile(valuesPath)
-	if err != nil {
-		return Model{}, fmt.Errorf("read %s: %w", valuesPath, err)
-	}
-
-	var values modelValues
-	if err := yaml.Unmarshal(data, &values); err != nil {
-		return Model{}, fmt.Errorf("parse %s: %w", valuesPath, err)
-	}
-
-	gpus, err := gpusPerPod(values)
+	gpus, err := def.GPUsPerPod()
 	if err != nil {
 		return Model{}, err
 	}
 
-	revision := strings.TrimSpace(values.Shaide.Revision)
+	dependencies := make([]Dependency, 0, len(def.Dependencies))
+	for _, dep := range def.Dependencies {
+		dependencies = append(dependencies, Dependency{ID: dep.ID, Revision: dep.Revision})
+	}
+
+	if def.Simulated() {
+		if category != CategoryGenerative {
+			return Model{}, fmt.Errorf("the installer offers the simulator as a generative model only")
+		}
+
+		return Model{
+			Name:      name,
+			Category:  category,
+			Slug:      def.Slug,
+			ID:        strings.TrimSpace(def.Model.Name),
+			Replicas:  int(def.ServerReplicas()),
+			Simulated: true,
+		}, nil
+	}
+
+	revision := strings.TrimSpace(def.Revision)
 
 	model := Model{
 		Name:          name,
 		Category:      category,
-		Slug:          slug,
-		ID:            strings.TrimSpace(values.ModelArtifacts.Name),
+		Slug:          def.Slug,
+		ID:            strings.TrimSpace(def.Model.Name),
 		Revision:      revision,
-		Dependencies:  values.Shaide.Dependencies,
-		StorageSize:   strings.TrimSpace(values.ModelArtifacts.Size),
+		Dependencies:  dependencies,
+		StorageSize:   strings.TrimSpace(def.Model.Size),
 		GPUsPerPod:    gpus,
-		Replicas:      values.Decode.Replicas,
+		Replicas:      int(def.ServerReplicas()),
 		HarborProject: ModelHarborProject,
-		HarborName:    slug,
+		HarborName:    def.Slug,
 		HarborTag:     harborTag(revision),
 	}
 
@@ -159,61 +147,6 @@ func loadModel(categoryDir, category, name string) (Model, error) {
 	}
 
 	return model, nil
-}
-
-// findModelValues returns the slug and values file of the model's single
-// ms-<slug>/ subdirectory. app-serving names the model's namespace, release and
-// labels after the same slug.
-func findModelValues(modelDir string) (string, string, error) {
-	entries, err := os.ReadDir(modelDir)
-	if err != nil {
-		return "", "", fmt.Errorf("read %s: %w", modelDir, err)
-	}
-
-	var slug, valuesPath string
-	for _, entry := range entries {
-		if !entry.IsDir() || !strings.HasPrefix(entry.Name(), modelServicePrefix) {
-			continue
-		}
-
-		candidate := filepath.Join(modelDir, entry.Name(), "values.yaml")
-		if _, err := os.Stat(candidate); err != nil {
-			continue
-		}
-
-		if valuesPath != "" {
-			return "", "", fmt.Errorf("more than one %s*/values.yaml", modelServicePrefix)
-		}
-
-		slug = strings.TrimPrefix(entry.Name(), modelServicePrefix)
-		valuesPath = candidate
-	}
-
-	if valuesPath == "" {
-		return "", "", fmt.Errorf("no %s*/values.yaml", modelServicePrefix)
-	}
-
-	return slug, valuesPath, nil
-}
-
-// gpusPerPod reads the GPU limit of the first decode container. A model
-// without one runs on CPU only, which is valid for the simulator images.
-func gpusPerPod(values modelValues) (int, error) {
-	if len(values.Decode.Containers) == 0 {
-		return 0, nil
-	}
-
-	raw, ok := values.Decode.Containers[0].Resources.Limits[gpuResource]
-	if !ok {
-		return 0, nil
-	}
-
-	count, err := strconv.Atoi(strings.TrimSpace(fmt.Sprint(raw)))
-	if err != nil {
-		return 0, fmt.Errorf("decode GPU limit %q is not a whole number", fmt.Sprint(raw))
-	}
-
-	return count, nil
 }
 
 // harborTag names the artifact after the revision it was built from, so a new

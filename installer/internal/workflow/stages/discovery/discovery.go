@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/axem-solutions/ai_platform/installer/internal/config"
+	"github.com/axem-solutions/ai_platform/installer/internal/config/catalog"
 	harborapi "github.com/axem-solutions/ai_platform/installer/internal/harbor/api"
 	"github.com/axem-solutions/ai_platform/installer/internal/harbor/auth"
 	"github.com/axem-solutions/ai_platform/installer/internal/kube"
@@ -404,7 +405,7 @@ func waitRegistryReady(rt *core.Runtime) error {
 	// Probe with a real Catalog repo so the token request carries a repository
 	// scope the robot account actually holds. A scopeless /v2/ probe would
 	// always 401 for a repository-scoped robot and never report ready.
-	models := rt.Bootstrap.Catalog.Models
+	models := catalog.WithWeights(rt.Bootstrap.Catalog.Models)
 	if len(models) == 0 {
 		return nil
 	}

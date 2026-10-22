@@ -24,23 +24,22 @@ import (
 	"github.com/axem-solutions/ai_platform/pkg/iac/serving"
 )
 
-// packagedModels lays out the values directories the installer image ships:
-// deployments/models/<category>/<name>/{gaie,ms}-<slug>/values.yaml, with the
-// slug being the lowercased name.
+// packagedModels lays out the model definitions the installer image ships:
+// deployments/models/<category>/<name>/model.yaml, with the slug being the
+// lowercased name.
 func packagedModels(t *testing.T, names map[string]string) string {
 	t.Helper()
 
 	root := t.TempDir()
 	for name, category := range names {
 		slug := strings.ToLower(name)
-		for _, release := range []string{"gaie-" + slug, "ms-" + slug} {
-			dir := filepath.Join(root, projectAppServing, "deployments", "models", category, name, release)
-			if err := os.MkdirAll(dir, 0o755); err != nil {
-				t.Fatalf("create %s: %v", dir, err)
-			}
-			if err := os.WriteFile(filepath.Join(dir, "values.yaml"), nil, 0o644); err != nil {
-				t.Fatal(err)
-			}
+		dir := filepath.Join(root, projectAppServing, "deployments", "models", category, name)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("create %s: %v", dir, err)
+		}
+		definition := "slug: " + slug + "\nmodel:\n  name: org/" + slug + "\n  size: 1Gi\n"
+		if err := os.WriteFile(filepath.Join(dir, "model.yaml"), []byte(definition), 0o644); err != nil {
+			t.Fatal(err)
 		}
 	}
 
@@ -98,6 +97,24 @@ func TestSelectedModelsCarryTheCatalog(t *testing.T) {
 	if got.Name != want.Name || got.ID != want.ID || got.HarborRef != want.HarborRef ||
 		got.StorageSize != want.StorageSize || got.StorageClass != "" {
 		t.Errorf("model = %+v, want %+v", got, want)
+	}
+}
+
+// A simulated model has no artifact in Harbor and no volume.
+func TestSelectedSimulatorHasNoWeights(t *testing.T) {
+	projects := packagedModels(t, map[string]string{"Simulator": "generative"})
+	sim := catalog.Model{
+		Name: "Simulator", Category: catalog.CategoryGenerative, Slug: "simulator",
+		ID: "shaide/simulator", Simulated: true,
+	}
+	rt := runtimeWith(t, projects, []catalog.Model{sim})
+
+	models := selectedModels(rt)
+	if len(models) != 1 {
+		t.Fatalf("selected %d models, want 1", len(models))
+	}
+	if models[0].HarborRef != "" || models[0].StorageSize != "" {
+		t.Errorf("simulator = %+v, want no Harbor reference or volume size", models[0])
 	}
 }
 
