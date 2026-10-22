@@ -22,10 +22,10 @@ For architecture details, traffic flows, and design decisions see [Gateway and r
 | `context` | No | current context | kubeconfig context to use |
 | `gatewayNamespace` | No | `gateway-system` | Namespace for the shared Gateway |
 | `istioHub` | No | `docker.io/istio` | Container image registry for Istio images |
-| `istioTag` | No | `1.28.1` | Istio version |
+| `istioTag` | No | `1.29.2` | Istio version |
 | `installGatewayApiCrds` | No | `false` on Azure, `true` elsewhere | Whether this stack installs upstream Gateway API CRDs. Keep `false` on AKS managed Gateway API clusters because Azure owns those CRDs. |
-| `gatewayApiCrdsPath` | No | `crds/gateway-api/standard` (bundled v1.5.1) | Override the Gateway API CRD source: a local kustomize dir or a remote URL. See [crds/README.md](crds/README.md). |
-| `gieCrdsPath` | No | `crds/gie` (bundled v1.4.0) | Override the GIE CRD source: a local kustomize dir or a remote URL. |
+| `gatewayApiCrdsPath` | No | `crds/gateway-api/standard` (bundled v1.6.2) | Override the Gateway API CRD source: a local kustomize dir or a remote URL. See [crds/README.md](crds/README.md). |
+| `gieCrdsPath` | No | `crds/gie` (bundled GIE v1.6.2 and llm-d router v1.0.0) | Override the GIE CRD source: a local kustomize dir or a remote URL. |
 | `infraStackRef` | No | — | Pulumi StackReference to cloud infra stack exporting `gatewayHostname`, `gatewayCertName`, `gatewayStaticIPName`, `albSubnetId`. Set on GCP and Azure stacks. Each export can also be set directly as a config key of the same name (plus `gatewayStaticIP` for a literal IP). |
 | `gatewayHostname` | No | — | Direct hostname for the shared gateway (on-prem alternative to `infraStackRef`). Set on RKE2 stack. |
 | `albName` | No | `shared-alb` | Azure AGC `ApplicationLoadBalancer` resource name. Used only when `gatewayClassName` is `azure-alb-external`: creates the ALB in `gateway-system` using `albSubnetId`. Ignored for any other class. |
