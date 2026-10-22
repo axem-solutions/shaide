@@ -518,6 +518,10 @@ func modelTitle(model catalog.Model) string {
 		kind = "emb"
 	}
 
+	if model.GPUsPerPod == 0 {
+		return fmt.Sprintf("%s · %s · no GPU", model.Name, kind)
+	}
+
 	return fmt.Sprintf("%s · %s · %d GPU", model.Name, kind, model.GPUsPerPod)
 }
 

@@ -151,7 +151,7 @@ func choicePrompt(models []catalog.Model, installed map[string]bool) core.Choice
 				model.Name,
 				categoryLabel(model.Category),
 				fmt.Sprint(model.GPUsPerPod),
-				model.StorageSize,
+				sizeCell(model),
 				status,
 			},
 			Detail:  modelDetail(model),
@@ -198,12 +198,27 @@ func modelDetail(model catalog.Model) string {
 		replicas = 1
 	}
 
+	if model.Simulated {
+		return strings.Join([]string{
+			fmt.Sprintf("%s on the llm-d inference simulator, no weights", model.ID),
+			fmt.Sprintf("no GPU, %d %s", replicas, plural(replicas, "replica", "replicas")),
+		}, "\n")
+	}
+
 	lines := []string{
 		fmt.Sprintf("%s @ %s", model.ID, model.HarborTag),
 		fmt.Sprintf("%d GPU per pod, %d %s", model.GPUsPerPod, replicas, plural(replicas, "replica", "replicas")),
 	}
 
 	return strings.Join(lines, "\n")
+}
+
+// sizeCell is the model's volume size; a simulated model has none.
+func sizeCell(model catalog.Model) string {
+	if !model.HasWeights() {
+		return "-"
+	}
+	return model.StorageSize
 }
 
 func plural(n int, one, many string) string {

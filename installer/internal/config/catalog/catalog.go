@@ -129,11 +129,11 @@ func Load(opts LoadOptions) (Catalog, error) {
 // skipped at bootstrap rather than failing minutes into a run.
 func (m Model) validate() error {
 	if strings.TrimSpace(m.ID) == "" {
-		return fmt.Errorf("modelArtifacts.name is required")
+		return fmt.Errorf("model.name is required")
 	}
 
 	if strings.TrimSpace(m.StorageSize) == "" {
-		return fmt.Errorf("modelArtifacts.size is required")
+		return fmt.Errorf("model.size is required")
 	}
 
 	if err := validateRevision(m.Revision); err != nil {
@@ -142,10 +142,10 @@ func (m Model) validate() error {
 
 	for _, dep := range m.Dependencies {
 		if strings.TrimSpace(dep.ID) == "" {
-			return fmt.Errorf("shaide.dependencies: id is required")
+			return fmt.Errorf("dependencies: id is required")
 		}
 		if err := validateRevision(dep.Revision); err != nil {
-			return fmt.Errorf("shaide.dependencies %s: %w", dep.ID, err)
+			return fmt.Errorf("dependencies %s: %w", dep.ID, err)
 		}
 	}
 
@@ -161,7 +161,7 @@ func validateRevision(revision string) error {
 	trimmed := strings.TrimSpace(revision)
 
 	if trimmed == "" {
-		return fmt.Errorf("shaide.revision is required; pin the Hugging Face commit to download")
+		return fmt.Errorf("revision is required; pin the Hugging Face commit to download")
 	}
 
 	if len(trimmed) < minRevisionLength || strings.Trim(strings.ToLower(trimmed), "0123456789abcdef") != "" {

@@ -10,11 +10,14 @@ import (
 	"github.com/axem-solutions/ai_platform/installer/internal/kube"
 	"github.com/axem-solutions/ai_platform/installer/internal/oras/inspect"
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/core"
+	"github.com/axem-solutions/ai_platform/pkg/iac/serving"
 	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
 	"github.com/axem-solutions/ai_platform/pkg/kube/connection"
 )
 
-const cudaImageName = "llm-d/llm-d-cuda"
+// cudaImageName is the model server image whose CUDA requirement the GPU
+// drivers must meet.
+const cudaImageName = serving.ModelServerImageName
 
 func Stage() core.Stage {
 	return core.Stage{

@@ -193,22 +193,28 @@ func servingPlacement(pools []placement.Pool) []serving.PlacementTerm {
 
 // selectedModels maps the models to serve onto the stack's model list. The
 // Harbor reference is derived from where the artifact stage put each model,
-// and each model runs on the node pools assigned to it.
+// and each model runs on the node pools assigned to it. A simulated model
+// gets no Harbor reference, so the stack creates no volume for it.
 func selectedModels(rt *core.Runtime) []serving.Model {
 	registry := harborRegistryHostname(rt)
 
 	models := make([]serving.Model, 0, len(rt.Models.Serve))
 	for _, model := range rt.Models.Serve {
-		models = append(models, serving.Model{
-			Name: model.Name,
-			ID:   model.ID,
-			HarborRef: fmt.Sprintf(
+		entry := serving.Model{
+			Name:      model.Name,
+			ID:        model.ID,
+			Placement: servingPlacement(rt.Placement.Models[model.Slug]),
+		}
+
+		if model.HasWeights() {
+			entry.HarborRef = fmt.Sprintf(
 				"%s/%s/%s:%s",
 				registry, model.HarborProject, model.HarborName, model.HarborTag,
-			),
-			StorageSize: model.StorageSize,
-			Placement:   servingPlacement(rt.Placement.Models[model.Slug]),
-		})
+			)
+			entry.StorageSize = model.StorageSize
+		}
+
+		models = append(models, entry)
 	}
 
 	return models

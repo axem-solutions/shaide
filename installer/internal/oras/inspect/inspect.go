@@ -49,7 +49,7 @@ func (p Platform) Equal(candidate *ocispec.Platform) bool {
 
 // InspectImage is the ORAS equivalent of:
 //
-// skopeo inspect --config docker://ghcr.io/llm-d/llm-d-cuda:v0.7.0
+// skopeo inspect --config docker://docker.io/vllm/vllm-openai:v0.31.0
 //
 // It resolves the image reference, selects the manifest matching the requested platform
 // reads the image configuration and returns the given environment variables as name-value pairs.

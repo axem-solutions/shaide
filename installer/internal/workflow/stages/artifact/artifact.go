@@ -20,6 +20,7 @@ import (
 	"github.com/axem-solutions/ai_platform/installer/internal/progress"
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/core"
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/stages/discovery"
+	"github.com/axem-solutions/ai_platform/pkg/iac/serving"
 	"github.com/axem-solutions/ai_platform/pkg/iac/shaide"
 )
 
@@ -66,7 +67,8 @@ func Stage() core.Stage {
 func checkModelArtifacts(rt *core.Runtime) error {
 	rt.Artifact.ToUpload = nil
 
-	if len(rt.Models.Serve) == 0 {
+	// A simulated model has nothing to mirror.
+	if len(catalog.WithWeights(rt.Models.Serve)) == 0 {
 		return nil
 	}
 
@@ -80,7 +82,7 @@ func checkModelArtifacts(rt *core.Runtime) error {
 	}
 	client := orasapi.NewClient(clientOptions)
 
-	for _, model := range rt.Models.Serve {
+	for _, model := range catalog.WithWeights(rt.Models.Serve) {
 		found, err := modelExistsInHarbor(context.Background(), client, model, rt.Bootstrap.Config.Paths.UploadState)
 		if err != nil {
 			return err
@@ -204,18 +206,34 @@ func uploadImages(rt *core.Runtime) error {
 }
 
 // imagesToUpload is the service images this run deploys. The webapp image is
-// left out when the webapp is not installed.
+// left out when the webapp is not installed, and the simulator image when no
+// simulated model is served.
 func imagesToUpload(rt *core.Runtime) []catalog.Image {
+	simulated := servesSimulator(rt.Models.Serve)
+
 	images := make([]catalog.Image, 0, len(rt.Bootstrap.Catalog.ServiceImages))
 	for _, image := range rt.Bootstrap.Catalog.ServiceImages {
 		if image.Name == shaide.WebAppImage && !rt.WebApp.Enabled {
 			rt.Detailf("not uploading %s: the webapp is not installed", image.Name)
 			continue
 		}
+		if image.Name == serving.SimulatorImageName && !simulated {
+			rt.Detailf("not uploading %s: no simulated model is served", image.Name)
+			continue
+		}
 		images = append(images, image)
 	}
 
 	return images
+}
+
+func servesSimulator(models []catalog.Model) bool {
+	for _, model := range models {
+		if model.Simulated {
+			return true
+		}
+	}
+	return false
 }
 
 func artifactUploader(rt *core.Runtime) (*oras.Uploader, error) {
@@ -296,7 +314,7 @@ func remoteSourceCredentials(rt *core.Runtime) map[string]orasapi.Credential {
 }
 
 func uninstallsModels(rt *core.Runtime) bool {
-	return len(rt.Models.Uninstall) > 0
+	return len(catalog.WithWeights(rt.Models.Uninstall)) > 0
 }
 
 // STEP 5 - Delete the artifacts of uninstalled models from Harbor
@@ -308,7 +326,7 @@ func deleteUninstalledModels(rt *core.Runtime) error {
 		return err
 	}
 
-	for _, model := range rt.Models.Uninstall {
+	for _, model := range catalog.WithWeights(rt.Models.Uninstall) {
 		err := harborapi.DeleteRepository(
 			context.Background(),
 			rt.Discovery.Client,

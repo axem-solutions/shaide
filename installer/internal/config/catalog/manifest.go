@@ -10,15 +10,15 @@ import (
 )
 
 // Model is a supported model packaged with the installer, read from its
-// deployments/models/<category>/<Name>/ms-<slug>/values.yaml.
+// deployments/models/<category>/<Name>/model.yaml.
 type Model struct {
 	// Name is the model's directory, for example "GPT-OSS-20B".
 	Name string
 	// Category is the directory above it: CategoryGenerative or
 	// CategoryEmbedder.
 	Category string
-	// Slug is the ms-<slug> suffix. app-serving names the model's namespace,
-	// releases and pod labels after it.
+	// Slug is the model.yaml slug. app-serving names the model's namespace,
+	// resources and pod labels after it.
 	Slug string
 
 	// ID and Revision pin the Hugging Face repository to download.
@@ -32,10 +32,32 @@ type Model struct {
 	GPUsPerPod int
 	Replicas   int
 
+	// Simulated is a model the llm-d inference simulator serves. It has no
+	// weights, so nothing is downloaded, mirrored or stored for it, and the
+	// Revision, StorageSize and Harbor fields are empty.
+	Simulated bool
+
 	// Where the model artifact lives in Harbor, derived from Slug and Revision.
 	HarborProject string
 	HarborName    string
 	HarborTag     string
+}
+
+// HasWeights reports whether the model has weights to download, mirror to
+// Harbor and store in a volume.
+func (m Model) HasWeights() bool {
+	return !m.Simulated
+}
+
+// WithWeights is the models that have weights.
+func WithWeights(models []Model) []Model {
+	var out []Model
+	for _, model := range models {
+		if model.HasWeights() {
+			out = append(out, model)
+		}
+	}
+	return out
 }
 
 type Dependency struct {
