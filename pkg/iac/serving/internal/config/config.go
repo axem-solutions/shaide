@@ -4,28 +4,22 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
+	"github.com/axem-solutions/ai_platform/pkg/iac/serving/modeldef"
 	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
 	kubernetes "github.com/axem-solutions/ai_platform/pkg/kube/connection"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
-var slugPattern = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
-
 const (
 	deploymentFolder = "deployments"
 	modelFolder      = "models"
 
-	gaiePrefix = "gaie-"
-	msPrefix   = "ms-"
-
-	// DefaultLLMdChartPath is relative to the project directory. The chart is
-	// downloaded into it by the installer image's chart-downloader stage; keep
-	// the version in sync with LLMD_INFRA_CHART_VERSION in installer/build/Dockerfile.
-	DefaultLLMdChartPath      = "./charts/llm-d-infra-v1.4.0.tgz"
-	DefaultGaieLocalChartPath = "charts/inferencepool"
+	// DefaultRouterChartPath is the llm-d-router-gateway chart vendored in
+	// the project, relative to the project directory. It is used on every
+	// platform, so deploying needs no access to the chart registry.
+	DefaultRouterChartPath = "charts/llm-d-router-gateway"
 )
 
 type Values struct {
@@ -39,14 +33,23 @@ type Values struct {
 		TokenSet bool
 	}
 
-	LLMd struct {
-		ChartPath string
-	}
+	// RouterChartPath is the resolved llm-d-router-gateway chart directory.
+	RouterChartPath string
 
 	Toleration *Toleration
 
 	// ORASImage pulls model weights into their volume.
 	ORASImage string
+
+	// ModelServerImage runs vLLM for models that do not name an image.
+	ModelServerImage string
+
+	// RouterImage is the llm-d router's endpoint picker (EPP).
+	RouterImage string
+
+	// SimulatorImage runs the models with engine sim that do not name an
+	// image.
+	SimulatorImage string
 
 	Models struct {
 		Generative []Model `json:"generative"`
@@ -69,6 +72,9 @@ type Model struct {
 	Placement []PlacementTerm `json:"placement,omitempty"`
 
 	ModelSource *ModelSource `json:"modelSource"`
+
+	// Definition is the packaged model.yaml, loaded when the config resolves.
+	Definition modeldef.Definition `json:"-"`
 }
 
 // ModelSource describes model weights pre-loaded from an OCI artifact into a
@@ -83,10 +89,8 @@ type ModelSource struct {
 }
 
 type ModelPaths struct {
-	Slug               string
-	GaieValuesPath     string
-	MsValuesPath       string
-	GaieLocalChartPath string
+	Slug           string
+	DefinitionPath string
 }
 
 func (c Config) Load(ctx *pulumi.Context) (Values, error) {
@@ -109,12 +113,20 @@ func (c Config) Load(ctx *pulumi.Context) (Values, error) {
 }
 
 func (c Config) applyDefaults(values *Values) {
-	if values.LLMd.ChartPath == "" {
-		values.LLMd.ChartPath = DefaultLLMdChartPath
-	}
-
 	if values.ORASImage == "" {
 		values.ORASImage = DefaultORASImage
+	}
+
+	if values.ModelServerImage == "" {
+		values.ModelServerImage = DefaultModelServerImage
+	}
+
+	if values.RouterImage == "" {
+		values.RouterImage = DefaultRouterImage
+	}
+
+	if values.SimulatorImage == "" {
+		values.SimulatorImage = DefaultSimulatorImage
 	}
 
 	applyModelDefaults := func(models []Model) {
@@ -136,22 +148,20 @@ func (c Config) applyDefaults(values *Values) {
 }
 
 func (c Config) resolve(values *Values) error {
-	values.LLMd.ChartPath = resolveProjectPath(c.ProjectDir(), values.LLMd.ChartPath)
+	values.RouterChartPath = resolveProjectPath(c.ProjectDir(), DefaultRouterChartPath)
 
-	gaieLocalChartPath := resolveProjectPath(c.ProjectDir(), DefaultGaieLocalChartPath)
-
-	if err := c.resolveModels("generative", values.Models.Generative, gaieLocalChartPath); err != nil {
+	if err := c.resolveModels(CategoryGenerative, values.Models.Generative); err != nil {
 		return err
 	}
 
-	if err := c.resolveModels("embedder", values.Models.Embedder, gaieLocalChartPath); err != nil {
+	if err := c.resolveModels(CategoryEmbedder, values.Models.Embedder); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (c Config) resolveModels(category string, models []Model, gaieLocalChartPath string) error {
+func (c Config) resolveModels(category string, models []Model) error {
 	for i := range models {
 		model := &models[i]
 
@@ -159,13 +169,13 @@ func (c Config) resolveModels(category string, models []Model, gaieLocalChartPat
 			continue
 		}
 
-		paths, err := resolveModelPaths(category, model.Name, c.ProjectDir())
+		paths, definition, err := resolveModelPaths(category, model.Name, c.ProjectDir())
 		if err != nil {
-			return fmt.Errorf("resolve model paths for %q: %w", model.Name, err)
+			return fmt.Errorf("resolve model %q: %w", model.Name, err)
 		}
 
-		paths.GaieLocalChartPath = gaieLocalChartPath
 		model.ModelPaths = paths
+		model.Definition = definition
 
 		if model.Namespace == "" {
 			model.Namespace = modelNamespace(model.Slug)
@@ -184,8 +194,20 @@ func (c Config) Validate(values Values) error {
 		return err
 	}
 
-	if strings.TrimSpace(values.LLMd.ChartPath) == "" {
-		return fmt.Errorf("llm-d chart path cannot be empty")
+	if strings.TrimSpace(values.RouterChartPath) == "" {
+		return fmt.Errorf("router chart path cannot be empty")
+	}
+
+	if strings.TrimSpace(values.ModelServerImage) == "" {
+		return fmt.Errorf("model server image cannot be empty")
+	}
+
+	if strings.TrimSpace(values.RouterImage) == "" {
+		return fmt.Errorf("router image cannot be empty")
+	}
+
+	if strings.TrimSpace(values.SimulatorImage) == "" {
+		return fmt.Errorf("simulator image cannot be empty")
 	}
 
 	if !values.hasEnabledModels() {
@@ -264,28 +286,16 @@ func (values Values) hasEnabledModels() bool {
 }
 
 func (paths ModelPaths) validate() error {
-	if err := paths.validateSlug(); err != nil {
+	if err := modeldef.ValidateSlug(paths.Slug); err != nil {
 		return err
 	}
 
-	if paths.GaieValuesPath == "" {
-		return fmt.Errorf("gaie values path cannot be empty")
+	if paths.DefinitionPath == "" {
+		return fmt.Errorf("model definition path cannot be empty")
 	}
 
-	if paths.MsValuesPath == "" {
-		return fmt.Errorf("model service values path cannot be empty")
-	}
-
-	if paths.GaieLocalChartPath == "" {
-		return fmt.Errorf("gaie local chart path cannot be empty")
-	}
-
-	if _, err := os.Stat(paths.GaieValuesPath); err != nil {
-		return fmt.Errorf("gaie values file not found: %s", paths.GaieValuesPath)
-	}
-
-	if _, err := os.Stat(paths.MsValuesPath); err != nil {
-		return fmt.Errorf("model service values file not found: %s", paths.MsValuesPath)
+	if _, err := os.Stat(paths.DefinitionPath); err != nil {
+		return fmt.Errorf("model definition not found: %s", paths.DefinitionPath)
 	}
 
 	return nil
@@ -323,88 +333,15 @@ func (values Values) requiresHarbor() bool {
 	return false
 }
 
-func resolveModelPaths(category string, modelName string, projectDir string) (ModelPaths, error) {
-	modelDir := filepath.Join(projectDir, deploymentFolder, modelFolder, category, modelName)
+// resolveModelPaths loads the model.yaml packaged for the model. Its slug
+// names the model's namespace, resources and labels.
+func resolveModelPaths(category string, modelName string, projectDir string) (ModelPaths, modeldef.Definition, error) {
+	path := modeldef.Path(filepath.Join(projectDir, deploymentFolder, modelFolder, category, modelName))
 
-	entries, err := os.ReadDir(modelDir)
+	definition, err := modeldef.Load(path)
 	if err != nil {
-		return ModelPaths{}, fmt.Errorf("read model directory %q: %w", modelDir, err)
+		return ModelPaths{}, modeldef.Definition{}, err
 	}
 
-	var paths ModelPaths
-	var msSlug string
-
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-
-		name := entry.Name()
-
-		switch {
-		case strings.HasPrefix(name, gaiePrefix):
-			if paths.GaieValuesPath != "" {
-				return ModelPaths{}, fmt.Errorf("multiple %s* subdirectories in %q", gaiePrefix, modelDir)
-			}
-
-			paths.Slug = strings.TrimPrefix(name, gaiePrefix)
-			paths.GaieValuesPath = filepath.Join(modelDir, name, "values.yaml")
-		case strings.HasPrefix(name, msPrefix):
-			if paths.MsValuesPath != "" {
-				return ModelPaths{}, fmt.Errorf("multiple %s* subdirectories in %q", msPrefix, modelDir)
-			}
-
-			msSlug = strings.TrimPrefix(name, msPrefix)
-			paths.MsValuesPath = filepath.Join(modelDir, name, "values.yaml")
-		}
-	}
-
-	if err := paths.validateResolved(modelDir, msSlug); err != nil {
-		return ModelPaths{}, err
-	}
-
-	return paths, nil
-}
-
-func (paths ModelPaths) validateResolved(modelDir string, msSlug string) error {
-	if paths.GaieValuesPath == "" {
-		return fmt.Errorf("no %s* subdirectory found in %q", gaiePrefix, modelDir)
-	}
-
-	if paths.MsValuesPath == "" {
-		return fmt.Errorf("no %s* subdirectory found in %q", msPrefix, modelDir)
-	}
-	if paths.Slug != msSlug {
-		return fmt.Errorf("slug mismatch: %s%s vs %s%s", gaiePrefix, paths.Slug, msPrefix, msSlug)
-	}
-
-	if err := paths.validateSlug(); err != nil {
-		return err
-	}
-
-	if _, err := os.Stat(paths.GaieValuesPath); err != nil {
-		return fmt.Errorf("gaie values file not found: %s", paths.GaieValuesPath)
-	}
-
-	if _, err := os.Stat(paths.MsValuesPath); err != nil {
-		return fmt.Errorf("model service values file not found: %s", paths.MsValuesPath)
-	}
-
-	return nil
-}
-
-func (paths ModelPaths) validateSlug() error {
-	if paths.Slug == "" {
-		return fmt.Errorf("slug cannot be empty")
-	}
-
-	if len(paths.Slug) > 47 {
-		return fmt.Errorf("invalid slug %q: too long (%d > 47)", paths.Slug, len(paths.Slug))
-	}
-
-	if !slugPattern.MatchString(paths.Slug) {
-		return fmt.Errorf("invalid slug %q: use lowercase alphanumerics and '-', start/end with alphanumeric", paths.Slug)
-	}
-
-	return nil
+	return ModelPaths{Slug: definition.Slug, DefinitionPath: path}, definition, nil
 }

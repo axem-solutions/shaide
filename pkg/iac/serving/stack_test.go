@@ -20,14 +20,13 @@ func packagedProject(t *testing.T, models map[string]string) string {
 	project := t.TempDir()
 	for name, category := range models {
 		slug := "slug-" + category
-		for _, dir := range []string{"gaie-" + slug, "ms-" + slug} {
-			path := filepath.Join(project, "deployments", "models", category, name, dir)
-			if err := os.MkdirAll(path, 0o755); err != nil {
-				t.Fatal(err)
-			}
-			if err := os.WriteFile(filepath.Join(path, "values.yaml"), nil, 0o644); err != nil {
-				t.Fatal(err)
-			}
+		dir := filepath.Join(project, "deployments", "models", category, name)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		definition := "slug: " + slug + "\nmodel:\n  name: org/" + slug + "\n  size: 1Gi\n"
+		if err := os.WriteFile(filepath.Join(dir, "model.yaml"), []byte(definition), 0o644); err != nil {
+			t.Fatal(err)
 		}
 	}
 	return project
@@ -112,18 +111,27 @@ func TestModelVolumes(t *testing.T) {
 	}
 }
 
-func TestORASImageIsPickedFromTheMirroredImages(t *testing.T) {
-	mirrored := "harbor.harbor.svc.cluster.local/services/oras-project/oras:v1.3.1"
+// The stack runs the images the installer mirrored and ignores the rest.
+func TestImagesArePickedFromTheMirroredImages(t *testing.T) {
+	const harbor = "harbor.harbor.svc.cluster.local/services/"
 	stack := NewStack(t.TempDir(), stackOptions(), Options{Images: map[string]string{
-		servingconfig.ORASImageName: mirrored,
-		"istio/pilot":               "harbor.harbor.svc.cluster.local/services/istio/pilot:1.28.1",
+		servingconfig.ORASImageName:        harbor + "oras-project/oras:v1.3.1",
+		servingconfig.ModelServerImageName: harbor + "vllm/vllm-openai:v0.31.0",
+		servingconfig.RouterImageName:      harbor + "llm-d/llm-d-router-endpoint-picker:v1.0.0",
+		"istio/pilot":                      harbor + "istio/pilot:1.29.2",
 	}})
 
 	resolved, err := stack.Config().Resolve(nil)
 	if err != nil {
 		t.Fatalf("Resolve() error = %v", err)
 	}
-	if got := resolved["app-serving:orasImage"].Value; got != mirrored {
-		t.Errorf("orasImage = %q, want %q", got, mirrored)
+	for key, want := range map[string]string{
+		"app-serving:orasImage":        harbor + "oras-project/oras:v1.3.1",
+		"app-serving:modelServerImage": harbor + "vllm/vllm-openai:v0.31.0",
+		"app-serving:routerImage":      harbor + "llm-d/llm-d-router-endpoint-picker:v1.0.0",
+	} {
+		if got := resolved[key].Value; got != want {
+			t.Errorf("%s = %q, want %q", key, got, want)
+		}
 	}
 }

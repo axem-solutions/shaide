@@ -1,0 +1,71 @@
+# GPT OSS 20B model definition — on-prem / air-gapped / GPU
+# Serves openai/gpt-oss-20b through the OpenAI-compatible API.
+# Tuned for 1x GPU node.
+# Images served from internal Harbor; no internet access required on cluster nodes.
+#
+# Image upload: the shaide installer mirrors the stack's vLLM image into Harbor.
+
+slug: gpt-oss-20b-rke2
+model:
+  name: "openai/gpt-oss-20b"
+  size: 60Gi
+server:
+  replicas: 1
+  args:
+    - "--tensor-parallel-size"
+    - "1"
+    - "--gpu-memory-utilization"
+    - "0.90"
+    - "--max-model-len"
+    - "100000"
+    - "--max-num-seqs"
+    - "4"
+    - "--max-num-batched-tokens"
+    - "8192"
+    - "--block-size"
+    - "16"
+    - "--trust-remote-code"
+  env:
+    - name: VLLM_LOGGING_LEVEL
+      value: INFO
+    - name: NCCL_P2P_DISABLE
+      value: "1"
+    - name: NCCL_IGNORE_DISABLED_P2P
+      value: "1"
+    - name: NCCL_DEBUG
+      value: "INFO"
+    - name: VLLM_SKIP_P2P_CHECK
+      value: "1"
+    - name: GLOO_SOCKET_IFNAME
+      value: "eth0"
+    - name: NCCL_SOCKET_IFNAME
+      value: "eth0"
+  resources:
+    limits:
+      nvidia.com/gpu: "1"
+      memory: "40Gi"
+      cpu: "16"
+    requests:
+      nvidia.com/gpu: "1"
+      memory: "40Gi"
+      cpu: "16"
+  volumeMounts:
+    - name: metrics-volume
+      mountPath: /.config
+    - name: torch-compile-cache
+      mountPath: /.cache
+    - name: shm
+      mountPath: /dev/shm
+  volumes:
+    - name: metrics-volume
+      emptyDir: {}
+    - name: torch-compile-cache
+      emptyDir: {}
+    - name: shm
+      emptyDir:
+        medium: Memory
+        sizeLimit: 8Gi
+  tolerations:
+    - key: "dedicated"
+      operator: "Exists"
+      effect: "NoSchedule"

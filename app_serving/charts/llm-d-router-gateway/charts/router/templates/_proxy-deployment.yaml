@@ -1,0 +1,113 @@
+{{- define "llm-d-epp.proxy-deployment" -}}
+{{- $proxy := include "llm-d-router.proxy" . | fromYaml | default dict -}}
+{{- $proxyType := include "llm-d-router.proxyType" . | trim -}}
+{{- $proxyConfigMap := index $proxy "configMap" | default dict -}}
+{{- $proxyConfigMapName := index $proxyConfigMap "name" | default "" -}}
+{{- if and $proxy.enabled (eq (include "llm-d-router.proxyMode" .) "service") -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "llm-d-router.proxyName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "llm-d-router.labels" . | nindent 4 }}
+    {{- include "llm-d-router.proxySelectorLabels" . | nindent 4 }}
+spec:
+  {{- $autoscaling := dig "autoscaling" dict .Values.router.proxy }}
+  {{- if not $autoscaling.enabled }}
+  replicas: {{ .Values.router.proxy.replicas | default 2 }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "llm-d-router.proxySelectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "llm-d-router.labels" . | nindent 8 }}
+        {{- include "llm-d-router.proxySelectorLabels" . | nindent 8 }}
+      annotations:
+        checksum/config: {{ include "llm-d-router.proxyConfigMapData" . | sha256sum }}
+    spec:
+      {{- if .Values.router.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml .Values.router.imagePullSecrets | nindent 8 }}
+      {{- end }}
+      terminationGracePeriodSeconds: {{ dig "terminationGracePeriodSeconds" 70 .Values.router.proxy }}
+      containers:
+        - name: {{ $proxy.name }}
+          image: {{ $proxy.image }}
+          imagePullPolicy: {{ $proxy.imagePullPolicy | default "IfNotPresent" }}
+        {{- with $proxy.command }}
+          command:
+            - {{ . | quote }}
+        {{- end }}
+        {{- with $proxy.args }}
+          args:
+          {{- range . }}
+            - {{ . | quote }}
+          {{- end }}
+        {{- end }}
+        {{- with $proxy.env }}
+          env:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- with $proxy.ports }}
+          ports:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- with $proxy.livenessProbe }}
+          livenessProbe:
+          {{- toYaml . | nindent 12 }}
+        {{- end }}
+        {{- with $proxy.readinessProbe }}
+          readinessProbe:
+          {{- toYaml . | nindent 12 }}
+        {{- end }}
+        {{- with $proxy.startupProbe }}
+          startupProbe:
+          {{- toYaml . | nindent 12 }}
+        {{- end }}
+        {{- if semverCompare ">=1.30-0" .Capabilities.KubeVersion.Version }}
+          # Give endpoint removal time to propagate before SIGTERM.
+          # Kubelet performs the delay without a shell in the distroless Envoy image.
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: 5
+        {{- end }}
+        {{- with $proxy.securityContext }}
+          securityContext:
+          {{- toYaml . | nindent 12 }}
+        {{- end }}
+        {{- with $proxy.resources }}
+          resources:
+          {{- toYaml . | nindent 12 }}
+        {{- end }}
+        {{- if or (and (eq $proxyType "agentgateway") $proxyConfigMapName) $proxy.volumeMounts }}
+          volumeMounts:
+          {{- if and (eq $proxyType "agentgateway") $proxyConfigMapName }}
+            - name: agentgateway-config-template
+              mountPath: /config
+              readOnly: true
+          {{- end }}
+          {{- with $proxy.volumeMounts }}
+          {{- toYaml . | nindent 12 }}
+          {{- end }}
+        {{- end }}
+      {{- if or (and (eq $proxyType "agentgateway") $proxyConfigMapName) $proxy.volumes }}
+      volumes:
+      {{- if and (eq $proxyType "agentgateway") $proxyConfigMapName }}
+        - name: agentgateway-config-template
+          configMap:
+            name: {{ $proxyConfigMapName }}
+            items:
+              - key: config.yaml
+                path: config.yaml
+      {{- end }}
+      {{- with $proxy.volumes }}
+      {{- tpl (toYaml .) $ | nindent 8 }}
+      {{- end }}
+      {{- end }}
+---
+{{- end -}}
+{{- end -}}

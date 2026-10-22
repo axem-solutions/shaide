@@ -8,11 +8,20 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
+// ModelServerImageName is the upstream name of the vLLM image the model
+// servers run, as the image manifest mirrors it. The installer checks the GPU
+// drivers against this image's CUDA requirement.
+const ModelServerImageName = servingconfig.ModelServerImageName
+
+// SimulatorImageName is the upstream name of llm-d's vLLM simulator image,
+// which simulated models run.
+const SimulatorImageName = servingconfig.SimulatorImageName
+
 // Model is one model the installer selected to serve, as the model manifest
 // describes it. Where it runs and how its weights are laid out is the stack's
 // business.
 type Model struct {
-	// Name is the packaged values directory, under
+	// Name is the packaged model directory, under
 	// deployments/models/<category>/<name>.
 	Name string
 
@@ -20,7 +29,8 @@ type Model struct {
 	// weights land at hub/<ID> inside the model's volume.
 	ID string
 
-	// HarborRef is where the weights were mirrored.
+	// HarborRef is where the weights were mirrored. Empty for a simulated
+	// model, which has no weights and so no volume.
 	HarborRef string
 
 	StorageSize string
@@ -88,6 +98,9 @@ func NewStack(projectDir string, common stackpkg.Options, options ...Options) *S
 			HarborToken:       servingOptions.HarborToken,
 			ModelStorageClass: servingOptions.ModelStorageClass,
 			ORASImage:         servingOptions.Images[servingconfig.ORASImageName],
+			ModelServerImage:  servingOptions.Images[servingconfig.ModelServerImageName],
+			RouterImage:       servingOptions.Images[servingconfig.RouterImageName],
+			SimulatorImage:    servingOptions.Images[servingconfig.SimulatorImageName],
 		},
 	)}
 }
@@ -142,10 +155,10 @@ func placement(model Model) []servingconfig.PlacementTerm {
 	return terms
 }
 
-// modelsInput places each model by the category its packaged values are in,
+// modelsInput places each model by the category its model.yaml is packaged in,
 // on its own placement or the GPU pool, with its weights under hub/<ID> in its
-// volume. A model with no packaged values is dropped rather than guessed at:
-// serving it from the wrong values directory would deploy the wrong runtime.
+// volume. A model with no packaged definition is dropped rather than guessed at:
+// serving it from the wrong definition would deploy the wrong runtime.
 func modelsInput(projectDir string, models []Model, logf func(format string, args ...any)) servingconfig.ModelsInput {
 	var input servingconfig.ModelsInput
 
@@ -153,7 +166,7 @@ func modelsInput(projectDir string, models []Model, logf func(format string, arg
 		category, ok := servingconfig.ModelCategory(projectDir, model.Name)
 		if !ok {
 			if logf != nil {
-				logf("model %q has no packaged values directory; skipping it for serving", model.Name)
+				logf("model %q has no packaged model directory; skipping it for serving", model.Name)
 			}
 			continue
 		}
@@ -162,12 +175,15 @@ func modelsInput(projectDir string, models []Model, logf func(format string, arg
 			Name:      model.Name,
 			Enabled:   true,
 			Placement: placement(model),
-			ModelSource: &servingconfig.ModelSourceInput{
+		}
+
+		if model.HarborRef != "" {
+			entry.ModelSource = &servingconfig.ModelSourceInput{
 				HarborRef:    model.HarborRef,
 				ModelUri:     path.Join("hub", model.ID),
 				StorageSize:  model.StorageSize,
 				StorageClass: model.StorageClass,
-			},
+			}
 		}
 
 		if len(entry.Placement) == 0 {

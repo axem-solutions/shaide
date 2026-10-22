@@ -6,6 +6,7 @@ import (
 
 	corev1 "github.com/pulumi/pulumi-kubernetes/sdk/v4/go/kubernetes/core/v1"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
+	k8scorev1 "k8s.io/api/core/v1"
 )
 
 // ClaimName is the PersistentVolumeClaim holding the model's weights.
@@ -13,6 +14,8 @@ func (m *Model) ClaimName() string {
 	return modelClaim(m.Slug)
 }
 
+// ReleasePostFix names the model's resources: its slug, or a stack-specific
+// suffix when the stack config sets releaseName (infra-<postfix>).
 func (m *Model) ReleasePostFix() string {
 	if m.ReleaseName == "" {
 		return "sim"
@@ -20,23 +23,38 @@ func (m *Model) ReleasePostFix() string {
 	return strings.TrimPrefix(m.ReleaseName, "infra-")
 }
 
-func (m *Model) InfraReleaseName() string {
-	if m.ReleaseName == "" {
-		return "infra-" + m.ReleasePostFix()
-	}
-	return m.ReleaseName
+// RouterReleaseName is the llm-d-router-gateway Helm release. The chart names
+// the InferencePool after it and the EPP Service "<release>-epp".
+func (m *Model) RouterReleaseName() string {
+	return "router-" + m.ReleasePostFix()
 }
 
-func (m *Model) GaieReleaseName() string {
-	return "gaie-" + m.ReleasePostFix()
+// RouterServiceName is the EPP Service the Gateway sends ext-proc calls to.
+func (m *Model) RouterServiceName() string {
+	return m.RouterReleaseName() + "-epp"
 }
 
-func (m *Model) ModelServiceReleaseName() string {
-	return "ms-" + m.ReleasePostFix()
+// InferencePoolName is the pool of model server pods the router picks from.
+func (m *Model) InferencePoolName() string {
+	return m.RouterReleaseName()
 }
 
+// GatewayName is the model's Istio Gateway.
 func (m *Model) GatewayName() string {
-	return m.InfraReleaseName() + "-inference-gateway"
+	return "gateway-" + m.ReleasePostFix()
+}
+
+// GatewayServiceName is the Service Istio provisions for the Gateway: Istio
+// names it "<gateway>-istio".
+func (m *Model) GatewayServiceName() string {
+	return m.GatewayName() + "-istio"
+}
+
+// ModelServerName is the model server Deployment. Its pods carry it as the
+// llm-d.ai/model label, which the InferencePool and the embedding Service
+// select on.
+func (m *Model) ModelServerName() string {
+	return "model-" + m.ReleasePostFix()
 }
 
 func (m *Model) HTTPRouteName() string {
@@ -47,16 +65,20 @@ func (m *Model) EmbeddingServiceName() string {
 	return "ms-" + m.ReleasePostFix() + "-embeddings"
 }
 
-// ChatCompletionEndpoint is the URL a client reaches this model at, through
-// the Istio Gateway. "-istio" is not app_serving's own naming choice — it's
-// how Istio names the Service it auto-provisions for a Gateway API Gateway,
-// confirmed against a real deployed cluster (kubectl get svc).
-func (m *Model) ChatCompletionEndpoint() string {
-	return "http://" + m.GatewayName() + "-istio." + m.Namespace + ".svc.cluster.local/v1/chat/completions"
+// LegacyModelServiceLabel is the llm-d.ai/model label the retired
+// llm-d-modelservice chart put on its pods, used to find them for removal.
+func (m *Model) LegacyModelServiceLabel() string {
+	return "ms-" + m.ReleasePostFix() + "-llm-d-modelservice"
 }
 
-// EmbeddingURL is the URL a client reaches this embedder model at, direct
-// (no Gateway/GAIE — embedding requests bypass that path entirely).
+// ChatCompletionEndpoint is the URL a client reaches this model at, through
+// the Istio Gateway.
+func (m *Model) ChatCompletionEndpoint() string {
+	return "http://" + m.GatewayServiceName() + "." + m.Namespace + ".svc.cluster.local/v1/chat/completions"
+}
+
+// EmbeddingURL is the URL a client reaches this embedder model at, through
+// its embedding Service.
 func (m *Model) EmbeddingURL() string {
 	return "http://" + m.EmbeddingServiceName() + "." + m.Namespace + ".svc.cluster.local:8200/v1/embeddings"
 }
@@ -114,43 +136,39 @@ type nodeRequirement struct {
 	values []string
 }
 
-// NodeAffinityMap builds a hard (required) nodeAffinity as a raw pulumi.Map, for chart values
-// that accept an arbitrary pod-spec passthrough (llm-d-modelservice's extraConfig).
-// Renders to the same requiredDuringSchedulingIgnoredDuringExecution shape used everywhere
-// else in this design. Returns an empty map when the model has no placement, contributing
-// nothing to the pod spec.
-func (m Model) NodeAffinityMap() pulumi.Map {
+// NodeAffinity builds the model's hard (required) nodeAffinity for pod specs
+// built from the Kubernetes API types, as the model server Deployment is.
+// Returns nil when the model has no placement.
+func (m Model) NodeAffinity() *k8scorev1.Affinity {
 	terms := m.placementTerms()
 	if len(terms) == 0 {
-		return pulumi.Map{}
+		return nil
 	}
 
-	nodeSelectorTerms := make(pulumi.Array, 0, len(terms))
+	nodeSelectorTerms := make([]k8scorev1.NodeSelectorTerm, 0, len(terms))
 	for _, term := range terms {
-		exprs := make([]map[string]interface{}, 0, len(term))
+		exprs := make([]k8scorev1.NodeSelectorRequirement, 0, len(term))
 		for _, req := range term {
-			exprs = append(exprs, map[string]interface{}{
-				"key":      req.key,
-				"operator": "In",
-				"values":   req.values,
+			exprs = append(exprs, k8scorev1.NodeSelectorRequirement{
+				Key:      req.key,
+				Operator: k8scorev1.NodeSelectorOpIn,
+				Values:   append([]string(nil), req.values...),
 			})
 		}
-		nodeSelectorTerms = append(nodeSelectorTerms, pulumi.Map{
-			"matchExpressions": pulumi.Any(exprs),
-		})
+		nodeSelectorTerms = append(nodeSelectorTerms, k8scorev1.NodeSelectorTerm{MatchExpressions: exprs})
 	}
 
-	return pulumi.Map{
-		"nodeAffinity": pulumi.Map{
-			"requiredDuringSchedulingIgnoredDuringExecution": pulumi.Map{
-				"nodeSelectorTerms": nodeSelectorTerms,
+	return &k8scorev1.Affinity{
+		NodeAffinity: &k8scorev1.NodeAffinity{
+			RequiredDuringSchedulingIgnoredDuringExecution: &k8scorev1.NodeSelector{
+				NodeSelectorTerms: nodeSelectorTerms,
 			},
 		},
 	}
 }
 
 // NodeAffinityArgs builds the same hard (required) nodeAffinity as *corev1.AffinityArgs, for
-// components using typed corev1.PodSpecArgs directly instead of raw Helm values.
+// components built from Pulumi's corev1.PodSpecArgs, such as the ORAS pull Job.
 func (m Model) NodeAffinityArgs() *corev1.AffinityArgs {
 	terms := m.placementTerms()
 	if len(terms) == 0 {
@@ -181,16 +199,24 @@ func (m Model) NodeAffinityArgs() *corev1.AffinityArgs {
 	}
 }
 
+// MetaLabels identify the model's resources; shaide-server discovers models
+// by them.
 func (m Model) MetaLabels(category string) pulumi.StringMap {
-	labels := pulumi.StringMap{
-		"app.kubernetes.io/part-of": pulumi.String("app-serving"),
-		"axem.dev/platform":         pulumi.String("ai-platform"),
-		"axem.dev/model-name":       pulumi.String(m.Name),
-		"axem.dev/model-slug":       pulumi.String(m.Slug),
-		"axem.dev/model-category":   pulumi.String(category),
+	return pulumi.ToStringMap(m.MetaLabelValues(category))
+}
+
+// MetaLabelValues are the MetaLabels as plain strings, for objects built from
+// the Kubernetes API types.
+func (m Model) MetaLabelValues(category string) map[string]string {
+	labels := map[string]string{
+		"app.kubernetes.io/part-of": "app-serving",
+		"axem.dev/platform":         "ai-platform",
+		"axem.dev/model-name":       m.Name,
+		"axem.dev/model-slug":       m.Slug,
+		"axem.dev/model-category":   category,
 	}
 	if ng := m.NodeSelector["nodegroup"]; ng != "" {
-		labels["axem.dev/nodegroup"] = pulumi.String(ng)
+		labels["axem.dev/nodegroup"] = ng
 	}
 	return labels
 }

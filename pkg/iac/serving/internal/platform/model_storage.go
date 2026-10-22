@@ -177,14 +177,14 @@ func createModelStorage(
 					Tolerations: buildTolerations(cfg.Toleration),
 					ImagePullSecrets: corev1.LocalObjectReferenceArray{
 						&corev1.LocalObjectReferenceArgs{
-							Name: pulumi.String("harbor-creds"),
+							Name: pulumi.String(HarborPullSecretName),
 						},
 					},
 					Volumes: corev1.VolumeArray{
 						&corev1.VolumeArgs{
 							Name: pulumi.String("harbor-creds"),
 							Secret: &corev1.SecretVolumeSourceArgs{
-								SecretName: pulumi.String("harbor-creds"),
+								SecretName: pulumi.String(HarborPullSecretName),
 								Items: corev1.KeyToPathArray{
 									&corev1.KeyToPathArgs{
 										Key:  pulumi.String(".dockerconfigjson"),

@@ -1,0 +1,353 @@
+extraServicePorts: []
+
+# Kubernetes cluster DNS domain, used to build in-cluster Service FQDNs.
+clusterDomain: cluster.local
+
+# Secrets holding credentials for pulling images from private registries
+imagePullSecrets: []
+
+epp:
+  replicas: 1
+  # Empty preserves automatic leader election for fixed replica counts > 1.
+  # Explicit modes: leader-elected or all-active.
+  haMode: ""
+
+  # Alpha: share in-flight load between active EPP replicas using external Redis 7.4+.
+  # Enabling this selects all-active mode and allows experimental plugins.
+  crossReplica:
+    enabled: false
+    syncInterval: 200ms
+    publishTimeout: 1s
+    redis:
+      address: ""
+      db: 0
+      stateTTL: 2s
+      coordinationTTL: 180s
+      # Existing Secret in the release namespace, exposed through passwordEnv.
+      # passwordSecretRef:
+      #   name: redis-auth
+      #   key: password
+      passwordSecretRef: {}
+
+  # Pod-level securityContext, inherited by every container in the EPP pod. The
+  # latency predictor images declare no user and run as root unless runAsUser is
+  # set here.
+  podSecurityContext: {}
+  # Container-level securityContext for the EPP container.
+  securityContext: {}
+
+  # Overrides the EPP Deployment's spec.strategy. All-active mode and autoscaling
+  # default to RollingUpdate (maxUnavailable: 0, maxSurge: 1); otherwise Recreate.
+  #
+  # With replicas > 1 the chart enables leader election, and standby replicas stay
+  # NotReady by design, so a `Recreate` Deployment never reports Available=True and
+  # `helm --wait` blocks until it times out. Setting a RollingUpdate strategy whose
+  # maxUnavailable covers the standbys lets Helm consider the release ready while
+  # keeping standbys out of the Service (they are still NotReady, so they are not
+  # Endpoints). See "Multi-replica EPP and Helm --wait" in the chart README.
+  #
+  # deploymentStrategy:
+  #   type: RollingUpdate
+  #   rollingUpdate:
+  #     maxUnavailable: 1
+  #     maxSurge: 0
+  image:
+    registry: ghcr.io/llm-d
+    repository: llm-d-router-endpoint-picker
+    tag: main
+    pullPolicy: Always
+  extProcPort: 9002
+  # gRPC port serving EPP liveness and readiness checks, 9003 if unset.
+  # grpcHealthPort: 9003
+
+  parsers: [] # e.g. ["openai-parser", "anthropic-parser"], or empty for auto-selection
+
+  # Metrics DataSource Configuration
+  # These values configure how the EPP scrapes metrics from model server pods.
+  metricsDataSource:
+    # scheme is the HTTP scheme used to scrape metrics (http or https).
+    scheme: "http"
+    # path is the URL path on the model server pod that exposes Prometheus metrics.
+    path: "/metrics"
+    # insecureSkipVerify disables TLS certificate verification when scheme is https.
+    insecureSkipVerify: true
+
+  # Example flags:
+  # flags:
+  #  # Log verbosity
+  #  v: 2
+  
+  # Example environment variables:
+  # env:
+  #   ENABLE_EXPERIMENTAL_FEATURE: "true"
+  env: []
+  
+  pluginsConfigFile: "default-plugins.yaml"
+  # Structured EPP configuration rendered into pluginsConfigFile. Maps merge
+  # across values files; lists are replaced according to Helm's merge rules.
+  pluginsConfig: {}
+  # Additional raw ConfigMap entries keyed by file name.
+  pluginsCustomConfig: {}
+  
+  # Define additional container ports
+  extraContainerPorts: []
+  
+  # Example defining a custom EPP config file
+  # pluginsCustomConfig:
+  #   custom-plugins.yaml: |
+  #     apiVersion: llm-d.ai/v1
+  #     kind: EndpointPickerConfig
+  #     plugins:
+  #     - type: custom-scorer
+  #       parameters:
+  #         custom-threshold: 64
+  #     schedulingProfiles:
+  #     - name: default
+  #       plugins:
+  #       - pluginRef: custom-scorer
+  
+  # EPP container resources: CPU limits unset for burst capacity, memory capped at 16Gi
+  resources:
+    requests:
+      cpu: "8"
+      memory: 8Gi
+    limits:
+      memory: 16Gi
+
+  # Autoscaling configuration for the EPP Deployment.
+  # When enabled, a HorizontalPodAutoscaler (HPA) resource is created targeting the EPP Deployment.
+  # Note: EPP autoscaling requires Active-Active mode (ha-enable-leader-election must not be true)
+  # and is incompatible with StatefulSet deployments (such as priority routing or GKE preferred backends).
+  # router.epp.replicas is ignored when autoscaling is enabled; use minReplicas and maxReplicas.
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 80
+    # targetMemoryUtilizationPercentage: 80
+    # behavior: {}
+    # metrics: [] # Optional custom metrics override. Replaces auto-generated CPU and memory metrics (percentage fields are still range-validated if defined).
+
+  affinity: {}
+  tolerations: []
+
+  # Annotations added to the EPP pod template. Useful for clusters that rely on
+  # annotation-based Prometheus scraping (prometheus.io/{scrape,port,path}) or
+  # Istio metrics-merging, rather than a ServiceMonitor or GMP.
+  podAnnotations: {}
+
+# By default no proxy is configured
+proxy:
+  enabled: false
+
+# Tokenizer sidecar. Runs vLLM's `vllm launch render <modelName>` (Python) or
+# `vllm-rs render <modelName>` (Rust) and exposes `/v1/completions/render` and
+# `/v1/chat/completions/render` over loopback HTTP to EPP. modelName is passed as the first
+# positional arg to the render command (required when enabled). EPP is wired to
+# the sidecar via `router.epp.pluginsCustomConfig`.
+# When flavor is "rust", router.tokenizer.image must be set to an image containing the vllm-rs binary.
+tokenizer:
+  enabled: false
+  # Backend renderer flavor: "python" (default, runs vllm launch render) or "rust" (runs vllm-rs render; requires an image that includes vllm-rs).
+  flavor: "python"
+  modelName: ""
+  image:
+    registry: docker.io
+    repository: vllm/vllm-openai-cpu
+    tag: v0.19.1
+    pullPolicy: IfNotPresent
+  port: 8000
+  command: []
+  args: []
+  # Extra args appended to the vllm-render container after the default or overridden args.
+  extraArgs: []
+  # Pod-level init containers rendered when the tokenizer is enabled.
+  initContainers: []
+  # Pod-level volumes rendered alongside model-cache when the tokenizer is enabled.
+  volumes: []
+  env:
+    - name: HF_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: llm-d-hf-token
+          key: HF_TOKEN
+  resources:
+    requests:
+      cpu: "4"
+      memory: 8Gi
+  volumeMounts: []
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: render-http
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 60
+
+# Monitoring configuration for EPP
+monitoring:
+  interval: "10s"
+  # Monitoring provider selection.
+  # Options: ["gmp", "prometheusoperator"].
+  #     gmp: Google Managed Prometheus
+  #     prometheusoperator: Open Source Prometheus Operator
+  # If not set, defaults to "prometheusoperator".
+  provider:
+    name: ""
+    gmp:
+      autopilot: false
+  # Prometheus ServiceMonitor will be created when enabled for EPP metrics collection
+  prometheus:
+    enabled: false
+    auth:
+      # Set to false to allow unauthenticated /metrics access. Required for annotation-based
+      # Prometheus scraping and Istio metrics-merging, which do not send Bearer tokens.
+      # When true, the chart creates cluster-scoped RBAC for the EPP. See docs/metrics.md.
+      enabled: true
+      # Service account token secret for authentication
+      secretName: inference-gateway-sa-metrics-reader-secret
+    # additional labels for the ServiceMonitor
+    extraLabels: {}
+
+tracing:
+  enabled: false
+  otelExporterEndpoint: "http://localhost:4317"
+  sampling:
+    sampler: "parentbased_traceidratio"
+    samplerArg: "0.1"
+
+inferencePool:
+  create: true
+  failureMode: "FailOpen"
+
+inferenceObjectives: []
+# - name: high-priority
+#   priority: 5
+# - name: low-priority
+#   priority: 1
+
+modelServers:
+  type: vllm # vllm, sglang, triton-tensorrt-llm, trtllm-serve, triton
+  protocol: http # http, grpc
+  targetPorts:
+    - number: 8000
+  # matchLabels: # REQUIRED in parent charts if creating inference pool
+  #   app: vllm-qwen3-32b
+
+latencyPredictor:
+  enabled: false
+  # Deployment mode. `sidecar` runs the training and prediction servers as
+  # containers in the EPP pod. `service` runs the training server as a
+  # single-replica Deployment and the prediction servers as a Deployment with
+  # `predictionServers.count` replicas. Each Deployment has one Service, so all
+  # prediction replicas share a single Service, and EPP points at the two
+  # Service URLs.
+  mode: sidecar
+  # Pod-level securityContext for the training and prediction pods in service
+  # mode. The images declare no user and run as root unless runAsUser is set.
+  # In sidecar mode router.epp.podSecurityContext applies instead.
+  podSecurityContext: {}
+  # Affinity and tolerations for the training and prediction pods in service
+  # mode. Empty uses router.epp.affinity and router.epp.tolerations.
+  affinity: {}
+  tolerations: []
+  # Training Server Configuration
+  trainingServer:
+    securityContext: {}
+    image:
+      registry: ghcr.io/llm-d
+      repository: llm-d-latency-predictor-training-server
+      tag: "0.9.0"
+      pullPolicy: Always
+    command: []
+    args: []
+    port: 8000
+    resources:
+      requests:
+        cpu: "2000m"
+        memory: "4Gi"
+      limits:
+        cpu: "4000m"
+        memory: "8Gi"
+    livenessProbe:
+      httpGet:
+        path: /healthz
+        port: 8000
+      initialDelaySeconds: 30
+      periodSeconds: 20
+    readinessProbe:
+      httpGet:
+        path: /readyz
+        port: 8000
+      initialDelaySeconds: 45
+      periodSeconds: 10
+    volumeSize: "20Gi"
+    config:
+      LATENCY_RETRAINING_INTERVAL_SEC: "10"
+      LATENCY_MIN_SAMPLES_FOR_RETRAIN: "100"
+      LATENCY_TTFT_MODEL_PATH: "/models/ttft.joblib"
+      LATENCY_TPOT_MODEL_PATH: "/models/tpot.joblib"
+      LATENCY_TTFT_SCALER_PATH: "/models/ttft_scaler.joblib"
+      LATENCY_TPOT_SCALER_PATH: "/models/tpot_scaler.joblib"
+      LATENCY_MODEL_TYPE: "xgboost"
+      LATENCY_MAX_TRAINING_DATA_SIZE_PER_BUCKET: "500"
+      LATENCY_OBJECTIVE_TYPE: "mean"
+
+  # Prediction Server Configuration
+  predictionServers:
+    # Number of prediction servers: containers in the EPP pod in sidecar mode,
+    # pods in the prediction Deployment in service mode.
+    count: 1
+    # Listen port of the first prediction server. Sidecar containers take
+    # consecutive ports from here; service mode uses only this port.
+    startPort: 8001
+    securityContext: {}
+    image:
+      registry: ghcr.io/llm-d
+      repository: llm-d-latency-predictor-prediction-server
+      tag: "0.9.0"
+      pullPolicy: Always
+    command: ["uvicorn"]
+    args: ["prediction.prediction_server:app", "--host", "0.0.0.0", "--port", "$(PREDICT_PORT)", "--workers", "$(UVICORN_WORKERS)"]
+    resources:
+      requests:
+        cpu: "8000m"
+        memory: "4Gi"
+      limits:
+        cpu: "28000m"
+        memory: "8Gi"
+    livenessProbe:
+      httpGet:
+        path: /healthz
+      initialDelaySeconds: 15
+      periodSeconds: 15
+      timeoutSeconds: 5
+      failureThreshold: 5
+    readinessProbe:
+      httpGet:
+        path: /readyz
+      initialDelaySeconds: 10
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 30
+    volumeSize: "10Gi"
+    config:
+      LATENCY_MODEL_TYPE: "xgboost"
+      PREDICT_HOST: "0.0.0.0"
+      LOCAL_TTFT_MODEL_PATH: "/server_models/ttft.joblib"
+      LOCAL_TPOT_MODEL_PATH: "/server_models/tpot.joblib"
+      LOCAL_TTFT_SCALER_PATH: "/server_models/ttft_scaler.joblib"
+      LOCAL_TPOT_SCALER_PATH: "/server_models/tpot_scaler.joblib"
+      LOCAL_TTFT_GATED_MODEL_PATH: "/server_models/ttft_gated.joblib"
+      LOCAL_TPOT_GATED_MODEL_PATH: "/server_models/tpot_gated.joblib"
+      UVICORN_WORKERS: "28"
+      OMP_NUM_THREADS: "1"
+      MODEL_SYNC_INTERVAL_SEC: "30"
+      LATENCY_OBJECTIVE_TYPE: "mean"
+
+  # EPP Environment Variables for Latency Predictor
+  eppEnv:
+    LATENCY_MAX_SAMPLE_SIZE: "10000"
+    LATENCY_MAX_CONCURRENT_DISPATCHES: "36"
+    LATENCY_COALESCE_WINDOW_MS: "1"

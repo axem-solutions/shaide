@@ -18,7 +18,7 @@ const ProviderIstio = "istio"
 const (
 	DefaultIstioNamespace = "istio-system"
 	DefaultIstioHub       = "docker.io/istio"
-	DefaultIstioTag       = "1.28.1"
+	DefaultIstioTag       = "1.29.2"
 
 	DefaultGatewayNamespace = "gateway-system"
 	DefaultTLSSecretName    = "gateway-tls"

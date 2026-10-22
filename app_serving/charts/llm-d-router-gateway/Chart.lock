@@ -1,0 +1,6 @@
+dependencies:
+- name: router
+  repository: file://../routerlib
+  version: 0.0.0
+digest: sha256:9e81a4a4f4a2a5e4a602108bddada94687fe41f069b061be9990d096623a1fa4
+generated: "2026-10-16T16:36:37.805735067Z"

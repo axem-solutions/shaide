@@ -1,0 +1,11 @@
+apiVersion: v2
+appVersion: v1.0.0
+dependencies:
+- alias: router
+  name: router
+  repository: file://../routerlib
+  version: 0.0.0
+description: A Helm chart for llm-d-router-gateway
+name: llm-d-router-gateway
+type: application
+version: v1.0.0

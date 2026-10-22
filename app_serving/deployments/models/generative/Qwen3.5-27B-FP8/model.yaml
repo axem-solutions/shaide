@@ -1,0 +1,72 @@
+# Qwen3.5-27B-FP8 model definition
+# Creates the resources for Qwen/Qwen3.5-27B-FP8
+# The upstream vLLM recipe targets TP=8 and the full 262K context window. We
+# use a conservative single-GPU text-only profile so the model remains practical
+# on 1x 48 GB cards while still supporting reasoning and tool calls.
+
+slug: qwen3-5-27b-fp8
+revision: "97f5941bf617e31c5e237364a8602ce3f03a551a"
+model:
+  name: "Qwen/Qwen3.5-27B-FP8"
+  size: 50Gi
+server:
+  replicas: 1
+  args:
+    - "--tensor-parallel-size"
+    - "1"
+    - "--gpu-memory-utilization"
+    - "0.45"
+    - "--max-model-len"
+    - "32768"
+    - "--max-num-seqs"
+    - "2"
+    - "--block-size"
+    - "16"
+    - "--kv-cache-dtype"
+    - "fp8"
+    - "--reasoning-parser"
+    - "qwen3"
+    - "--enable-auto-tool-choice"
+    - "--tool-call-parser"
+    - "qwen3_coder"
+    - "--trust-remote-code"
+  env:
+    - name: VLLM_LOGGING_LEVEL
+      value: INFO
+    - name: NCCL_P2P_DISABLE
+      value: "1"
+    - name: NCCL_IGNORE_DISABLED_P2P
+      value: "1"
+    - name: NCCL_DEBUG
+      value: "INFO"
+    - name: VLLM_SKIP_P2P_CHECK
+      value: "1"
+    - name: GLOO_SOCKET_IFNAME
+      value: "eth0"
+    - name: NCCL_SOCKET_IFNAME
+      value: "eth0"
+  resources:
+    limits:
+      nvidia.com/gpu: "1"
+      memory: "48Gi"
+      cpu: "16"
+    requests:
+      nvidia.com/gpu: "1"
+      memory: "48Gi"
+      cpu: "16"
+  volumeMounts:
+    - name: metrics-volume
+      mountPath: /.config
+    - name: torch-compile-cache
+      mountPath: /.cache
+    - name: shm
+      mountPath: /dev/shm
+  volumes:
+    - name: metrics-volume
+      emptyDir: {}
+    - name: torch-compile-cache
+      emptyDir: {}
+    - name: shm
+      emptyDir:
+        medium: Memory
+        sizeLimit: 8Gi

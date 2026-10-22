@@ -42,6 +42,23 @@ const (
 	DefaultORASImage = "ghcr.io/oras-project/oras:v1.3.1"
 )
 
+// The model server and the llm-d router run these images. The names are the
+// upstream ones the image manifest mirrors them under; the defaults are used
+// when no mirrored reference is supplied. The versions follow llm-d v1.0:
+// its GPU vLLM recipe and its router release.
+const (
+	ModelServerImageName    = "vllm/vllm-openai"
+	DefaultModelServerImage = "docker.io/vllm/vllm-openai:v0.31.0"
+
+	RouterImageName    = "llm-d/llm-d-router-endpoint-picker"
+	DefaultRouterImage = "ghcr.io/llm-d/llm-d-router-endpoint-picker:v1.0.0"
+
+	// SimulatorImageName is llm-d's vLLM simulator, which models with engine
+	// sim run unless they name their own image.
+	SimulatorImageName    = "llm-d/llm-d-inference-sim"
+	DefaultSimulatorImage = "ghcr.io/llm-d/llm-d-inference-sim:v1.0.0"
+)
+
 // ModelCategory reports which category holds a packaged model's values, or
 // false when the project packages no values for it.
 func ModelCategory(projectDir, name string) (string, bool) {
@@ -56,10 +73,10 @@ func ModelCategory(projectDir, name string) (string, bool) {
 }
 
 // ModelVolume names the namespace and PersistentVolumeClaim that hold a
-// packaged model's weights. Both derive from the slug of its values
-// directories, so only the project can name them.
+// packaged model's weights. Both derive from the slug in its model.yaml, so
+// only the project can name them.
 func ModelVolume(projectDir, category, name string) (namespace, claim string, err error) {
-	paths, err := resolveModelPaths(category, name, projectDir)
+	paths, _, err := resolveModelPaths(category, name, projectDir)
 	if err != nil {
 		return "", "", err
 	}
