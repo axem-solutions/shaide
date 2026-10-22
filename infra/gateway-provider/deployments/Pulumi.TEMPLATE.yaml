@@ -27,15 +27,15 @@
 #   istioHub   — image registry prefix for Istio component images (pilot, proxyv2);
 #                default: docker.io/istio. On-prem air-gapped clusters must point this at
 #                an internal Harbor project, e.g. harbor.harbor.svc.cluster.local/images-shaide
-#   istioTag   — Istio version; default: 1.28.1
+#   istioTag   — Istio version; default: 1.29.2
 #
 #   installGatewayApiCrds — boolean; whether this stack installs the Gateway API CRDs.
 #                            See the cloudProvider note above for the default.
 #   gatewayApiCrdsPath     — local kustomize path (or remote URL) for Gateway API CRDs;
-#                            default: the bundled standard-channel v1.5.1 CRDs in
+#                            default: the bundled standard-channel v1.6.2 CRDs in
 #                            crds/gateway-api/standard — see crds/README.md.
 #   gieCrdsPath            — local kustomize path (or remote URL) for the Gateway API
-#                            Inference Extension CRDs; default: the bundled v1.4.0 CRDs
+#                            Inference Extension CRDs; default: the bundled v1.6.2 CRDs and the llm-d router v1.0.0 CRDs
 #                            in crds/gie
 #
 #   tlsCertAnnotation — annotation key used to bind a cloud-managed certificate to the
@@ -88,7 +88,7 @@ config:
 
   # --- Istio images (override for on-prem air-gap) ---
   # gateway-provider:istioHub: docker.io/istio
-  # gateway-provider:istioTag: "1.28.1"
+  # gateway-provider:istioTag: "1.29.2"
 
   # --- CRDs (bundled defaults shown — see crds/README.md) ---
   # gateway-provider:installGatewayApiCrds: true
