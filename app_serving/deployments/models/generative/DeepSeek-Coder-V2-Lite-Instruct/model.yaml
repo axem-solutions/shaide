@@ -1,0 +1,63 @@
+# DeepSeek Coder V2 Lite Instruct model definition
+# Creates the resources for DeepSeek-Coder-V2-Lite-Instruct
+# Optimized for 1x g5.24xlarge node (4x NVIDIA A10G GPUs)
+
+slug: deepseek-coder
+revision: "e434a23f91ba5b4923cf6c9d9a238eb4a08e3a11"
+model:
+  name: "deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct"
+  size: 30Gi
+server:
+  replicas: 2 # two TP=2 replicas fill the 4 GPUs; the router balances between them
+  args:
+    - "--tensor-parallel-size"
+    - "2"
+    - "--gpu-memory-utilization"
+    - "0.9"
+    - "--max-model-len"
+    - "16384"
+    - "--block-size"
+    - "16"
+    - "--trust-remote-code"
+  env:
+    - name: VLLM_LOGGING_LEVEL
+      value: INFO
+    # - name: TP_SIZE
+    #   value: "2"
+    - name: NCCL_P2P_DISABLE
+      value: "1"
+    - name: NCCL_IGNORE_DISABLED_P2P
+      value: "1"
+    - name: NCCL_DEBUG
+      value: "INFO"
+    - name: VLLM_SKIP_P2P_CHECK
+      value: "1"
+    - name: GLOO_SOCKET_IFNAME
+      value: "eth0"
+    - name: NCCL_SOCKET_IFNAME
+      value: "eth0"
+  resources:
+    limits:
+      nvidia.com/gpu: "2"
+      memory: "28Gi"
+      cpu: "8"
+    requests:
+      nvidia.com/gpu: "2"
+      memory: "22Gi"
+      cpu: "6"
+  volumeMounts:
+    - name: metrics-volume
+      mountPath: /.config
+    - name: torch-compile-cache
+      mountPath: /.cache
+    - name: shm
+      mountPath: /dev/shm
+  volumes:
+    - name: metrics-volume
+      emptyDir: {}
+    - name: torch-compile-cache
+      emptyDir: {}
+    - name: shm
+      emptyDir:
+        medium: Memory
+        sizeLimit: 8Gi

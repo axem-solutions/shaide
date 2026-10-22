@@ -19,8 +19,9 @@ func TestApplyDefaults(t *testing.T) {
 
 	configuration.applyDefaults(&values)
 
-	if values.LLMd.ChartPath != DefaultLLMdChartPath {
-		t.Errorf("llm-d chart path = %q, want %q", values.LLMd.ChartPath, DefaultLLMdChartPath)
+	if values.ModelServerImage != DefaultModelServerImage || values.RouterImage != DefaultRouterImage ||
+		values.SimulatorImage != DefaultSimulatorImage {
+		t.Errorf("images = %q, %q, %q, want the upstream defaults", values.ModelServerImage, values.RouterImage, values.SimulatorImage)
 	}
 	if got := values.Models.Generative[0].ModelSource.StorageClass; got != "managed-csi" {
 		t.Errorf("model storage class = %q, want %q", got, "managed-csi")
@@ -29,9 +30,7 @@ func TestApplyDefaults(t *testing.T) {
 
 func TestResolveResolvesPathsAndModelDefaults(t *testing.T) {
 	projectDir := t.TempDir()
-	modelDir := filepath.Join(projectDir, deploymentFolder, modelFolder, "generative", "ExampleModel")
-	writeValuesFile(t, filepath.Join(modelDir, "gaie-example", "values.yaml"))
-	writeValuesFile(t, filepath.Join(modelDir, "ms-example", "values.yaml"))
+	writeDefinition(t, projectDir, CategoryGenerative, "ExampleModel", "example")
 
 	configuration := New(projectDir, stack.Options{}, Sources{})
 	values := Values{
@@ -60,37 +59,34 @@ func TestResolveResolvesPathsAndModelDefaults(t *testing.T) {
 	if model.ReleaseName != "infra-example" {
 		t.Errorf("release name = %q, want %q", model.ReleaseName, "infra-example")
 	}
-	if model.GaieLocalChartPath != filepath.Join(projectDir, DefaultGaieLocalChartPath) {
-		t.Errorf("GAIE chart path = %q", model.GaieLocalChartPath)
+	if model.Definition.Model.Name != "org/example" {
+		t.Errorf("definition = %+v, want the packaged model.yaml", model.Definition)
 	}
-	wantLLMdPath := filepath.Clean(filepath.Join(projectDir, DefaultLLMdChartPath))
-	if values.LLMd.ChartPath != wantLLMdPath {
-		t.Errorf("llm-d chart path = %q, want %q", values.LLMd.ChartPath, wantLLMdPath)
+	if want := filepath.Join(projectDir, DefaultRouterChartPath); values.RouterChartPath != want {
+		t.Errorf("router chart path = %q, want %q", values.RouterChartPath, want)
 	}
 }
 
 func TestValidate(t *testing.T) {
 	projectDir := t.TempDir()
-	gaieValuesPath := filepath.Join(projectDir, "gaie-values.yaml")
-	modelServiceValuesPath := filepath.Join(projectDir, "model-service-values.yaml")
-	writeValuesFile(t, gaieValuesPath)
-	writeValuesFile(t, modelServiceValuesPath)
+	definitionPath := writeDefinition(t, projectDir, CategoryGenerative, "example", "example")
 
 	configuration := New("", stack.Options{}, Sources{})
 	valid := Values{
-		Platform: cluster.GCP,
+		Platform:         cluster.GCP,
+		RouterChartPath:  DefaultRouterChartPath,
+		ModelServerImage: DefaultModelServerImage,
+		RouterImage:      DefaultRouterImage,
+		SimulatorImage:   DefaultSimulatorImage,
 	}
-	valid.LLMd.ChartPath = DefaultLLMdChartPath
 	valid.Models.Generative = []Model{{
 		Name:        "example",
 		Enabled:     true,
 		Namespace:   "llm-d-example",
 		ReleaseName: "infra-example",
 		ModelPaths: ModelPaths{
-			Slug:               "example",
-			GaieValuesPath:     gaieValuesPath,
-			MsValuesPath:       modelServiceValuesPath,
-			GaieLocalChartPath: "charts/inferencepool",
+			Slug:           "example",
+			DefinitionPath: definitionPath,
 		},
 	}}
 
@@ -117,9 +113,16 @@ func TestValidate(t *testing.T) {
 		{
 			name: "empty chart path",
 			mutate: func(values *Values) {
-				values.LLMd.ChartPath = ""
+				values.RouterChartPath = ""
 			},
-			wantErr: "chart path cannot be empty",
+			wantErr: "router chart path cannot be empty",
+		},
+		{
+			name: "missing definition",
+			mutate: func(values *Values) {
+				values.Models.Generative[0].DefinitionPath = filepath.Join(projectDir, "missing.yaml")
+			},
+			wantErr: "model definition not found",
 		},
 		{
 			name: "model source requires Harbor",
@@ -192,7 +195,9 @@ func TestDefinitionResolvesRuntimeSources(t *testing.T) {
 		"app-serving:platform":          "azure",
 		"app-serving:kubeconfig":        "/tmp/kubeconfig",
 		"app-serving:context":           "aks-context",
-		"app-serving:llmdChart":         DefaultLLMdChartPath,
+		"app-serving:modelServerImage":  DefaultModelServerImage,
+		"app-serving:routerImage":       DefaultRouterImage,
+		"app-serving:simulatorImage":    DefaultSimulatorImage,
 		"app-serving:harborUser":        "robot$user",
 		"app-serving:harborToken":       "secret-token",
 		"app-serving:modelStorageClass": "managed-csi",
@@ -216,40 +221,57 @@ func TestDefinitionResolvesRuntimeSources(t *testing.T) {
 
 func TestResolveProjectPath(t *testing.T) {
 	projectDir := "/var/lib/shaide/app-serving"
-	want := filepath.Join(projectDir, "charts", "inferencepool")
-	if got := resolveProjectPath(projectDir, "charts/inferencepool"); got != want {
+	want := filepath.Join(projectDir, "charts", "llm-d-router-gateway")
+	if got := resolveProjectPath(projectDir, "charts/llm-d-router-gateway"); got != want {
 		t.Errorf("resolveProjectPath() = %q, want %q", got, want)
 	}
 
-	absolute := "/opt/charts/inferencepool"
+	absolute := "/opt/charts/llm-d-router-gateway"
 	if got := resolveProjectPath(projectDir, absolute); got != absolute {
 		t.Errorf("absolute path = %q, want %q", got, absolute)
 	}
 }
 
-func writeValuesFile(t *testing.T, path string) {
+// writeDefinition packages a minimal model.yaml for name under category and
+// returns its path.
+func writeDefinition(t *testing.T, projectDir, category, name, slug string) string {
 	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+
+	dir := filepath.Join(projectDir, deploymentFolder, modelFolder, category, name)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatalf("create test model directory: %v", err)
 	}
-	if err := os.WriteFile(path, []byte("model: test\n"), 0o600); err != nil {
-		t.Fatalf("write test values: %v", err)
+
+	path := filepath.Join(dir, "model.yaml")
+	content := "slug: " + slug + "\nmodel:\n  name: org/" + slug + "\n  size: 1Gi\n"
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("write test model definition: %v", err)
 	}
+	return path
 }
 
-// TestDefaultLLMdChartPathStaysInsideProject guards against a default that
+// TestDefaultRouterChartPathStaysInsideProject guards against a default that
 // escapes the project directory. The chart ships inside the project's charts/
 // folder, so resolveProjectPath must be able to anchor it there; a "../" or
 // absolute default resolves to a path the installer image never populates.
-func TestDefaultLLMdChartPathStaysInsideProject(t *testing.T) {
-	if filepath.IsAbs(DefaultLLMdChartPath) {
-		t.Fatalf("DefaultLLMdChartPath = %q, want a relative path", DefaultLLMdChartPath)
+func TestDefaultRouterChartPathStaysInsideProject(t *testing.T) {
+	if filepath.IsAbs(DefaultRouterChartPath) {
+		t.Fatalf("DefaultRouterChartPath = %q, want a relative path", DefaultRouterChartPath)
 	}
 
 	projectDir := "/projects/app-serving"
-	resolved := resolveProjectPath(projectDir, DefaultLLMdChartPath)
+	resolved := resolveProjectPath(projectDir, DefaultRouterChartPath)
 	if !strings.HasPrefix(resolved, projectDir+string(filepath.Separator)) {
 		t.Errorf("resolveProjectPath(%q, %q) = %q, want a path inside the project directory",
-			projectDir, DefaultLLMdChartPath, resolved)
+			projectDir, DefaultRouterChartPath, resolved)
+	}
+}
+
+// The vendored chart is what every platform deploys; the default must point
+// at it.
+func TestDefaultRouterChartIsVendored(t *testing.T) {
+	chart := filepath.Join("..", "..", "..", "..", "..", "app_serving", DefaultRouterChartPath, "Chart.yaml")
+	if _, err := os.Stat(chart); err != nil {
+		t.Fatalf("vendored router chart missing: %v", err)
 	}
 }

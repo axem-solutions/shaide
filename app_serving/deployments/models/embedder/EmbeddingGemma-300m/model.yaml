@@ -1,0 +1,66 @@
+# EmbeddingGemma 300M model definition
+# Serves google/embeddinggemma-300m through the OpenAI-compatible /v1/embeddings API
+# Tuned for 1x NVIDIA L4 node (g2-standard-8-l4)
+
+slug: embeddinggemma-300m
+revision: "57c266a740f537b4dc058e1b0cda161fd15afa75"
+model:
+  name: "google/embeddinggemma-300m"
+  size: 10Gi
+server:
+  replicas: 1
+  args:
+    - "--runner"
+    - "pooling"
+    - "--tensor-parallel-size"
+    - "1"
+    - "--gpu-memory-utilization"
+    - "0.7"
+    - "--max-model-len"
+    - "2048"
+    - "--dtype"
+    - "bfloat16"
+    - "--max-num-seqs"
+    - "64"
+    - "--max-num-batched-tokens"
+    - "12288"
+  env:
+    - name: VLLM_LOGGING_LEVEL
+      value: INFO
+    - name: NCCL_P2P_DISABLE
+      value: "1"
+    - name: NCCL_IGNORE_DISABLED_P2P
+      value: "1"
+    - name: NCCL_DEBUG
+      value: "INFO"
+    - name: VLLM_SKIP_P2P_CHECK
+      value: "1"
+    - name: GLOO_SOCKET_IFNAME
+      value: "eth0"
+    - name: NCCL_SOCKET_IFNAME
+      value: "eth0"
+  resources:
+    limits:
+      nvidia.com/gpu: "1"
+      memory: "8Gi"
+      cpu: "4"
+    requests:
+      nvidia.com/gpu: "1"
+      memory: "8Gi"
+      cpu: "4"
+  volumeMounts:
+    - name: metrics-volume
+      mountPath: /.config
+    - name: torch-compile-cache
+      mountPath: /.cache
+    - name: shm
+      mountPath: /dev/shm
+  volumes:
+    - name: metrics-volume
+      emptyDir: {}
+    - name: torch-compile-cache
+      emptyDir: {}
+    - name: shm
+      emptyDir:
+        medium: Memory
+        sizeLimit: 8Gi

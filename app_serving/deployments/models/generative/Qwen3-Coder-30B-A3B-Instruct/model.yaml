@@ -1,0 +1,71 @@
+# Qwen3-Coder-30B-A3B-Instruct model definition
+# Creates the resources for Qwen/Qwen3-Coder-30B-A3B-Instruct
+# The upstream model card suggests reducing context length when OOM occurs; we
+# start with 32K here to keep the BF16 checkpoint practical on a single 96 GB GPU.
+
+slug: qwen3-coder-30b-a3b
+revision: "b2cff646eb4bb1d68355c01b18ae02e7cf42d120"
+model:
+  name: "Qwen/Qwen3-Coder-30B-A3B-Instruct"
+  size: 70Gi
+server:
+  replicas: 1
+  args:
+    - "--tensor-parallel-size"
+    - "1"
+    - "--gpu-memory-utilization"
+    - "0.48"
+    - "--kv-cache-dtype"
+    - "fp8"
+    - "--max-model-len"
+    - "32768"
+    - "--max-num-seqs"
+    - "4"
+    - "--max-num-batched-tokens"
+    - "8192"
+    - "--block-size"
+    - "16"
+    - "--trust-remote-code"
+    - "--enable-auto-tool-choice"
+    - "--tool-call-parser"
+    - "qwen3_coder"
+  env:
+    - name: VLLM_LOGGING_LEVEL
+      value: INFO
+    - name: NCCL_P2P_DISABLE
+      value: "1"
+    - name: NCCL_IGNORE_DISABLED_P2P
+      value: "1"
+    - name: NCCL_DEBUG
+      value: "INFO"
+    - name: VLLM_SKIP_P2P_CHECK
+      value: "1"
+    - name: GLOO_SOCKET_IFNAME
+      value: "eth0"
+    - name: NCCL_SOCKET_IFNAME
+      value: "eth0"
+  resources:
+    limits:
+      nvidia.com/gpu: "1"
+      memory: "64Gi"
+      cpu: "16"
+    requests:
+      nvidia.com/gpu: "1"
+      memory: "64Gi"
+      cpu: "16"
+  volumeMounts:
+    - name: metrics-volume
+      mountPath: /.config
+    - name: torch-compile-cache
+      mountPath: /.cache
+    - name: shm
+      mountPath: /dev/shm
+  volumes:
+    - name: metrics-volume
+      emptyDir: {}
+    - name: torch-compile-cache
+      emptyDir: {}
+    - name: shm
+      emptyDir:
+        medium: Memory
+        sizeLimit: 8Gi

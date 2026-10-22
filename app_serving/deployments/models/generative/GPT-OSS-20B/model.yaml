@@ -1,0 +1,79 @@
+# GPT OSS 20B model definition
+# Creates the resources for GPT-OSS-20B.
+# Single GPU. The vLLM image comes from the app-serving stack; it is built for
+# TORCH_CUDA_ARCH_LIST 7.5 to 12.0, so it includes the sm_86 kernels an A10 needs.
+
+slug: gpt-oss-20b
+revision: "6cee5e81ee83917806bbde320786a8fb61efebee"
+model:
+  name: "openai/gpt-oss-20b"
+  size: 60Gi
+server:
+  replicas: 1
+  runtimeMetadata: true
+  args:
+    - "--tensor-parallel-size"
+    - "1"
+    # 0.85 of a 24 GB A10 leaves room for the ~13.7 GiB of MXFP4 weights, the
+    # KV cache and CUDA graph capture. Higher values let vLLM size a KV cache
+    # it then cannot allocate, and startup fails with a CUDA OOM.
+    - "--gpu-memory-utilization"
+    - "0.85"
+    - "--max-model-len"
+    - "100000"
+    - "--max-num-seqs"
+    - "4"
+    - "--max-num-batched-tokens"
+    - "8192"
+    - "--block-size"
+    - "16"
+    - "--trust-remote-code"
+  env:
+    # Triton JIT-compiles a CUDA helper at engine start and links the driver
+    # library with -l:libcuda.so.1, using TRITON_LIBCUDA_PATH as the -L dir.
+    # The NVIDIA container runtime injects the driver using the *host's*
+    # layout. On Ubuntu nodes (AKS) that is /usr/lib/x86_64-linux-gnu, which is
+    # also the vLLM image's own layout. Without the right path the engine dies
+    # at startup with "ld: cannot find -l:libcuda.so.1".
+    # Adjust per node OS if this model runs on a non-Ubuntu host.
+    - name: TRITON_LIBCUDA_PATH
+      value: "/usr/lib/x86_64-linux-gnu"
+    - name: VLLM_LOGGING_LEVEL
+      value: INFO
+    - name: NCCL_P2P_DISABLE
+      value: "1"
+    - name: NCCL_IGNORE_DISABLED_P2P
+      value: "1"
+    - name: NCCL_DEBUG
+      value: "INFO"
+    - name: VLLM_SKIP_P2P_CHECK
+      value: "1"
+    - name: GLOO_SOCKET_IFNAME
+      value: "eth0"
+    - name: NCCL_SOCKET_IFNAME
+      value: "eth0"
+  resources:
+    limits:
+      nvidia.com/gpu: "1"
+      memory: "40Gi"
+      cpu: "16"
+    requests:
+      nvidia.com/gpu: "1"
+      memory: "40Gi"
+      cpu: "16"
+  volumeMounts:
+    - name: metrics-volume
+      mountPath: /.config
+    - name: torch-compile-cache
+      mountPath: /.cache
+    - name: shm
+      mountPath: /dev/shm
+  volumes:
+    - name: metrics-volume
+      emptyDir: {}
+    - name: torch-compile-cache
+      emptyDir: {}
+    - name: shm
+      emptyDir:
+        medium: Memory
+        sizeLimit: 8Gi

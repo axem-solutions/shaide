@@ -1,0 +1,5 @@
+# Match the FastAPI/Starlette versions in vllm/vllm-openai:v0.31.0, which
+# requires fastapi >=0.133.0,<0.137.0 and starlette >=1.0.1.
+fastapi==0.136.3
+starlette==1.9.0
+httpx==0.28.1

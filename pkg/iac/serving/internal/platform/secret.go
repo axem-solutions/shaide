@@ -11,6 +11,10 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
+// HarborPullSecretName is the image pull secret every model namespace gets
+// when the stack has Harbor credentials.
+const HarborPullSecretName = "harbor-creds"
+
 // registryHost extracts the registry hostname from an OCI reference.
 // "harbor.harbor.svc.cluster.local/ai-models/nomic:1.5.0" → "harbor.harbor.svc.cluster.local"
 func registryHost(ref string) string {
@@ -22,7 +26,7 @@ func registryHost(ref string) string {
 
 // CreateHarborPullSecret creates a kubernetes.io/dockerconfigjson pull secret that
 // authenticates against the internal Harbor registry using the robot account credentials.
-// The secret is named "harbor-creds" and must be referenced by chart imagePullSecrets.
+// The secret is named HarborPullSecretName; pods reference it in imagePullSecrets.
 func CreateHarborPullSecret(
 	ctx *pulumi.Context,
 	cfg appConfig.Values,
@@ -60,7 +64,7 @@ func CreateHarborPullSecret(
 	baseOpts := []pulumi.ResourceOption{pulumi.DependsOn([]pulumi.Resource{llmdNamespace})}
 	return core_v1.NewSecret(ctx, resourceName, &core_v1.SecretArgs{
 		Metadata: &meta_v1.ObjectMetaArgs{
-			Name:      pulumi.String("harbor-creds"),
+			Name:      pulumi.String(HarborPullSecretName),
 			Namespace: pulumi.String(model.Namespace),
 		},
 		Type: pulumi.String("kubernetes.io/dockerconfigjson"),

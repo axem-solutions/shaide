@@ -241,7 +241,7 @@ func namespaceOrCluster(ns string) string {
 }
 
 // istioBaseChartResources lists resources managed by the upstream istio/base
-// Helm chart (stable for Istio 1.28.x). All entries are forceDestroy=true
+// Helm chart (stable for Istio 1.28.x and 1.29.x). All entries are forceDestroy=true
 // because Pulumi v4 Helm Chart does not honor pre-existing Helm metadata for
 // adoption - the only reliable path is to delete and let the chart recreate.
 func istioBaseChartResources(istioNamespace string) []chartResource {
@@ -254,7 +254,7 @@ func istioBaseChartResources(istioNamespace string) []chartResource {
 			name: "istio-reader-clusterrole-" + istioNamespace, forceDestroy: true},
 		{gvr: schema.GroupVersionResource{Group: "admissionregistration.k8s.io", Version: "v1", Resource: "validatingwebhookconfigurations"},
 			name: "istiod-default-validator", forceDestroy: true},
-		// Istio CRDs - 13 stable types in 1.28.x
+		// Istio CRDs - 13 stable types in 1.28.x and 1.29.x
 		istioCRD("authorizationpolicies.security.istio.io"),
 		istioCRD("destinationrules.networking.istio.io"),
 		istioCRD("envoyfilters.networking.istio.io"),
@@ -273,7 +273,7 @@ func istioBaseChartResources(istioNamespace string) []chartResource {
 }
 
 // istiodChartResources lists resources managed by the upstream istio/istiod
-// Helm chart (stable for Istio 1.28.x). All entries forceDestroy=true; see
+// Helm chart (stable for Istio 1.28.x and 1.29.x). All entries forceDestroy=true; see
 // istioBaseChartResources comment for rationale.
 func istiodChartResources(istioNamespace string) []chartResource {
 	return []chartResource{

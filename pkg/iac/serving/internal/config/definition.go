@@ -19,13 +19,15 @@ const (
 	KeyKubeconfig        stackconfig.Key = "kubeconfig"
 	KeyContext           stackconfig.Key = "context"
 	KeyModels            stackconfig.Key = "models"
-	KeyLLMdChart         stackconfig.Key = "llmdChart"
 	KeyHarborHostname    stackconfig.Key = "harborHostname"
 	KeyHarborUser        stackconfig.Key = "harborUser"
 	KeyHarborToken       stackconfig.Key = "harborToken"
 	KeyGPUToleration     stackconfig.Key = "gpuToleration"
 	KeyModelStorageClass stackconfig.Key = "modelStorageClass"
 	KeyORASImage         stackconfig.Key = "orasImage"
+	KeyModelServerImage  stackconfig.Key = "modelServerImage"
+	KeyRouterImage       stackconfig.Key = "routerImage"
+	KeySimulatorImage    stackconfig.Key = "simulatorImage"
 )
 
 const legacyKeyCloudProvider = "cloudProvider"
@@ -47,6 +49,18 @@ type Sources struct {
 	// ORASImage is where the ORAS image was mirrored. Empty falls back to
 	// DefaultORASImage.
 	ORASImage string
+
+	// ModelServerImage is where the vLLM image was mirrored. Empty falls
+	// back to DefaultModelServerImage.
+	ModelServerImage string
+
+	// RouterImage is where the llm-d router's EPP image was mirrored. Empty
+	// falls back to DefaultRouterImage.
+	RouterImage string
+
+	// SimulatorImage is where the llm-d inference simulator image was
+	// mirrored. Empty falls back to DefaultSimulatorImage.
+	SimulatorImage string
 }
 
 type Config struct {
@@ -107,15 +121,6 @@ func newDefinition(opts stack.Options, sources Sources) stackconfig.Config[Value
 				},
 			},
 			{
-				Key: KeyLLMdChart,
-				Source: stackconfig.Source{
-					Default: DefaultLLMdChartPath,
-				},
-				Setter: func(cfg *Values, root *pulumiconfig.Config) {
-					cfg.LLMd.ChartPath = root.Get(KeyLLMdChart.String())
-				},
-			},
-			{
 				Key: KeyHarborHostname,
 				Source: stackconfig.Source{
 					Value: optionalSource(sources.HarborHostname),
@@ -170,6 +175,36 @@ func newDefinition(opts stack.Options, sources Sources) stackconfig.Config[Value
 				},
 				Setter: func(cfg *Values, root *pulumiconfig.Config) {
 					cfg.ORASImage = root.Get(KeyORASImage.String())
+				},
+			},
+			{
+				Key: KeyModelServerImage,
+				Source: stackconfig.Source{
+					Value:   optionalSource(sources.ModelServerImage),
+					Default: DefaultModelServerImage,
+				},
+				Setter: func(cfg *Values, root *pulumiconfig.Config) {
+					cfg.ModelServerImage = root.Get(KeyModelServerImage.String())
+				},
+			},
+			{
+				Key: KeyRouterImage,
+				Source: stackconfig.Source{
+					Value:   optionalSource(sources.RouterImage),
+					Default: DefaultRouterImage,
+				},
+				Setter: func(cfg *Values, root *pulumiconfig.Config) {
+					cfg.RouterImage = root.Get(KeyRouterImage.String())
+				},
+			},
+			{
+				Key: KeySimulatorImage,
+				Source: stackconfig.Source{
+					Value:   optionalSource(sources.SimulatorImage),
+					Default: DefaultSimulatorImage,
+				},
+				Setter: func(cfg *Values, root *pulumiconfig.Config) {
+					cfg.SimulatorImage = root.Get(KeySimulatorImage.String())
 				},
 			},
 			{

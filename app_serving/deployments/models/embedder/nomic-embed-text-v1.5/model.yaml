@@ -1,0 +1,67 @@
+# Nomic Embed Text v1.5 model definition
+# Serves nomic-ai/nomic-embed-text-v1.5 through the OpenAI-compatible /v1/embeddings API
+# Tuned for a single-GPU embedder deployment using vLLM pooling runner.
+
+slug: nomic-embed-text-v1-5
+revision: "e9b6763023c676ca8431644204f50c2b100d9aab"
+model:
+  name: "nomic-ai/nomic-embed-text-v1.5"
+  size: 10Gi
+server:
+  replicas: 1
+  args:
+    - "--runner"
+    - "pooling"
+    - "--tensor-parallel-size"
+    - "1"
+    - "--gpu-memory-utilization"
+    - "0.7"
+    - "--max-model-len"
+    - "2048"
+    - "--dtype"
+    - "bfloat16"
+    - "--max-num-seqs"
+    - "8"
+    - "--max-num-batched-tokens"
+    - "8192"
+    - "--trust-remote-code"
+  env:
+    - name: VLLM_LOGGING_LEVEL
+      value: INFO
+    - name: NCCL_P2P_DISABLE
+      value: "1"
+    - name: NCCL_IGNORE_DISABLED_P2P
+      value: "1"
+    - name: NCCL_DEBUG
+      value: "INFO"
+    - name: VLLM_SKIP_P2P_CHECK
+      value: "1"
+    - name: GLOO_SOCKET_IFNAME
+      value: "eth0"
+    - name: NCCL_SOCKET_IFNAME
+      value: "eth0"
+  resources:
+    limits:
+      nvidia.com/gpu: "1"
+      memory: "8Gi"
+      cpu: "4"
+    requests:
+      nvidia.com/gpu: "1"
+      memory: "8Gi"
+      cpu: "4"
+  volumeMounts:
+    - name: metrics-volume
+      mountPath: /.config
+    - name: torch-compile-cache
+      mountPath: /.cache
+    - name: shm
+      mountPath: /dev/shm
+  volumes:
+    - name: metrics-volume
+      emptyDir: {}
+    - name: torch-compile-cache
+      emptyDir: {}
+    - name: shm
+      emptyDir:
+        medium: Memory
+        sizeLimit: 8Gi

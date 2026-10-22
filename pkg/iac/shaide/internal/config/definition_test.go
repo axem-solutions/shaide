@@ -66,7 +66,7 @@ func completeSources() Sources {
 			BusyboxImageName:      "harbor.harbor.svc.cluster.local/shaide/busybox:1.37",
 
 			// Mirrored for another stack; app-shaide must ignore it.
-			"istio/pilot": "harbor.harbor.svc.cluster.local/services/istio/pilot:1.28.1",
+			"istio/pilot": "harbor.harbor.svc.cluster.local/services/istio/pilot:1.29.2",
 		},
 	}
 }

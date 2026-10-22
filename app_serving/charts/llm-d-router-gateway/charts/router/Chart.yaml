@@ -1,0 +1,6 @@
+apiVersion: v2
+appVersion: 0.0.0
+description: A library Helm chart for Endpoint Picker
+name: router
+type: library
+version: 0.0.0

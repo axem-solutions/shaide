@@ -1,0 +1,64 @@
+# Gemma 4 31B-IT model definition
+# Weights loaded from Harbor via ORAS pull job into PVC gemma-4-31b-model.
+
+slug: gemma-4-31b
+revision: "5bbc2fb1c1b2c611d06e3d9f23c170ba21659d89"
+model:
+  name: "google/gemma-4-31B"
+  size: 180Gi
+server:
+  replicas: 1
+  args:
+    - "--tensor-parallel-size"
+    - "1"
+    - "--gpu-memory-utilization"
+    - "0.9"
+    - "--max-model-len"
+    - "32768"
+    - "--max-num-seqs"
+    - "4"
+    - "--block-size"
+    - "16"
+    - "--trust-remote-code"
+  env:
+    - name: VLLM_WORKER_MULTIPROC_METHOD
+      value: spawn
+    - name: VLLM_LOGGING_LEVEL
+      value: INFO
+    - name: NCCL_P2P_DISABLE
+      value: "1"
+    - name: NCCL_IGNORE_DISABLED_P2P
+      value: "1"
+    - name: NCCL_DEBUG
+      value: "INFO"
+    - name: VLLM_SKIP_P2P_CHECK
+      value: "1"
+    - name: GLOO_SOCKET_IFNAME
+      value: "eth0"
+    - name: NCCL_SOCKET_IFNAME
+      value: "eth0"
+  resources:
+    limits:
+      nvidia.com/gpu: "1"
+      memory: "48Gi"
+      cpu: "10" # "16"
+    requests:
+      nvidia.com/gpu: "1"
+      memory: "48Gi"
+      cpu: "10" # "16"
+  volumeMounts:
+    - name: metrics-volume
+      mountPath: /.config
+    - name: torch-compile-cache
+      mountPath: /.cache
+    - name: shm
+      mountPath: /dev/shm
+  volumes:
+    - name: metrics-volume
+      emptyDir: {}
+    - name: torch-compile-cache
+      emptyDir: {}
+    - name: shm
+      emptyDir:
+        medium: Memory
+        sizeLimit: 8Gi

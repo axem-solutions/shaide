@@ -1,6 +1,0 @@
-apiVersion: v2
-appVersion: v1.2.0
-description: A Helm chart for InferencePool
-name: inferencepool
-type: application
-version: v1.2.0

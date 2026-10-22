@@ -2,8 +2,6 @@ package config
 
 import (
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
@@ -63,16 +61,7 @@ func TestORASImage(t *testing.T) {
 
 func packageModel(t *testing.T, projectDir, category, name, slug string) {
 	t.Helper()
-
-	for _, dir := range []string{"gaie-" + slug, "ms-" + slug} {
-		path := filepath.Join(projectDir, deploymentFolder, modelFolder, category, name, dir)
-		if err := os.MkdirAll(path, 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(path, "values.yaml"), nil, 0o644); err != nil {
-			t.Fatal(err)
-		}
-	}
+	writeDefinition(t, projectDir, category, name, slug)
 }
 
 func TestModelCategory(t *testing.T) {

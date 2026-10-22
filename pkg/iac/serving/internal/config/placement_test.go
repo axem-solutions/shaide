@@ -27,6 +27,11 @@ func TestPlacementTermsAreAlternatives(t *testing.T) {
 	if m.NodeAffinityArgs() == nil {
 		t.Error("NodeAffinityArgs() = nil, want the placement")
 	}
+
+	affinity := m.NodeAffinity()
+	if affinity == nil || len(affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms) != 2 {
+		t.Errorf("NodeAffinity() = %+v, want one term per placement", affinity)
+	}
 }
 
 // Without a placement the node selector applies as one term ANDing its keys,
@@ -46,7 +51,7 @@ func TestNodeSelectorIsOneTerm(t *testing.T) {
 func TestNoPlacementAddsNoAffinity(t *testing.T) {
 	m := Model{}
 
-	if m.NodeAffinityArgs() != nil || len(m.NodeAffinityMap()) != 0 {
+	if m.NodeAffinityArgs() != nil || m.NodeAffinity() != nil {
 		t.Error("a model without placement got a node affinity")
 	}
 }
