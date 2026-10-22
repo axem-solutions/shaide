@@ -15,8 +15,9 @@ differences between cloud (GCP) and on-prem air-gapped (RKE2) deployments.
 ## Overview
 
 `app_serving` is a Pulumi Go program that deploys a full LLM inference stack onto a
-Kubernetes cluster. It is model-agnostic: the models to deploy are selected via stack
-config, and all model-specific settings live in per-model `values.yaml` files.
+Kubernetes cluster, following llm-d v1.0. It is model-agnostic: the models to deploy are
+selected via stack config, and all model-specific settings live in per-model `model.yaml`
+files.
 
 Multiple models can be deployed onto the same cluster from a single stack config by
 listing them under `models.generative` and/or `models.embedder`. Each model gets its
@@ -26,30 +27,33 @@ own namespace and isolated set of resources, but shares the cluster-level creden
 The stack deploys the following components **per model**, in order:
 
 ```
-Namespace + Secrets
+Namespace + Harbor pull secret
       ↓
-llm-d-infra   (Istio Gateway + DestinationRule)
+Model storage   (PVC + ORAS pull Job, when the model has a modelSource)
       ↓
-GAIE          (Gateway API Inference Extension — EPP + InferencePool)
+Gateway         (Istio Gateway + its parameters ConfigMap + llmd-gateway-<slug> Service)
       ↓
-ModelService  (vLLM decode/prefill pods + routing sidecar)
+Router          (llm-d-router-gateway chart: InferencePool + EPP + DestinationRule)
       ↓
-      ├─ generative models → HTTPRoute        (binds Gateway listener → InferencePool)
-      └─ embedder models   → EmbeddingService (ClusterIP Service straight to the decode pod, port 8200)
+Model server    (vLLM Deployment, waits for the ORAS Job)
+      ↓
+      ├─ HTTPRoute        (binds Gateway listener → InferencePool), every model
+      └─ EmbeddingService (ClusterIP Service to the model server pods), embedder models
 ```
 
 Traffic path at runtime:
 
 ```
 Generative:
-client → Gateway (infra-<slug>-inference-gateway)
+client → llmd-gateway-<slug> (ExternalName)
+       → Gateway (gateway-<slug>, Service gateway-<slug>-istio)
        → HTTPRoute (llm-d-<slug>)
-       → InferencePool (gaie-<slug>)  ← EPP picks the best pod
-       → ModelService decode pod (ms-<slug>)
+       → InferencePool (router-<slug>)  ← EPP router-<slug>-epp picks the best pod
+       → model server pod (model-<slug>), port 8000
 
 Embedding:
 client → ms-<slug>-embeddings.<namespace>.svc.cluster.local:8200
-       → ModelService decode pod directly — no Gateway, no GAIE/EPP
+       → model server pod (model-<slug>), port 8000
 ```
 
 ---
@@ -58,16 +62,15 @@ client → ms-<slug>-embeddings.<namespace>.svc.cluster.local:8200
 
 ```
 app_serving/
+├── charts/
+│   └── llm-d-router-gateway/         # Vendored llm-d router chart (v1.0.0)
 ├── deployments/
 │   ├── Pulumi.yaml                   # Stack descriptor (runtime: go, main: ..)
 │   ├── Pulumi.<stack>.yaml           # Per-stack config (one file per cluster target)
 │   └── models/
 │       └── <category>/                     # generative or embedder
 │           └── <ModelName>[-<target>]/      # One folder per model+cluster combination
-│               ├── gaie-<slug>/            # slug is shared across variants of the same model
-│               │   └── values.yaml         # GAIE (inferencepool) Helm values
-│               └── ms-<slug>/
-│                   └── values.yaml         # ModelService Helm values
+│               └── model.yaml              # Model definition (slug, pins, server, router)
 └── main.go                           # Orchestration entry point; calls
                                        # github.com/axem-solutions/ai_platform/pkg/iac/serving
 ```
@@ -78,18 +81,19 @@ The implementation itself lives outside `app_serving/`, in the shared `pkg` modu
 ```
 pkg/iac/serving/
 ├── serving.go                        # DeployAppServing — orchestration entry point
+├── modeldef/                         # model.yaml schema, shared with the installer
 └── internal/
     ├── config/
-    │   ├── config.go                 # Config loading and validation; returns a single Config
-    │   │                              # (Config.Models holds one Model entry per enabled model)
+    │   ├── config.go                 # Config loading and validation; loads each model.yaml
     │   ├── input.go                  # Raw stack-config shape (stackInput, modelInput, ...)
-    │   └── naming.go                 # Release/namespace/gateway name derivation
+    │   └── naming.go                 # Namespace/gateway/router/model server name derivation
     ├── components/
-    │   ├── llmd-infra/deploy.go      # llm-d-infra Helm chart
-    │   ├── gaie/deploy.go            # inferencepool (GAIE) Helm chart
-    │   ├── modelservice/deploy.go    # llm-d-modelservice Helm chart
+    │   ├── gateway/deploy.go         # Istio Gateway and discovery Service
+    │   ├── router/                   # llm-d-router-gateway Helm release and its values
+    │   ├── modelserver/              # Model server Deployment and runtime metadata
     │   ├── httproute/deploy.go       # HTTPRoute custom resource
     │   └── embeddingservice/deploy.go # ClusterIP Service for embedder models
+    ├── legacy/                       # Removes the retired modelservice chart's pods
     └── platform/
         ├── secret.go                 # Harbor pull secret creation
         └── model_storage.go          # PVC + ORAS pull Job creation
@@ -116,27 +120,27 @@ and runs it. The working directory for the binary is `app_serving/`.
 `appConfig.Load(ctx)` reads the stack config (`Pulumi.<stack>.yaml`) and returns
 a `Config` struct containing one `Model` entry per enabled model.
 
-1. Reads `cloudProvider` — must be `cloud` or `on-prem`. Determines which credentials
+1. Reads `platform` — `gcp`, `aws`, `azure` or `on-prem`. Determines which credentials
    are required.
 2. Reads `models.generative` and `models.embedder` lists. Each entry has:
    - `name` — folder name under `deployments/models/<category>/`
    - `enabled` — **boolean** (`true`/`false`); models with `enabled: false` are skipped
    - `nodeSelector` — per-model node targeting map
    - `nameSpace` (optional) — overrides auto-derived `llm-d-<slug>`
-   - `releaseName` (optional) — overrides auto-derived `infra-<slug>`
-3. Loads cluster-wide credentials shared by all models:
+   - `releaseName` (optional) — overrides the auto-derived resource suffix (`infra-<slug>`)
+3. Loads cluster-wide settings shared by all models:
    - `kubeconfig`, `harborHostname`, `harborUser`, `harborToken`
-4. For each enabled model, scans `deployments/models/<category>/<name>/` for exactly one
-   `gaie-<slug>/` and one `ms-<slug>/` subdirectory. Both must share the same `<slug>`.
-5. Derives per-model resource names from the slug (unless overridden):
+   - `modelServerImage`, `routerImage`, `orasImage`: the installer's Harbor mirrors, or upstream
+4. For each enabled model, loads and validates
+   `deployments/models/<category>/<name>/model.yaml` (`pkg/iac/serving/modeldef`).
+5. Derives per-model resource names from the definition's slug (unless overridden):
    - Namespace: `llm-d-<slug>`
-   - Infra release: `infra-<slug>`
-   - GAIE release: `gaie-<slug>`
-   - ModelService release: `ms-<slug>`
-   - Gateway name: `infra-<slug>-inference-gateway`
+   - Gateway: `gateway-<slug>` (Istio Service `gateway-<slug>-istio`)
+   - Router release and InferencePool: `router-<slug>`
+   - Model server Deployment: `model-<slug>`
    - HTTPRoute name: `llm-d-<slug>`
-6. Validates credentials per `cloudProvider`:
-   - `cloud`: no additional required credentials (Harbor credentials optional, needed when `modelSource` is set).
+6. Validates credentials per `platform`:
+   - Cloud: no additional required credentials (Harbor credentials optional, needed when `modelSource` is set).
    - `on-prem`: `kubeconfig`, `harborHostname`, `harborUser`, `harborToken` **required**.
 
 ---
@@ -159,11 +163,18 @@ means all models in a stack target the same cluster.
 
 ---
 
-### Step 4 — Per-Model Deployment Loop (`main.go`)
+### Step 4 — Legacy cleanup and the per-model loop (`models/deploy.go`)
 
-For each enabled model in the `models` list, steps 5–11 below are executed
-in sequence, each using the model's `Model` entry (with its own `Namespace`,
-`ReleaseName`, `GaieValuesPath`, etc.).
+Before registering any resource (and not during a preview), the stack deletes the model
+server Deployments the retired `llm-d-modelservice` chart left in each enabled model's
+namespace and waits for their pods to terminate. Pulumi would otherwise create the new
+model server before removing the old one, and on a GPU node the new pods would wait for
+GPUs the old pods hold. On a stack deployed after the llm-d v1.0 move there is nothing to
+delete.
+
+Then, for each enabled model in the `models` list, steps 5–11 below are executed, each
+using the model's `Model` entry (with its own `Namespace`, `ReleaseName`, `Definition`,
+etc.).
 
 ---
 
@@ -191,8 +202,8 @@ against Harbor. The ORAS image is pulled from where the installer mirrored it
 (`app-serving:orasImage`, `<harbor>/services/oras-project/oras:v1.3.1`), or from `ghcr.io`
 when no mirrored reference is set.
 
-The ModelService chart (Step 10) depends on both the PVC and the Job, so the inference
-pod never starts with an empty PVC.
+The model server Deployment (Step 10) depends on both the PVC and the Job, so the
+inference pod never starts with an empty PVC.
 
 See [Model storage](model-storage.md) for the full directory layout and recovery
 procedure.
@@ -206,117 +217,109 @@ When `harborToken` is set (i.e. `HarborTokenSet` is true), creates a `harbor-cre
 against Harbor with the robot account credentials (`harborUser` / `harborToken`).
 
 This secret serves two purposes:
-- **`imagePullSecrets`** — referenced by pods in on-prem `values.yaml` files so cluster
-  nodes (no internet) can pull container images from Harbor.
+- **`imagePullSecrets`** — set on the model server and router pods, so cluster nodes (no
+  internet) can pull the mirrored images from Harbor.
 - **ORAS Job authentication** — mounted as `/root/.docker/config.json` in the ORAS pull
   Job so `oras pull` can authenticate against Harbor to fetch model artifacts.
 
 ---
 
-### Step 8 — llm-d-infra Helm Chart (`llmd-infra/deploy.go`)
+### Step 8 — Gateway (`gateway/deploy.go`)
 
-**Chart source**: the pinned `llm-d-infra` chart tarball bundled with the
-installer image at `<project>/charts/llm-d-infra-v1.4.0.tgz`, downloaded by the
-image's `chart-downloader` stage. Override with `app-serving:llmdChart`.
-
-Deploys:
-- An Istio `Gateway` resource — the cluster entry point for inference traffic for this model.
-- A `DestinationRule` for the GAIE EPP service (TLS settings — one-way SIMPLE mode with
-  `insecureSkipVerify`, not mutual TLS).
-
-Additionally creates two plain Kubernetes resources:
-- An `ExternalName` Service (`llmd-gateway-<slug>`) resolving to the gateway's in-cluster
-  FQDN — used by `app_shaide` to reach the inference gateway.
-- A `ConfigMap` (`gateway-defaults-<slug>`) that injects a hard `nodeAffinity` (built from the
-  stack's `nodeSelector` config) into the Istio Gateway pod via the `istio` GatewayClass
-  defaults mechanism.
+Creates, without any Helm chart:
+- A Gateway API `Gateway` (`gateway-<slug>`) of class `istio` with an HTTP listener on
+  port 80, labeled `istio.io/enable-inference-extproc: "true"`. Istio provisions its proxy
+  Deployment and the Service `gateway-<slug>-istio`.
+- The `ConfigMap` the Gateway's `infrastructure.parametersRef` names. It makes the
+  Service `ClusterIP` and sets the istio-proxy log level and resources, following the
+  llm-d v1.0 Istio gateway recipe.
+- An `ExternalName` Service (`llmd-gateway-<slug>`) resolving to `gateway-<slug>-istio` —
+  labeled so shaide-server discovers the model's endpoint by label selector.
 
 ---
 
-### Step 9 — GAIE Helm Chart (`gaie/deploy.go`)
+### Step 9 — Router (`router/`)
 
-**Chart source**: Pulumi calls Helm on the provisioner laptop, which downloads the
-chart from `oci://registry.k8s.io/gateway-api-inference-extension/charts/inferencepool`
-at version `v1.2.0`. The provisioner has internet; the cluster nodes do not need it.
+**Chart source**: the `llm-d-router-gateway` chart v1.0.0, vendored unpacked in
+`app_serving/charts/llm-d-router-gateway` and copied into the installer image. The same
+copy is used on every platform, so neither the provisioner nor the cluster needs access to
+a chart registry.
 
-Values are merged from two sources:
-1. `deployments/models/<category>/<modelName>/gaie-<slug>/values.yaml` — model-specific
-   settings (EPP image, InferencePool label selectors).
-2. Programmatic values in `gaie/deploy.go` — DestinationRule connection pool settings,
-   Istio provider config.
+The values are built in Go (`router/values.go`):
+- EPP image from `app-serving:routerImage`, split into the chart's registry, repository and
+  tag (the chart's own default tag is `main`, so it is always set)
+- `InferencePool` targeting port 8000 of the pods labeled `llm-d.ai/model: model-<slug>`,
+  `llm-d.ai/role: decode`, with `failureMode: FailOpen`
+- EPP configuration: llm-d's optimized baseline as a `llm-d.ai/v1` `EndpointPickerConfig`,
+  or the model's own `router.pluginsConfig`
+- Istio provider: a `DestinationRule` for the EPP Service (TLS SIMPLE with
+  `insecureSkipVerify`, raised connection pool limits)
+- `httpRoute.create: false` — the platform creates its own HTTPRoute (Step 11)
+- With more than one router replica, a rolling update strategy that tolerates the
+  leader-elected standbys, so the release does not wait forever for them to become ready
 
 Deploys:
-- The EPP (Endpoint Picker Policy) pod — watches InferencePod labels and routes
-  requests to the best available ModelService pod.
-- An `InferencePool` custom resource — the traffic target for the HTTPRoute.
-
-**Image pull**:
-- Cloud: EPP image pulled from `registry.k8s.io/gateway-api-inference-extension/epp:v1.2.0`
-  directly by cluster nodes (internet access available).
-- On-prem: EPP image pulled from `harbor.harbor.svc.cluster.local/images-shaide/gateway-api-inference-extension/epp:v1.2.0`
-  (Harbor) using the `harbor-creds` pull secret.
+- The EPP Deployment and Service `router-<slug>-epp` — the Gateway calls it over ext-proc
+  for every request, and it picks the model server pod.
+- The `InferencePool` `router-<slug>` — the traffic target for the HTTPRoute.
 
 ---
 
-### Step 10 — ModelService Helm Chart (`modelservice/deploy.go`)
+### Step 10 — Model Server (`modelserver/`)
 
-**Chart source**: Pulumi calls Helm on the provisioner laptop, which downloads the
-chart from `https://llm-d-incubation.github.io/llm-d-modelservice/` at version
-`v0.4.12`.
+The Deployment `model-<slug>` is built from the Kubernetes API types
+(`modelserver/deployment.go`) and applied as a manifest, so it is exactly what the unit
+tests check. It follows the llm-d v1.0 single-host decode recipe:
 
-Values are merged from two sources:
-1. `deployments/models/<category>/<modelName>/ms-<slug>/values.yaml` — model-specific
-   settings (model URI, container images, GPU resources, inference server args).
-2. Programmatic values in `modelservice/deploy.go` — a hard `nodeAffinity` (built from the
-   stack's `nodeSelector` config) and, when the stack sets `gpuToleration`, a matching
-   toleration applied to both decode and prefill pods. The
-   toleration's key/value/effect are read from stack config, not hardcoded — they must match
-   whatever taint is actually applied to the GPU node.
-
-Deploys per-model decode and prefill pods. Each pod contains two containers:
-- **Inference server container** — serves the model. Supported servers:
-  - `modelCommand: vllmServe` — runs vLLM; chart auto-generates `--model`, `--port`, and
-    parallelism args. The decode pod listens on port **8200** (routing-proxy takes 8000).
-  - `modelCommand: custom` — user provides `command` and `args` directly. The chart
-    still mounts the model PVC and injects `HF_HUB_CACHE` (from `pvc+hf://` URI), but
-    does not generate any inference args. The inference server **must listen on port 8200**
-    for decode pods.
-  - `modelCommand: imageDefault` — uses the container image's default entrypoint with
-    chart-generated args.
+- Container `modelserver`, port 8000 named `modelserver`; liveness `/health`, readiness and
+  startup `/v1/models`. The startup probe allows 30 minutes.
+- **vLLM** (`server.engine: vllm`, the default): `vllm serve <org>/<model> --port 8000
+  --served-model-name <model.name> --shutdown-timeout=45` followed by `server.args`. The
+  image is the model's `server.image` or the stack's `modelServerImage`.
+- **Simulator** (`server.engine: sim`): the image's own entrypoint with
+  `--model <model.name> --port 8000`. The image is the model's `server.image` or the
+  stack's `simulatorImage`.
+- **Weights**: with a `modelSource`, the model's PVC mounted read-only at `/model-cache`,
+  `HF_HUB_CACHE=/model-cache/hub` and `HF_HUB_OFFLINE=1`; without one, an `emptyDir` sized
+  to `model.size` that vLLM downloads into.
+- **Placement**: the model's node affinity, the stack's GPU toleration plus the model's own
+  tolerations. Replicas of a model with a PVC must share a node, because the PVC is
+  `ReadWriteOnce`.
+- **Graceful shutdown**: a 15 s `preStop` sleep (the pod leaves the pool first), vLLM's
+  45 s drain, a 75 s termination grace period.
+- **Rollout**: `Recreate` for one replica; with several replicas, a rolling update of one
+  pod at a time that needs no spare GPU.
+- **Runtime metadata** (`server.runtimeMetadata: true`): the platform's vLLM middleware,
+  mounted from a content-addressed ConfigMap.
+- Service links are disabled: they inject `VLLM_*`-looking variables that vLLM would read
+  as its own settings.
 
 **Inference server for CPU-only embedding models (on-prem)**:
-For CPU-only verification of embedding models, `michaelf34/infinity` can be used instead
-of vLLM via `modelCommand: custom`. Infinity does not require CUDA libraries at startup
-and resolves model weights from the HF cache via `HF_HUB_CACHE` (injected by the chart).
-The vLLM CUDA image (`llm-d-cuda`) cannot start on CPU-only nodes even with `--device cpu`.
+The vLLM CUDA image cannot start on CPU-only nodes. For CPU-only verification use the
+simulator, or a model with its own `server.image` (for example a vLLM CPU image).
 
 **Image pull**:
-- Cloud: images pulled from `ghcr.io/llm-d/...` directly.
-- On-prem: images pulled from `harbor.harbor.svc.cluster.local/images-shaide/llm-d/...` using `harbor-creds`.
-
-**Embeddings endpoint**:
-The inference gateway (EPP) validates all requests as chat-completions and rejects
-`/v1/embeddings` or `/embeddings` calls with a 400 error. For embedding models, bypass
-the gateway and access the inference server directly on port 8200 (pod port-forward or
-a dedicated ClusterIP service).
+- Cloud: images pulled from the Harbor mirrors the installer created, or from upstream
+  registries on a direct `pulumi up`.
+- On-prem: images pulled from Harbor using `harbor-creds`.
 
 ---
 
-### Step 11 — HTTPRoute or Embedding Service
+### Step 11 — HTTPRoute and Embedding Service
 
-**Generative models** (`httproute/deploy.go`): creates a `gateway.networking.k8s.io/v1
+**Every model** (`httproute/deploy.go`): creates a `gateway.networking.k8s.io/v1
 HTTPRoute` custom resource that:
-- Binds to the Istio Gateway created in Step 8.
+- Binds to the Gateway created in Step 8.
 - Routes all traffic (`PathPrefix: /`) to the `InferencePool` created in Step 9.
+- Sets no request timeout, so long streamed generations are not cut off.
 
 This completes the traffic chain. Inference requests arriving at the gateway are
-forwarded to the EPP, which selects the optimal decode pod based on KV-cache state.
+forwarded to the EPP, which selects the model server pod by prefix-cache affinity and
+token load.
 
-**Embedder models** (`embeddingservice/deploy.go`): creates a `ClusterIP` Service
-(`ms-<slug>-embeddings`) that selects the decode pod directly on port 8200, bypassing
-the Gateway/GAIE/EPP path entirely — the EPP only validates chat-completion requests
-and rejects `/v1/embeddings`. `main.go` picks one branch or the other based on
-`model.IsEmbedder`; a model never gets both.
+**Embedder models** (`embeddingservice/deploy.go`): additionally creates a `ClusterIP`
+Service (`ms-<slug>-embeddings`) on port 8200 that selects the model server pods directly
+and forwards to their port 8000. shaide-server discovers and calls embedders through it.
 
 ---
 
@@ -330,7 +333,7 @@ deployments/Pulumi.TEMPLATE.yaml deployments/Pulumi.<stack-name>.yaml`).
 ### Cloud example
 
 ```yaml
-app-serving:cloudProvider: cloud
+app-serving:platform: gcp
 app-serving:models:
   generative:
     - name: <modelName>
@@ -353,8 +356,8 @@ app-serving:harborToken:
 | Cluster | GKE/EKS/AKS; provider reads `KUBECONFIG` env |
 | Harbor pull secret | Created (`harbor-creds`) when `harborToken` is set |
 | Model weights | Pulled from Harbor by ORAS Job into PVC before inference pod starts |
-| Images | Pulled from `ghcr.io` and `registry.k8s.io` by cluster nodes (internet) |
-| Helm charts | Downloaded from OCI / HTTP by Pulumi on provisioner laptop |
+| Images | The installer's Harbor mirrors (`modelServerImage`, `routerImage`); upstream on a direct `pulumi up` |
+| Helm charts | The vendored router chart in `app_serving/charts/` |
 | Node targeting | Cloud node pool label (`nodegroup: <node-pool-name>`) |
 | Namespace | `llm-d-<slug>` |
 
@@ -363,7 +366,7 @@ app-serving:harborToken:
 ### On-prem air-gap (RKE2) example
 
 ```yaml
-app-serving:cloudProvider: on-prem
+app-serving:platform: on-prem
 app-serving:models:
   generative:
     - name: <modelName>
@@ -395,9 +398,9 @@ app-serving:harborToken:
 | Model weights | Pulled from Harbor by ORAS Job into PVC (models with `modelSource`) |
 | Model PV | hostpath PV auto-created by Pulumi when `hostpathNode` is set; the directory must already exist on the node |
 | GPU scheduling | The installer passes each model's placement: the node pools assigned to it in the `Assign node pools` stage, matched on the pool label the platform maintains (e.g. `kubernetes.azure.com/agentpool`, or `nodegroup` on-prem), one `nodeSelectorTerm` per label. Without a placement the stack falls back to `nodegroup=generative`. Models tolerate `nvidia.com/gpu=present:NoSchedule`; the stack writes the toleration as `gpuToleration`, applied to model pods and the ORAS pull Job |
-| Images | Pulled from `harbor.harbor.svc.cluster.local/images-shaide/...` by cluster nodes (no internet) |
+| Images | Pulled from Harbor by cluster nodes (no internet) |
 | ORAS image | `harbor.harbor.svc.cluster.local/services/oras-project/oras:v1.3.1`, mirrored by the installer |
-| Helm charts | Downloaded from OCI / HTTP by Pulumi on provisioner laptop (has internet) |
+| Helm charts | The vendored router chart in `app_serving/charts/`; nothing is downloaded |
 | Node targeting | RKE2 node label (`workload: cpu` or `workload: gpu`) |
 | Namespaces | One per model, derived from slug (e.g. `llm-d-<slug>`) |
 
@@ -405,16 +408,19 @@ app-serving:harborToken:
 
 The installer copies the images of supported models into Harbor in its
 [`Populate Harbor` stage](../installation/installer-guide.md#populate-harbor-stage)
-(see `installer/build/manifests/images.yaml`). Images only a manual stack uses, such as
-the simulator, must be copied by hand:
+(see `installer/build/manifests/images.yaml`): vLLM, the llm-d router EPP, ORAS and Istio,
+and the inference simulator when the `Simulator` model is served. A manual stack copies
+the simulator image by hand:
 
 ```bash
-skopeo copy docker://ghcr.io/llm-d/llm-d-inference-sim:v0.7.1 \
-  docker://<harbor-host>/<project>/llm-d-inference-sim:v0.7.1
-
-skopeo copy docker://registry.k8s.io/gateway-api-inference-extension/epp:v1.2.0 \
-  docker://<harbor-host>/<project>/epp:v1.2.0
+skopeo copy docker://ghcr.io/llm-d/llm-d-inference-sim:v1.0.0 \
+  docker://<harbor-host>/<project>/llm-d-inference-sim:v1.0.0
 ```
+
+A manual stack without the installer also sets `modelServerImage`, `routerImage` and
+`simulatorImage` to the Harbor copies of `docker.io/vllm/vllm-openai:v0.31.0`,
+`ghcr.io/llm-d/llm-d-router-endpoint-picker:v1.0.0` and
+`ghcr.io/llm-d/llm-d-inference-sim:v1.0.0`.
 
 **Before `pulumi up` — model weight preparation (real models only, not sim):**
 
@@ -427,33 +433,30 @@ it downloads the pinned Hugging Face revision of each selected model and pushes 
 Harbor as `ai-models/<slug>:<first 12 characters of the revision>`.
 
 After `pulumi up`, the ORAS pull Job runs automatically inside the cluster and populates
-the PVC. The ModelService pod waits for the Job to complete before starting.
+the PVC. The model server pods wait for the Job to complete before starting.
 
 ---
 
 ## Adding a New Model or Cluster Variant
 
 The folder name under `models/` is the model entry referenced in `models.generative` /
-`models.embedder`.
-The same model running on a different cluster gets its own folder with cluster-specific
-`values.yaml` files (different image registries, `imagePullSecrets`, etc.) while
-keeping a unique `<slug>` in the subfolder names so Kubernetes resource names remain
-unique within a cluster.
+`models.embedder`. The same model running on a different cluster gets its own folder with
+a cluster-specific `model.yaml` (different tolerations, image, tuning) and, when both may
+run on the same cluster, its own `slug` so Kubernetes resource names remain unique.
 
 | Folder | Slug | Namespace | Target |
 |--------|------|-----------|--------|
 | `<ModelName>` | `<slug>` | `llm-d-<slug>` | Cloud |
 | `<ModelName>-rke2` | `<slug>-rke2` | `llm-d-<slug>-rke2` | RKE2 on-prem |
 
-1. Create the model folder:
+1. Create the model folder and its definition:
    ```
    deployments/models/<category>/<ModelName>/   # or <ModelName>-<target> for a cluster variant
-     gaie-<slug>/values.yaml
-     ms-<slug>/values.yaml
+     model.yaml
    ```
-   Both subdirectories must use the same `<slug>` (lowercase alphanumeric + `-`,
-   max 47 characters). Each model deployed on the same cluster must have a **unique slug**
-   to avoid namespace and resource name collisions.
+   The `slug` is lowercase alphanumeric + `-`, max 47 characters. Each model deployed on
+   the same cluster must have a **unique slug** to avoid namespace and resource name
+   collisions. See [Adding a New Model](model-serving.md#adding-a-new-model) for the schema.
 
 2. Add the model to the stack config under the appropriate category:
    ```yaml
@@ -484,26 +487,29 @@ unique within a cluster.
 For on-prem air-gap deployments, additionally:
 - Make sure the model's container images are in Harbor (see image preparation above).
 - Set `harborHostname`, `harborUser`, `harborToken`, and `kubeconfig` in the stack config.
-- Use Harbor image references in the model's `values.yaml` files.
 
 ---
 
 ## Key Design Decisions
 
-**Helm charts downloaded by the provisioner, not the cluster.**
-Both cloud and on-prem stacks pull Helm charts from OCI/HTTP registries at `pulumi up`
-time. This happens on the provisioner laptop, which always has internet access. Cluster
-nodes never need to fetch chart content.
+**Charts are vendored, images come from Harbor.**
+The only Helm chart, the llm-d router, is committed unpacked under `app_serving/charts/`,
+so a deploy needs no chart registry on any platform. The Gateway and the model server are
+plain Kubernetes objects built in Go: the llm-d v1.0 project retired its `llm-d-infra` and
+`llm-d-modelservice` charts in favour of Kustomize recipes, and shaide reproduces those
+recipes in Go, where its own settings (placement, tolerations, weights volume, metadata)
+are applied and unit tested.
 
 **Container images are the air-gap boundary.**
 Only container images are pulled by cluster nodes. On cloud clusters, nodes pull from
-public registries directly. On the air-gapped RKE2 cluster, images must be pre-loaded
-into Harbor; the `registries.yaml` on each node authenticates containerd against Harbor.
+the Harbor mirrors or public registries. On the air-gapped RKE2 cluster, images must be
+pre-loaded into Harbor; the `registries.yaml` on each node authenticates containerd
+against Harbor.
 
 **Model isolation via namespace.**
 Each model gets its own namespace (`llm-d-<slug>`). Multiple models run concurrently
 on the same cluster without interference — each has its own gateway, EPP, and model
-service pods.
+server pods.
 
 **Multiple models in one stack via `models`.**
 A single `Pulumi.<stack>.yaml` can deploy multiple models onto the same cluster by
@@ -515,7 +521,7 @@ on-prem credentials across multiple stack files.
 
 ```yaml
 # One stack file, two models, shared credentials, per-model nodeSelector
-app-serving:cloudProvider: on-prem
+app-serving:platform: on-prem
 app-serving:models:
   generative:
     - name: <ModelA>
@@ -539,8 +545,9 @@ app-serving:harborToken:
   secure: <encrypted>
 ```
 
-**Values merge: file + programmatic.**
-Model-specific settings (images, model URI, GPU resources) live in `values.yaml` files
-and are owned by the model author. Cross-cutting infrastructure settings (nodeSelector,
-GPU tolerations, connection pool limits) are applied programmatically in the Go
-components so they are consistent across all models.
+**Model definition + platform policy.**
+Model-specific settings (vLLM arguments, GPU resources, replicas, router tuning) live in
+`model.yaml` and are owned by the model author. Cross-cutting settings (port, probes,
+graceful shutdown, placement, GPU tolerations, weights volume, connection pool limits) are
+applied in the Go components so they are consistent across all models. The platform
+rejects a definition that repeats a flag it sets.

@@ -58,8 +58,8 @@ each node's allocatable capacity rather than raw host resources.
 kubectl top pod -n <namespace>
 ```
 
-Per-pod CPU/memory within a namespace — e.g. `-n llm-d-sim-local-gen` to
-check a model's decode/prefill pods, or `-n app-shaide` for the Shaide
+Per-pod CPU/memory within a namespace — e.g. `-n llm-d-simulator` to
+check a model's server pods, or `-n app-shaide` for the Shaide
 stack. Without `-n`, only the `default` namespace is shown; add `-A` for
 every namespace at once.
 

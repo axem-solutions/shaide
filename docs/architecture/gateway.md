@@ -83,13 +83,13 @@ shared-gateway  [gateway-system]        ← gateway-provider
     └── HTTPRoute                       ← app_shaide
             └──▶ shaide-server (ClusterIP)  [app-shaide ns]
                      │
-                     └──▶ infra-<model>-inference-gateway-istio (in-cluster FQDN)
+                     └──▶ llmd-gateway-<slug> → gateway-<slug>-istio (in-cluster FQDN)
                               │
                               ▼
-                      per-model Gateway (istio, ClusterIP)   ← app_serving (llm-d-infra)
+                      per-model Gateway (istio, ClusterIP)   ← app_serving
                               │
                               └── HTTPRoute                  ← app_serving
-                                      └──▶ InferencePool
+                                      └──▶ InferencePool ◀── EPP picks the pod (llm-d router)
                                                └──▶ model pods
 ```
 
@@ -113,13 +113,13 @@ shared-gateway  [gateway-system]             ← gateway-provider
     └── HTTPRoute                            ← app_shaide
             └──▶ shaide-server (ClusterIP)  [app-shaide ns]
                      │
-                     └──▶ infra-<model>-inference-gateway-istio (in-cluster FQDN)
+                     └──▶ llmd-gateway-<slug> → gateway-<slug>-istio (in-cluster FQDN)
                               │
                               ▼
-                      per-model Gateway (istio, ClusterIP)   ← app_serving (llm-d-infra)
+                      per-model Gateway (istio, ClusterIP)   ← app_serving
                               │
                               └── HTTPRoute                  ← app_serving
-                                      └──▶ InferencePool
+                                      └──▶ InferencePool ◀── EPP picks the pod (llm-d router)
                                                └──▶ model pods
 ```
 
@@ -137,13 +137,13 @@ shared-gateway  [gateway-system]             ← gateway-provider
     └── HTTPRoute                            ← app_shaide
             └──▶ shaide-server (ClusterIP)  [app-shaide ns]
                      │
-                     └──▶ infra-<model>-inference-gateway-istio (in-cluster FQDN)
+                     └──▶ llmd-gateway-<slug> → gateway-<slug>-istio (in-cluster FQDN)
                               │
                               ▼
-                      per-model Gateway (istio, ClusterIP)   ← app_serving (llm-d-infra)
+                      per-model Gateway (istio, ClusterIP)   ← app_serving
                               │
                               └── HTTPRoute                  ← app_serving
-                                      └──▶ InferencePool
+                                      └──▶ InferencePool ◀── EPP picks the pod (llm-d router)
                                                └──▶ model pods
 ```
 

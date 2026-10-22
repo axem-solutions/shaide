@@ -190,11 +190,12 @@ spec:
 
 ### 6. Point `app_serving`'s model config at the PVC
 
-Whatever consumes model weights in `app_serving` (the `modelservice`
-component) needs to reference `pvc-gemma-4` instead of going through the
-`modelSource` → ORAS pull path. Check the specific stack's model config
-under `app_serving/deployments/models/<ModelName>/` for the exact field —
-this varies per model definition, so there's no one-line snippet here;
+The model server Deployment in `app_serving` (the `modelserver`
+component) mounts the PVC named `<slug>-model` when the stack sets the
+model's `modelSource`. To use `pvc-gemma-4` instead of going through the
+`modelSource` → ORAS pull path, check the model's definition under
+`app_serving/deployments/models/<category>/<ModelName>/model.yaml` and the
+stack config — this varies per model, so there's no one-line snippet here;
 treat `pvc-gemma-4` as a drop-in replacement for whatever PVC the ORAS Job
 would otherwise have created.
 

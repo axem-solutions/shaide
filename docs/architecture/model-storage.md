@@ -12,8 +12,8 @@ Model weights are stored as OCI artifacts in Harbor and pulled into a Persistent
 one-time Kubernetes Job before the inference pod starts. No HuggingFace token is required
 anywhere in the cluster at runtime.
 
-The llm-d `modelservice` Helm chart supports the `pvc+hf://` URI scheme, which mounts a PVC
-and sets `HF_HUB_CACHE` automatically so the inference server resolves the model by its repo
+The model server Deployment mounts the PVC at `/model-cache` and sets
+`HF_HUB_CACHE=/model-cache/hub` and `HF_HUB_OFFLINE=1`, so vLLM resolves the model by its repo
 ID (e.g. `<org>/<model-name>`) from the local cache without any network access.
 
 ---
@@ -44,7 +44,7 @@ ID (e.g. `<org>/<model-name>`) from the local cache without any network access.
                        ▼
                   ┌──────────────────────────────────────┐
                   │  Inference Pod                        │
-                  │  /model-cache/hub/org/model/          │
+                  │  vllm serve <org>/<model-name>        │
                   │  HF_HUB_CACHE=/model-cache/hub        │
                   │  HF_HUB_OFFLINE=1                     │
                   └──────────────────────────────────────┘
@@ -60,8 +60,11 @@ Each model can optionally declare a `modelSource` block in the stack YAML. When 
 2. On on-prem with `hostpathNode` set: auto-creates a static `PersistentVolume` bound to that node
    under `/var/lib/hostpath/models/<slug>` (the directory must already exist on the node).
 3. Creates a one-time ORAS pull Job that populates the PVC from Harbor.
-4. Overrides `modelArtifacts.uri` in the Helm chart with `pvc+hf://<slug>-model/<modelUri>`.
-5. Makes the ModelService chart depend on the Job, preventing the pod from starting with an empty PVC.
+4. Mounts the PVC read-only into the model server pods and points vLLM at `<modelUri>` in its
+   Hugging Face cache (`hub/<org>/<model-name>` serves `<org>/<model-name>` from `/model-cache/hub`).
+5. Makes the model server Deployment depend on the Job, preventing the pod from starting with an empty PVC.
+
+The PVC is `ReadWriteOnce`, so all replicas of a model are scheduled onto the node holding it.
 
 ### `modelSource` fields
 
@@ -179,11 +182,11 @@ Namespace
   ├── ModelPVC           (<slug>-model; created when modelSource is set)
   ├── OrasJob            (<slug>-model-pull; depends on PVC)
   │
-  ├── LlmdInfra (Helm)
-  │     └── GaieRelease (Helm)
-  │           └── ModelService (Helm)  ← depends on Namespace, PVC, OrasJob
-  │                 ├── HTTPRoute        (generative models)
-  │                 └── EmbeddingService (embedder models — ClusterIP, port 8200, no Gateway/EPP)
+  ├── Gateway            (gateway-<slug> + parameters ConfigMap + llmd-gateway-<slug> Service)
+  ├── Router (Helm)      (router-<slug>: InferencePool + EPP)
+  ├── ModelServer        (model-<slug> Deployment)  ← depends on Namespace, PVC, OrasJob
+  │     ├── HTTPRoute        (every model; Gateway → InferencePool)
+  │     └── EmbeddingService (embedder models; ClusterIP port 8200 → pods' port 8000)
 ```
 
 ---

@@ -13,7 +13,7 @@ shaide is built in layers, each an independent Pulumi program.
 | Layer | Page |
 | --- | --- |
 | Internal OCI registry | [Platform services](platform-services.md) |
-| Istio, Gateway API, GAIE | [Gateway and routing](gateway.md) |
+| Istio, Gateway API, Inference Extension | [Gateway and routing](gateway.md) |
 | vLLM + llm-d model stacks | [Model serving](model-serving.md) |
 | shaide server, control panel | [Application layer](application-layer.md) |
 | MCP datasources | [MCP datasources](mcp.md) |
