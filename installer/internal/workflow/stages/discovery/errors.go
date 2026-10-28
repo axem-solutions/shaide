@@ -1,6 +1,9 @@
 package discovery
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 type harborResourceKind string
 
@@ -22,7 +25,10 @@ type harborDiscoveryError struct {
 	Problem      harborResourceProblem
 	Namespace    string
 	ResourceName string
-	Err          error
+	// Candidates lists other namespaces that run a Harbor, for a missing
+	// namespace.
+	Candidates []string
+	Err        error
 }
 
 func (e harborDiscoveryError) Error() string {
@@ -32,6 +38,9 @@ func (e harborDiscoveryError) Error() string {
 	}
 
 	msg := fmt.Sprintf("%s %s is %s", e.Kind, target, e.Problem)
+	if len(e.Candidates) > 0 {
+		msg += fmt.Sprintf("; Harbor found in namespace(s) %s", strings.Join(e.Candidates, ", "))
+	}
 	if e.Err != nil {
 		return fmt.Sprintf("%s: %v", msg, e.Err)
 	}

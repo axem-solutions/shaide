@@ -3,6 +3,7 @@ package discovery
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/core"
 )
@@ -15,7 +16,7 @@ func recoverCheckResources(rt *core.Runtime, runErr error) (core.RecoveryAction,
 
 	switch discoveryErr.Kind {
 	case harborNamespace:
-		return recoverHarborNamespace(rt)
+		return recoverHarborNamespace(rt, discoveryErr.Candidates)
 	case harborService:
 		return recoverHarborService(rt)
 	case harborSecret:
@@ -25,18 +26,28 @@ func recoverCheckResources(rt *core.Runtime, runErr error) (core.RecoveryAction,
 	}
 }
 
-func recoverHarborNamespace(rt *core.Runtime) (core.RecoveryAction, error) {
+// recoverHarborNamespace asks what to do when the Harbor namespace is missing
+// and CheckResources could not install Harbor without asking: a Harbor runs in
+// the candidate namespaces, or the lookup for one failed.
+func recoverHarborNamespace(rt *core.Runtime, candidates []string) (core.RecoveryAction, error) {
 	msg := fmt.Sprintf(
 		"Harbor namespace %q was not found",
 		rt.Bootstrap.Config.Harbor.Namespace,
 	)
+	defaultOption := "Fresh install"
+	defaultNamespace := rt.Bootstrap.Config.Harbor.Namespace
+	if len(candidates) > 0 {
+		msg += fmt.Sprintf(", but Harbor runs in namespace %s", strings.Join(candidates, ", "))
+		defaultOption = "Choose another namespace"
+		defaultNamespace = candidates[0]
+	}
 	options := []string{
 		"Fresh install",
 		"Choose another namespace",
 		"Abort",
 	}
 
-	selected, promptErr := rt.Reporter.Select(msg, "Fresh install", options)
+	selected, promptErr := rt.Reporter.Select(msg, defaultOption, options)
 	if promptErr != nil {
 		return core.RecoveryFail, promptErr
 	}
@@ -50,7 +61,7 @@ func recoverHarborNamespace(rt *core.Runtime) (core.RecoveryAction, error) {
 		ns, inputErr := rt.Reporter.Input(
 			"Harbor namespace",
 			"harbor",
-			rt.Bootstrap.Config.Harbor.Namespace,
+			defaultNamespace,
 		)
 		if inputErr != nil {
 			return core.RecoveryFail, inputErr

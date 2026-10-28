@@ -2,7 +2,9 @@ package discovery
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -20,6 +22,7 @@ import (
 	pkgkube "github.com/axem-solutions/ai_platform/pkg/kube"
 	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -99,7 +102,7 @@ func InstallOnPrem(rt *core.Runtime) bool {
 
 func CheckResources(rt *core.Runtime) error {
 	if err := checkHarborTarget(rt); err != nil {
-		return err
+		return installWhenHarborMissing(rt, err)
 	}
 
 	if err := checkHarborPullSecret(rt); err != nil {
@@ -130,6 +133,61 @@ func CheckResources(rt *core.Runtime) error {
 	rt.Detailf("harbor client ready for %s", rt.Discovery.HarborForward.Address())
 
 	return nil
+}
+
+// harborLabels select the Services of a Harbor Helm release: the goharbor
+// chart sets app, charts following the Kubernetes conventions set
+// app.kubernetes.io/name.
+var harborLabels = []string{"app=harbor", "app.kubernetes.io/name=harbor"}
+
+// installWhenHarborMissing switches to a fresh install when the Harbor
+// namespace does not exist and no Harbor runs elsewhere on the cluster, which
+// is the normal case on a new cluster. Any other error is returned for the
+// recovery prompt, including a missing namespace with a Harbor in another one,
+// so the installer never deploys a second Harbor without asking.
+func installWhenHarborMissing(rt *core.Runtime, err error) error {
+	var discoveryErr harborDiscoveryError
+	if !errors.As(err, &discoveryErr) || discoveryErr.Kind != harborNamespace || discoveryErr.Problem != missing {
+		return err
+	}
+
+	reqCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	namespaces, findErr := findHarborNamespaces(reqCtx, rt.Cluster.Client)
+	if findErr != nil {
+		rt.Detailf("could not look for Harbor in other namespaces: %v", findErr)
+		return discoveryErr
+	}
+	if len(namespaces) > 0 {
+		discoveryErr.Candidates = namespaces
+		return discoveryErr
+	}
+
+	rt.Detailf("no Harbor found on the cluster; installing it in namespace %q", discoveryErr.ResourceName)
+	rt.Discovery.Mode = core.Install
+	return nil
+}
+
+// findHarborNamespaces returns the sorted namespaces that hold Harbor Services.
+func findHarborNamespaces(ctx context.Context, client kubernetes.Interface) ([]string, error) {
+	found := map[string]bool{}
+	for _, selector := range harborLabels {
+		services, err := client.CoreV1().Services(metav1.NamespaceAll).List(ctx, metav1.ListOptions{LabelSelector: selector})
+		if err != nil {
+			return nil, fmt.Errorf("list Services with %s: %w", selector, err)
+		}
+		for _, svc := range services.Items {
+			found[svc.Namespace] = true
+		}
+	}
+
+	namespaces := make([]string, 0, len(found))
+	for ns := range found {
+		namespaces = append(namespaces, ns)
+	}
+	slices.Sort(namespaces)
+	return namespaces, nil
 }
 
 func checkHarborTarget(rt *core.Runtime) error {
