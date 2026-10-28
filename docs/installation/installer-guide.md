@@ -28,6 +28,8 @@ The container expects:
 | Input | Required | Container path or env | Purpose |
 | --- | --- | --- | --- |
 | Kubeconfig | Yes | `/.kube/config` by default | Context selection and cluster access |
+| AWS login | EKS | `/host-config/aws`, `AWS_PROFILE` | Tokens for EKS kubeconfigs (`aws eks get-token`) |
+| gcloud login | GKE | `/host-config/gcloud` | Tokens for GKE kubeconfigs (`gke-gcloud-auth-plugin`) |
 | Persistent storage | Yes | `/var/shaide-installer` | Model cache, upload state, Pulumi state, logs |
 | Hugging Face token | Yes | `HF_TOKEN` | Downloads selected model snapshots |
 | Registry credentials | Optional | `GHCR_TOKEN`, `DOCKERHUB_PASSWORD` | Private images and rate limits |
@@ -230,6 +232,34 @@ The persistent storage directory must be mounted at:
 ```text
 /var/shaide-installer
 ```
+
+#### EKS and GKE clusters
+
+EKS and GKE kubeconfigs do not contain a credential: they run a command that gets a
+short-lived token from your cloud login. The installer image contains these commands (the
+AWS CLI, and `gke-gcloud-auth-plugin` with the Google Cloud CLI); mount your login so they
+can use it. Add these options to the `docker run` command above:
+
+- **EKS:** log in first (`aws sso login`, or your usual credentials), then add
+
+  ```bash
+    -v "$HOME/.aws:/host-config/aws:ro" \
+    -e AWS_PROFILE \
+  ```
+
+- **GKE:** log in first (`gcloud auth login`), then add
+
+  ```bash
+    -v "$HOME/.config/gcloud:/host-config/gcloud:ro" \
+  ```
+
+The installer copies the login into the container when it starts and refreshes tokens
+there, so your files are only read. The login must stay valid for the whole run: AWS SSO
+sessions last several hours by default; log in again before a long install if yours is
+about to expire.
+
+AKS kubeconfigs from `az aks get-credentials` contain a client certificate and need no
+extra options.
 
 
 ## Installer Workflow Stages
