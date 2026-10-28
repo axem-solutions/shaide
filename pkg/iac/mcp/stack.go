@@ -1,9 +1,12 @@
 package mcp
 
 import (
+	"encoding/json"
+
 	"github.com/axem-solutions/ai_platform/pkg/iac/knowledgecenter"
 	appconfig "github.com/axem-solutions/ai_platform/pkg/iac/mcp/internal/config"
 	stackpkg "github.com/axem-solutions/ai_platform/pkg/stack"
+	"github.com/pulumi/pulumi/sdk/v3/go/auto"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
@@ -93,6 +96,22 @@ func (s *Stack) Config() stackpkg.Config {
 
 func (s *Stack) Deploy(ctx *pulumi.Context) error {
 	return deployAppMCP(ctx, s.config)
+}
+
+// HasDatasources reports whether values, e.g. the config an earlier run
+// stored in the stack, configure any generic MCP server besides KC-MCP.
+func (s *Stack) HasDatasources(values auto.ConfigMap) bool {
+	value, ok := values[s.Config().Definition().Key(appconfig.KeyDatasources)]
+	if !ok {
+		return false
+	}
+
+	var datasources []json.RawMessage
+	if err := json.Unmarshal([]byte(value.Value), &datasources); err != nil {
+		// Unreadable is not proof of none.
+		return true
+	}
+	return len(datasources) > 0
 }
 
 var _ stackpkg.Stack = (*Stack)(nil)

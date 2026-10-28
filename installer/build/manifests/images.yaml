@@ -7,6 +7,9 @@ harbor_upload_images:
   - { source: "dockerhub", project: "shaide", name: "rustfs/rustfs", tag: "1.0.0-alpha.92" }
   - { source: "dockerhub", project: "shaide", name: "qdrant/qdrant", tag: "v1.17" }
   - { source: "dockerhub", project: "shaide", name: "busybox", tag: "1.37" }
+  # Knowledge Center: KC in app_shaide, KC-MCP in app_mcp
+  - { source: "ghcr", project: "shaide", name: "axem-solutions/shaide_knowledge_center", tag: "sha-888c96846a38003920e1744ee61cd29b64a5dd81" }
+  - { source: "ghcr", project: "shaide", name: "axem-solutions/shaide_knowledge_center_mcp", tag: "sha-888c96846a38003920e1744ee61cd29b64a5dd81" }
 
   # app_serving and infrastructure
   - { source: "ghcr", project: "services", name: "oras-project/oras", tag: "v1.3.1" }

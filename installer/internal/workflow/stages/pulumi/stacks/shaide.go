@@ -2,10 +2,12 @@ package stacks
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 
 	"github.com/axem-solutions/ai_platform/installer/internal/placement"
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/core"
+	"github.com/axem-solutions/ai_platform/installer/internal/workflow/stages/knowledgecenter"
 	"github.com/axem-solutions/ai_platform/pkg/iac/shaide"
 	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
 	stackpkg "github.com/axem-solutions/ai_platform/pkg/stack"
@@ -26,25 +28,13 @@ func shaidePlacement(pools []placement.Pool) []shaide.PlacementTerm {
 }
 
 func DeployAppShaide(rt *core.Runtime) error {
-	webAppEnabled := rt.WebApp.Enabled
+	if rt.KnowledgeCenter.Enabled {
+		if err := knowledgeCenterCredentials(rt, newShaideStack(rt)); err != nil {
+			return err
+		}
+	}
 
-	shaideStack := shaide.NewStack(
-		filepath.Join(rt.Bootstrap.Config.Paths.ProjectsDir, projectAppShaide),
-		stackpkg.Options{
-			Platform:   cluster.Provider(rt.Bootstrap.Provider),
-			Kubeconfig: rt.Cluster.ConfigPath,
-			Context:    rt.Cluster.SelectedContext,
-		},
-		shaide.Options{
-			GatewayHostname: rt.Bootstrap.GatewayHostname,
-			WebAppEnabled:   &webAppEnabled,
-			Images:          mirroredImages(rt.Bootstrap.Catalog.ServiceImages, harborRegistryHostname(rt)),
-
-			// Prefer the node pools assigned to CPU work. The preference is
-			// soft, so the components still schedule if those nodes are full.
-			Placement: shaidePlacement(rt.Placement.CPU),
-		},
-	)
+	shaideStack := newShaideStack(rt)
 
 	deployer, err := newStackDeployer(rt, shaideStack, stackDeploymentOptions{})
 	if err != nil {
@@ -55,5 +45,41 @@ func DeployAppShaide(rt *core.Runtime) error {
 		return err
 	}
 
-	return nil
+	if !rt.KnowledgeCenter.Enabled {
+		return nil
+	}
+
+	adminPassword, ok := shaideStack.AdminPassword(deployer.ResolvedConfig())
+	if !ok {
+		return fmt.Errorf("the app-shaide config has no admin password to create the Knowledge Center account with")
+	}
+
+	return knowledgecenter.EnsureEmbeddingAccount(rt, adminPassword, rt.KnowledgeCenter.Credentials)
+}
+
+// newShaideStack is app-shaide with this run's answers. The Knowledge Center
+// credentials are empty until knowledgeCenterCredentials sets them.
+func newShaideStack(rt *core.Runtime) *shaide.Stack {
+	webAppEnabled := rt.WebApp.Enabled
+	knowledgeCenterEnabled := rt.KnowledgeCenter.Enabled
+
+	return shaide.NewStack(
+		filepath.Join(rt.Bootstrap.Config.Paths.ProjectsDir, projectAppShaide),
+		stackpkg.Options{
+			Platform:   cluster.Provider(rt.Bootstrap.Provider),
+			Kubeconfig: rt.Cluster.ConfigPath,
+			Context:    rt.Cluster.SelectedContext,
+		},
+		shaide.Options{
+			GatewayHostname:        rt.Bootstrap.GatewayHostname,
+			WebAppEnabled:          &webAppEnabled,
+			KnowledgeCenterEnabled: &knowledgeCenterEnabled,
+			KnowledgeCenter:        rt.KnowledgeCenter.Credentials,
+			Images:                 mirroredImages(rt.Bootstrap.Catalog.ServiceImages, harborRegistryHostname(rt)),
+
+			// Prefer the node pools assigned to CPU work. The preference is
+			// soft, so the components still schedule if those nodes are full.
+			Placement: shaidePlacement(rt.Placement.CPU),
+		},
+	)
 }

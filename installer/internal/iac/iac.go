@@ -139,6 +139,21 @@ func (d *Deployer) DestroyOnly(ctx context.Context, deployment func(ctx *pulumi.
 }
 
 func (d *Deployer) prepareStack(ctx context.Context, deployment func(ctx *pulumi.Context) error) (auto.Stack, error) {
+	stack, err := d.openStack(ctx, deployment)
+	if err != nil {
+		return auto.Stack{}, err
+	}
+
+	if err := d.applyConfig(ctx, stack); err != nil {
+		return auto.Stack{}, err
+	}
+
+	return stack, nil
+}
+
+// openStack selects the stack, creating it when it does not exist, without
+// writing this run's config.
+func (d *Deployer) openStack(ctx context.Context, deployment func(ctx *pulumi.Context) error) (auto.Stack, error) {
 	if err := os.MkdirAll(d.StateDir, 0o755); err != nil {
 		return auto.Stack{}, fmt.Errorf("create pulumi state dir: %w", err)
 	}
@@ -156,10 +171,6 @@ func (d *Deployer) prepareStack(ctx context.Context, deployment func(ctx *pulumi
 	)
 	if err != nil {
 		return auto.Stack{}, fmt.Errorf("upsert stack: %w", err)
-	}
-
-	if err := d.applyConfig(ctx, stack); err != nil {
-		return auto.Stack{}, err
 	}
 
 	return stack, nil
