@@ -72,6 +72,12 @@ kubectl auth can-i '*' '*'
 
 `--network host` is required so the container reaches the cluster over the host network.
 
+| Symptom | Fix |
+| --- | --- |
+| `getting credentials: exec: executable aws not found` or `gke-gcloud-auth-plugin not found` | Use an installer image that includes the cloud CLIs, and mount your login: see [EKS and GKE clusters](installer-guide.md#eks-and-gke-clusters) |
+| `getting credentials: exec: executable aws failed` with an SSO or token error | Your AWS login is missing or expired, or `AWS_PROFILE` was not passed. Run `aws sso login` on the host, check the `-v "$HOME/.aws:/host-config/aws:ro"` mount and `-e AWS_PROFILE`, and restart the installer |
+| `gke-gcloud-auth-plugin` reports no active account or expired credentials | Run `gcloud auth login` on the host, check the `-v "$HOME/.config/gcloud:/host-config/gcloud:ro"` mount, and restart the installer |
+
 ## Deployment failures
 
 Failures during apply usually indicate an unmet cluster requirement:

@@ -84,6 +84,41 @@ RUN curl -fsSL --retry 3 \
 
 
 # -----------------------------------------------------------------------------
+# Cloud CLI stage
+#
+# EKS and GKE kubeconfigs get their tokens from an exec credential plugin:
+# `aws eks get-token` and gke-gcloud-auth-plugin. This stage downloads and
+# verifies the AWS CLI and the Google Cloud apt key, so the runtime stage
+# needs no gnupg or unzip.
+# -----------------------------------------------------------------------------
+FROM debian:bookworm-slim AS cloud-cli
+
+ARG AWS_CLI_VERSION=2.37.13
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl gnupg unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+# keys/aws-cli.asc is the AWS CLI Team's public key from the AWS CLI install
+# guide (fingerprint FB5D B77F D5C1 18B8 0511 ADA8 A631 0ACC 4672 475C). It
+# expires on 2027-07-01; replace it with the guide's current key then.
+COPY installer/build/keys/aws-cli.asc /tmp/aws-cli.asc
+
+RUN curl -fsSL --retry 3 -o /tmp/awscliv2.zip \
+        "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-${AWS_CLI_VERSION}.zip" \
+    && curl -fsSL --retry 3 -o /tmp/awscliv2.sig \
+        "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-${AWS_CLI_VERSION}.zip.sig" \
+    && gpg --batch --import /tmp/aws-cli.asc \
+    && gpg --batch --verify /tmp/awscliv2.sig /tmp/awscliv2.zip \
+    && unzip -q /tmp/awscliv2.zip -d /tmp \
+    && /tmp/aws/install --install-dir /usr/local/aws-cli --bin-dir /usr/local/bin \
+    && /usr/local/bin/aws --version
+
+RUN curl -fsSL --retry 3 https://packages.cloud.google.com/apt/doc/apt-key.gpg \
+    | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
+
+
+# -----------------------------------------------------------------------------
 # Runtime stage
 #
 # Use a smaller Debian image containing only the compiled installer and the
@@ -100,6 +135,15 @@ LABEL org.opencontainers.image.licenses=Apache-2.0
 
 ARG PULUMI_VERSION=3.244.0
 ARG PULUMI_KUBERNETES_PLUGIN_VERSION=4.31.1
+ARG GOOGLE_CLOUD_CLI_VERSION=589.0.0-0
+
+# AWS CLI, for EKS kubeconfigs (`aws eks get-token`).
+COPY --from=cloud-cli /usr/local/aws-cli /usr/local/aws-cli
+RUN ln -s /usr/local/aws-cli/v2/current/bin/aws /usr/local/bin/aws
+
+# Key of the Google Cloud apt repository, for gke-gcloud-auth-plugin. The
+# repository itself is added below, once ca-certificates is installed.
+COPY --from=cloud-cli /usr/share/keyrings/cloud.google.gpg /usr/share/keyrings/cloud.google.gpg
 
 # --no-install-recommends:
 #   Avoids optional packages that are not required.
@@ -112,12 +156,32 @@ ARG PULUMI_KUBERNETES_PLUGIN_VERSION=4.31.1
 #
 # python3 and python3-venv:
 #   Required for the isolated Hugging Face CLI environment.
+#
+# google-cloud-cli and google-cloud-cli-gke-gcloud-auth-plugin:
+#   GKE kubeconfigs run gke-gcloud-auth-plugin, which gets its token from
+#   gcloud.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
         python3 \
         python3-venv \
+    \
+    # The Google Cloud repository is served over HTTPS, so it can only be
+    # added after ca-certificates.
+    && echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" \
+        > /etc/apt/sources.list.d/google-cloud-sdk.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+        "google-cloud-cli=${GOOGLE_CLOUD_CLI_VERSION}" \
+        "google-cloud-cli-gke-gcloud-auth-plugin=${GOOGLE_CLOUD_CLI_VERSION}" \
+    # Only gcloud's login and token commands are used. Drop gsutil, bq and the
+    # bundled Python (gcloud runs on the image's python3 instead; see
+    # CLOUDSDK_PYTHON below), about 240 MB.
+    && rm -rf \
+        /usr/lib/google-cloud-sdk/platform/gsutil \
+        /usr/lib/google-cloud-sdk/platform/bq \
+        /usr/lib/google-cloud-sdk/platform/bundledpythonunix \
     \
     # Install Hugging Face tooling in an isolated Python virtual environment.
     && python3 -m venv /opt/huggingface \
@@ -138,6 +202,9 @@ RUN curl -fsSL https://get.pulumi.com \
 
 # Make the Pulumi and Hugging Face executables available without absolute paths.
 ENV PATH="/root/.pulumi/bin:/opt/huggingface/bin:${PATH}"
+
+# gcloud's bundled Python is removed above.
+ENV CLOUDSDK_PYTHON=/usr/bin/python3
 
 # Transfer concurrency is set per run from the resource budget, not baked in.
 # An ENV here would win over the caps the installer computes, because it is
@@ -202,4 +269,9 @@ COPY --from=chart-downloader \
 COPY installer/build/manifests/images.yaml \
     /opt/shaide-installer/manifests/images.yaml
 
+# Copies the AWS and gcloud logins mounted under /host-config before the
+# installer starts; see entrypoint.sh.
+COPY --chmod=0755 installer/build/entrypoint.sh /usr/local/bin/installer-entrypoint
+
+ENTRYPOINT ["/usr/local/bin/installer-entrypoint"]
 CMD ["/bin/installer"]
