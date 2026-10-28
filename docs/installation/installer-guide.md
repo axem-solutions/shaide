@@ -456,6 +456,7 @@ During this stage, the installer:
 | `Harbor pull secret`                                                   | Existing pull secret name, usually `harbor-pull-secret`                   |
 | `Harbor admin password`                                                | Harbor administrator password                                             |
 | `Harbor robot password`                                                | Harbor robot account password                                             |
+| `Harbor storage node hostname` (on-prem only)                          | Node that holds Harbor's hostPath volumes; every Harbor pod runs there   |
 | `Could not <operation> from Harbor ...`                                | `Retry`, `Continue without Harbor models`, `Fresh install`, `Abort`                    |
 | `Harbor image preload failed`                                          | `Retry`, `Abort`                                                          |
 

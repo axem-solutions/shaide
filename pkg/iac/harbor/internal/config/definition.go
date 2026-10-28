@@ -162,6 +162,12 @@ func newDefinition(opts stack.Options) stackconfig.Config[Values] {
 					Kind:  stackconfig.PromptInput,
 					Title: "Harbor storage node hostname",
 				},
+				// Only hostPath storage, the on-prem default, pins Harbor to a
+				// node. Cloud clusters use dynamic volumes, and a hostname there
+				// would pin every Harbor pod to one node.
+				Policy: stackconfig.Policy{
+					When: stackconfig.WhenEquals(KeyPlatform, string(cluster.OnPrem)),
+				},
 				Setter: func(cfg *Values, root *pulumiconfig.Config) {
 					cfg.Storage.NodeHostname = root.Get(KeyNodeHostname.String())
 				},

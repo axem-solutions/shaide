@@ -211,7 +211,7 @@ Runs four checks: admin REST API, admin token service, robot REST API, robot tok
 | `harbor:robotPassword` | no | Desired `k8s-harbor-sa` robot account password (secret) — `pulumi up` creates/updates the account to match. Also gates the pull secret and is required for image mirroring |
 | `harbor:projects` | no | Harbor projects to create and keep public, one name per line. No default; unset means `pulumi up` creates none (existing projects, if any, are left alone) |
 | `harbor:chartPath` | no | Path to Harbor Helm chart tarball (default: `./charts/harbor-1.18.2.tgz`) |
-| `harbor:nodeHostname` | no | Pin all Harbor pods to a specific node (`kubernetes.io/hostname`) |
+| `harbor:nodeHostname` | on-prem (hostPath storage) | Pin all Harbor pods to a specific node (`kubernetes.io/hostname`). The installer asks for it on on-prem clusters only; cloud clusters use dynamic volumes |
 | `harbor:staticClusterIP` | no | Pin Harbor's Service to a fixed ClusterIP; required for the node-trust DaemonSet |
 | `kubeconfig` | no | Path to kubeconfig; omit to use `KUBECONFIG` env / `~/.kube/config` |
 
