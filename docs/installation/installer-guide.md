@@ -439,14 +439,16 @@ The `discovery` stage determines whether this is a fresh installation or an upda
 During this stage, the installer:
 
 - detects existing Harbor resources
-- decides whether this is a fresh install or update
+- decides whether this is a fresh install or update: a cluster without the Harbor
+  namespace, and with no Harbor in any other namespace, is a fresh install and gets
+  Harbor without a prompt
 - deploys Harbor when needed
 - creates or validates the Harbor pull secret
 - prepares the Harbor connection used by later artifact upload stages
 
 | Prompt                                                                 | Options / Input                                                           |
 |------------------------------------------------------------------------|---------------------------------------------------------------------------|
-| `Harbor namespace "<name>" was not found`                              | `Fresh install`, `Choose another namespace`, `Abort`                      |
+| `Harbor namespace "<name>" was not found, but Harbor runs in namespace <names>` | `Fresh install`, `Choose another namespace` (prefilled with the namespace found), `Abort` |
 | `Harbor namespace`                                                     | Existing namespace name                                                   |
 | `Harbor service "<name>" is not usable in namespace "<namespace>"`     | `Enter service name`, `Choose another namespace`, `Fresh install`, `Abort`|
 | `Harbor service`                                                       | Existing service name, usually `harbor`                                   |
@@ -470,7 +472,8 @@ During this stage, the installer:
 | Condition                                                    | Installer behavior                                  |
 |--------------------------------------------------------------|-----------------------------------------------------|
 | Harbor namespace, service, pull secret, and access are valid | Reuse existing Harbor and continue in update mode.  |
-| Harbor resources are missing in a new environment            | Deploy Harbor as part of the fresh-install path.    |
+| No Harbor namespace and no Harbor anywhere on the cluster    | Deploy Harbor as part of the fresh-install path, without a prompt. |
+| No Harbor namespace, but a Harbor in another namespace       | Ask whether to use that Harbor or install a new one. |
 | Existing Harbor resources are incomplete or invalid          | Ask for corrected namespace, service, or secret.    |
 
 #### Harbor image preload

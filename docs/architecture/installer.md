@@ -75,7 +75,9 @@ Harbor discovery uses these defaults from `installer/internal/config/config.go`:
 | Model project | `ai-models` |
 | Robot account | `robot$k8s-harbor-sa` |
 
-If the default Harbor namespace, service, or pull secret is missing or invalid,
+When the cluster has no Harbor namespace and no Harbor Services in any other
+namespace, the installer deploys Harbor without asking. If a Harbor runs in
+another namespace, or the Harbor service or pull secret is missing or invalid,
 the recovery flow prompts the user to install Harbor, retry with another
 resource name, continue an update flow, or abort.
 
