@@ -4,6 +4,8 @@ import (
 	"github.com/axem-solutions/ai_platform/pkg/iac/knowledgecenter"
 	appconfig "github.com/axem-solutions/ai_platform/pkg/iac/shaide/internal/config"
 	stackpkg "github.com/axem-solutions/ai_platform/pkg/stack"
+	stackconfig "github.com/axem-solutions/ai_platform/pkg/stack/config"
+	"github.com/pulumi/pulumi/sdk/v3/go/auto"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
@@ -93,6 +95,33 @@ func (s *Stack) Deploy(ctx *pulumi.Context) error {
 	return deployAppShaide(ctx, s.config)
 }
 
+// AdminPassword is the shaide-server admin password in values, e.g. the
+// resolved config of this run.
+func (s *Stack) AdminPassword(values auto.ConfigMap) (string, bool) {
+	value, ok := values[s.Config().Definition().Key(appconfig.KeyAdminAuthKey)]
+	return value.Value, ok
+}
+
+// KnowledgeCenterCredentials reads the Knowledge Center credentials from
+// values, e.g. the config an earlier run stored in the stack. Missing ones
+// are left empty.
+func (s *Stack) KnowledgeCenterCredentials(values auto.ConfigMap) knowledgecenter.Credentials {
+	get := func(key stackconfig.Key) string {
+		return values[s.Config().Definition().Key(key)].Value
+	}
+
+	return knowledgecenter.Credentials{
+		InternalToken:     get(appconfig.KeyKCInternalToken),
+		WebhookToken:      get(appconfig.KeyKCWebhookToken),
+		GatewayToken:      get(appconfig.KeyKCGatewayToken),
+		ScopedToken:       get(appconfig.KeyKCScopedToken),
+		ContextSigningKey: get(appconfig.KeyKCContextSigningKey),
+		ContextPublicKey:  get(appconfig.KeyKCContextPublicKey),
+		EmbeddingUsername: get(appconfig.KeyKCEmbeddingUsername),
+		EmbeddingPassword: get(appconfig.KeyKCEmbeddingPassword),
+	}
+}
+
 var _ stackpkg.Stack = (*Stack)(nil)
 
 // Namespace and ServiceAccountName are the app-shaide values other stacks must
@@ -119,3 +148,10 @@ const KnowledgeCenterImage = knowledgecenter.ImageName
 // KnowledgeCenterName names the KC Deployment, so the installer can tell from
 // the cluster whether an earlier install included it.
 const KnowledgeCenterName = knowledgecenter.ServiceName
+
+// ServerServiceName and ServerServicePort address shaide-server's ClusterIP
+// Service in Namespace.
+const (
+	ServerServiceName = "shaide-server"
+	ServerServicePort = 80
+)

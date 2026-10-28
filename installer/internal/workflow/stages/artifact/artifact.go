@@ -20,6 +20,7 @@ import (
 	"github.com/axem-solutions/ai_platform/installer/internal/progress"
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/core"
 	"github.com/axem-solutions/ai_platform/installer/internal/workflow/stages/discovery"
+	"github.com/axem-solutions/ai_platform/pkg/iac/mcp"
 	"github.com/axem-solutions/ai_platform/pkg/iac/serving"
 	"github.com/axem-solutions/ai_platform/pkg/iac/shaide"
 )
@@ -206,8 +207,9 @@ func uploadImages(rt *core.Runtime) error {
 }
 
 // imagesToUpload is the service images this run deploys. The webapp image is
-// left out when the webapp is not installed, and the simulator image when no
-// simulated model is served.
+// left out when the webapp is not installed, the KC and KC-MCP images when the
+// Knowledge Center is not, and the simulator image when no simulated model is
+// served.
 func imagesToUpload(rt *core.Runtime) []catalog.Image {
 	simulated := servesSimulator(rt.Models.Serve)
 
@@ -215,6 +217,10 @@ func imagesToUpload(rt *core.Runtime) []catalog.Image {
 	for _, image := range rt.Bootstrap.Catalog.ServiceImages {
 		if image.Name == shaide.WebAppImage && !rt.WebApp.Enabled {
 			rt.Detailf("not uploading %s: the webapp is not installed", image.Name)
+			continue
+		}
+		if (image.Name == shaide.KnowledgeCenterImage || image.Name == mcp.KnowledgeCenterMCPImage) && !rt.KnowledgeCenter.Enabled {
+			rt.Detailf("not uploading %s: the Knowledge Center is not installed", image.Name)
 			continue
 		}
 		if image.Name == serving.SimulatorImageName && !simulated {

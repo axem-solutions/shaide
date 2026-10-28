@@ -26,6 +26,14 @@ func Stage() core.Stage {
 				Recover: RecoverAppShaide,
 			},
 			{
+				// Deploys KC-MCP with the Knowledge Center, and removes an
+				// app-mcp stack an earlier run deployed for it when KC is
+				// turned off.
+				Name:    "Deploy App-MCP",
+				Run:     stacks.DeployAppMCP,
+				Recover: RecoverAppMCP,
+			},
+			{
 				Name:    "Deploy Monitoring",
 				Run:     stacks.DeployMonitoring,
 				Recover: RecoverMonitoring,

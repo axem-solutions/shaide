@@ -6,6 +6,7 @@ import (
 	harborapi "github.com/axem-solutions/ai_platform/installer/internal/harbor/api"
 	"github.com/axem-solutions/ai_platform/installer/internal/harbor/auth"
 	"github.com/axem-solutions/ai_platform/installer/internal/placement"
+	"github.com/axem-solutions/ai_platform/pkg/iac/knowledgecenter"
 	"github.com/axem-solutions/ai_platform/pkg/kube"
 	"github.com/axem-solutions/ai_platform/pkg/kube/cluster"
 	"k8s.io/client-go/kubernetes"
@@ -20,8 +21,10 @@ type GlobalState struct {
 	// Placement is the node pools assigned to each model and to CPU work.
 	Placement placement.Assignment
 	WebApp    WebAppState
-	Artifact  ArtifactState
-	Pulumi    PulumiState
+	// KnowledgeCenter is the operator's answer for KC and KC-MCP.
+	KnowledgeCenter KnowledgeCenterState
+	Artifact        ArtifactState
+	Pulumi          PulumiState
 }
 
 type ClusterState struct {
@@ -61,6 +64,16 @@ type ModelsState struct {
 // WebAppState is the operator's answer to whether the webapp is installed.
 type WebAppState struct {
 	Enabled bool
+}
+
+// KnowledgeCenterState is the operator's answer to whether the Knowledge
+// Center is installed, and the credentials app-shaide and app-mcp share.
+type KnowledgeCenterState struct {
+	Enabled bool
+
+	// Credentials are set by the app-shaide deployment when Enabled: the ones
+	// app-shaide already holds, completed with generated ones.
+	Credentials knowledgecenter.Credentials
 }
 
 type ArtifactState struct {

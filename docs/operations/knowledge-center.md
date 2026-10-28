@@ -43,8 +43,11 @@ agent ──> shaide-server MCP gateway ──(gateway token + signed context)�
 
 ## Configuration
 
-The installer passes the same answer and the same `knowledgecenter.Credentials`
-(`pkg/iac/knowledgecenter`) to both stacks. Neither stack generates or rotates a secret.
+The installer asks once whether to install the Knowledge Center (see the
+[installer guide](../installation/installer-guide.md#select-knowledge-center-stage)) and passes
+the same answer and the same `knowledgecenter.Credentials` (`pkg/iac/knowledgecenter`) to both
+stacks. It generates the credentials on the first install, stores them in the app-shaide stack
+config and reuses them on later runs. Neither stack generates or rotates a secret.
 
 | Value | Format | app-shaide | app-mcp |
 | --- | --- | --- | --- |
@@ -76,14 +79,14 @@ Secret updates do not automatically roll these consumers. Credential changes req
 deliberate restarts of the affected pods after coordinated Secret updates; automatic secret
 rotation and rollout wiring are outside this change.
 
-## Before the first upload (not automated)
+## Before the first upload
 
-Installing KC does not create the embedding account or register an embedding model.
-An administrator must, through the existing shaide-server admin and user APIs:
+The installer creates the embedding account: an **ordinary (non-admin)** user named
+`kcEmbeddingUsername` (`knowledge-center`) with the password `kcEmbeddingPassword`. Stacks
+deployed without the installer need that user created through the shaide-server user API.
 
-1. Create an **ordinary (non-admin)** user whose name and password match
-   `kcEmbeddingUsername` / `kcEmbeddingPassword`.
-2. Register the embedding model to use and verify its vector dimensions.
+Installing KC does not register an embedding model. An administrator registers the
+embedding model to use and verifies its vector dimensions.
 
 Until both exist, uploads fail with `embedding_auth` or `embedding_model_not_found`.
 
@@ -129,6 +132,11 @@ For app-mcp, the handoff depends on what remains selected:
 | No generic datasources, previously managed KC-only stack | Use the installer's existing targeted `Deployer.DestroyOnly` path for that app-mcp stack, without normal Resolve or a subsequent Up. |
 | Nothing selected and no previously managed app-mcp stack | No app-mcp operation is needed. |
 
+The installer handles this: it runs no generic datasources, so with the Knowledge Center
+turned off it destroys the app-mcp stack it deployed for KC-MCP through `DestroyOnly`, and
+stops for operator review if that stack has generic datasources configured. A stack that
+was never deployed needs nothing.
+
 Do not skip a previously managed KC-only app-mcp stack: skipping leaves its resources.
 Normal false-plus-empty Resolve and direct Load deliberately reject missing generic
 configuration; an empty desired state is not a teardown shortcut.
@@ -140,8 +148,7 @@ the existing `DestroyOnly` cluster-target/UID guard must pass. Review the stack 
 confirm no generic or unrelated workloads remain owned by it, and no unrelated workloads
 rely on its managed namespace or RBAC. A live KC-MCP pod or a false selection alone does not
 prove ownership. If state or ownership is missing or ambiguous, stop for operator review.
-Destroy only app-mcp, never app-shaide or shared storage. The separate installer owner must
-wire this transition; the platform does not implement that selection or teardown workflow.
+Destroy only app-mcp, never app-shaide or shared storage.
 
 ## Migrating from `mcp-gateway`
 

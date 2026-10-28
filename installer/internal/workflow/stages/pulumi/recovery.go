@@ -21,6 +21,10 @@ func RecoverAppShaide(rt *core.Runtime, runErr error) (core.RecoveryAction, erro
 	return recoverStackError(rt, runErr, stackAppShaide)
 }
 
+func RecoverAppMCP(rt *core.Runtime, runErr error) (core.RecoveryAction, error) {
+	return recoverStackError(rt, runErr, stackAppMCP)
+}
+
 func RecoverHarbor(rt *core.Runtime, runErr error) (core.RecoveryAction, error) {
 	return recoverStackError(rt, runErr, stackCloudHarbor)
 }
@@ -115,6 +119,7 @@ const (
 	stackAppServing      stackTarget = "app-serving"
 	stackGatewayProvider stackTarget = "gateway-provider"
 	stackAppShaide       stackTarget = "app-shaide"
+	stackAppMCP          stackTarget = "app-mcp"
 	stackCloudHarbor     stackTarget = "harbor"
 	stackMonitoring      stackTarget = "monitoring"
 )
@@ -127,6 +132,8 @@ func displayStack(target stackTarget) string {
 		return "Gateway Provider"
 	case stackAppShaide:
 		return "App-Shaide"
+	case stackAppMCP:
+		return "App-MCP"
 	case stackCloudHarbor:
 		return "Harbor"
 	case stackMonitoring:

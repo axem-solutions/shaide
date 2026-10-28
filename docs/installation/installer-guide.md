@@ -127,10 +127,11 @@ The installation has two parts:
 | `Kubernetes`          | Load kubeconfig and connect to the target cluster.          |
 | `Select models`       | Choose which supported models to install, keep or uninstall. |
 | `Select webapp`       | Choose whether to install the WebApp.                       |
+| `Select Knowledge Center` | Choose whether to install the Knowledge Center.         |
 | `Assign node pools`   | Assign node pools to each model and to CPU work.            |
 | `Discovery`           | Discover Harbor and determine the installation type.         |
 | `Populate Harbor`     | Upload images and selected model artifacts.                 |
-| `Deploy platform`     | Deploy Gateway Provider, App-Serving, App-Shaide, and Monitoring. |
+| `Deploy platform`     | Deploy Gateway Provider, App-Serving, App-Shaide, App-MCP, and Monitoring. |
 | `Verify installation` | Check pods, namespaces, gateway resources, and UI access.   |
 | `Preserve state`      | Keep storage, logs, deployment state, and passphrase for reruns. |
 
@@ -348,6 +349,29 @@ a declined WebApp's image is not uploaded.
 |---|---|
 | `Install the WebApp?` | `Yes` or `No`. The WebApp is available from axem as part of a subscription. **Default** `No`, which leaves the end-user web application out, skips uploading its image, and removes one an earlier install deployed. The control panel learns the answer through its `APP_ENABLED` env var. `Yes` is pre-selected when the cluster already runs the webapp |
 
+### `Select Knowledge Center` stage
+
+This stage decides whether the [Knowledge Center](../operations/knowledge-center.md) is
+installed. One answer covers the Knowledge Center (KC, in `app-shaide`) and its MCP server
+(KC-MCP, in `app-mcp`). It runs before Harbor is populated, so a declined Knowledge Center's
+images are not uploaded.
+
+| Prompt | Options / Input |
+|---|---|
+| `Install the Knowledge Center?` | `Yes` or `No`. The Knowledge Center is available from axem as part of a subscription. **Default** `No`, which leaves KC and KC-MCP out, skips uploading their images, and removes ones an earlier install deployed. The control panel learns the answer through its `KNOWLEDGE_CENTER_ENABLED` env var. `Yes` is pre-selected when the cluster already runs the Knowledge Center |
+
+With `Yes`, the installer also:
+
+- generates the Knowledge Center credentials on the first install and stores them in the
+  app-shaide stack config. Later runs reuse them, also after the Knowledge Center was turned
+  off in between, so nothing the running deployments use is rotated.
+- creates the ordinary shaide user `knowledge-center` that KC requests embeddings with,
+  once app-shaide is deployed. If a user of that name already exists with another password,
+  the run stops and says so.
+
+An administrator still registers the embedding model in the control panel before the first
+upload.
+
 ### `Assign node pools` stage
 
 This stage decides which node pools each workload runs on. You assign one or more pools to
@@ -474,7 +498,7 @@ During this stage, the installer:
 - checks that the installer storage directory on the provisioning host has room for the missing ones
 - downloads them from Hugging Face
 - uploads model artifacts to Harbor
-- copies container images from their origin registries into Harbor, leaving out the WebApp image when the WebApp is not installed and the simulator image when the `Simulator` model is not served
+- copies container images from their origin registries into Harbor, leaving out the WebApp image when the WebApp is not installed, the KC and KC-MCP images when the Knowledge Center is not, and the simulator image when the `Simulator` model is not served
 - deletes the artifacts of uninstalled models from Harbor
 
 
@@ -516,7 +540,8 @@ The installer runs the stacks in this fixed order:
 1. Gateway Provider
 2. App-Serving
 3. App-Shaide
-4. Monitoring
+4. App-MCP
+5. Monitoring
 
 Most deployment values — node selectors, image references, chart and CRD paths — ship
 with the installer. The prompts below cover what cannot be known in advance.
@@ -576,9 +601,10 @@ the run.
 | Gateway Provider | Gateway resources are deployed successfully.         |
 | App-Serving      | Model-serving resources and workloads are deployed.  |
 | App-Shaide       | shaide application services are deployed.            |
+| App-MCP          | KC-MCP is deployed with the Knowledge Center. Without it, an App-MCP stack an earlier run deployed is destroyed, or nothing happens. |
 | Monitoring       | Log aggregation and dashboards are deployed.         |
 
-The stage is complete when all four deployment steps finish successfully.
+The stage is complete when all deployment steps finish successfully.
 
 
 ## Verification
