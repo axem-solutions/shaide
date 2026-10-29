@@ -39,6 +39,9 @@ type DownloadRequest struct {
 	RepoID   string
 	Revision string
 	HubDir   string
+	// Files limits the download to these repository paths. Empty downloads
+	// the whole repository.
+	Files []string
 }
 
 func New(config Config) Runner {
@@ -100,12 +103,14 @@ func (r Runner) check() error {
 }
 
 func downloadArgs(request DownloadRequest) []string {
-	return []string{
+	args := []string{
 		"download",
 		"--cache-dir", request.HubDir,
 		"--revision", request.Revision,
 		request.RepoID,
 	}
+
+	return append(args, request.Files...)
 }
 
 func (r Runner) normalizeDownloadRequest(request DownloadRequest) DownloadRequest {

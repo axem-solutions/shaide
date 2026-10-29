@@ -148,6 +148,10 @@ host path of its bind mount.
 3. Rebuild the installer image. The model is offered in the `select models` stage and
    published as `ai-models/<slug>:<first 12 characters of the revision>`.
 
+The installer downloads only the files vLLM loads, by the rules in
+`installer/internal/huggingface/files`. Check what they leave out for the new model's repository,
+and add its file list to that package's tests.
+
 Bumping `revision` changes the Harbor tag, so the next run uploads and serves the
 new weights. A generative model with `server.engine: sim` needs no revision: the
 installer offers it without weights, and mirrors the simulator image only when it is

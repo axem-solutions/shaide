@@ -1,0 +1,14 @@
+config.json
+configuration_deepseek.py
+generation_config.json
+.gitattributes
+model-00001-of-000004.safetensors
+model-00002-of-000004.safetensors
+model-00003-of-000004.safetensors
+model-00004-of-000004.safetensors
+modeling_deepseek.py
+model.safetensors.index.json
+README.md
+tokenization_deepseek_fast.py
+tokenizer_config.json
+tokenizer.json

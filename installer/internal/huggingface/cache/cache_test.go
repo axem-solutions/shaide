@@ -3,7 +3,10 @@ package cache
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
+
+	"github.com/axem-solutions/ai_platform/installer/internal/huggingface/files"
 )
 
 const (
@@ -187,5 +190,60 @@ func TestCompletePointsTheRefAtThePinnedRevision(t *testing.T) {
 	content, _ := os.ReadFile(state.Sentinel)
 	if string(content) != newRevision {
 		t.Errorf(".complete = %q, want the revision recorded", content)
+	}
+}
+
+// A cache an earlier installer filled with the whole repository keeps only
+// the files the model server loads, and their blobs.
+func TestRemoveUnselectedTrimsAFullDownload(t *testing.T) {
+	m := newManager(t)
+	modelDir := filepath.Join(m.HubDir(), "models--openai--gpt-oss-20b")
+	snapshot(t, modelDir, newRevision, map[string]string{
+		"config.json":                      "config",
+		"model-00000-of-00001.safetensors": "weights",
+		"metal/model.bin":                  "metal",
+		"original/model.safetensors":       "original",
+		"original/config.json":             "original-config",
+	})
+	state := State{ModelDir: modelDir, Revision: newRevision}
+
+	removed, err := m.RemoveUnselected(state, files.Select)
+	if err != nil {
+		t.Fatalf("RemoveUnselected: %v", err)
+	}
+	slices.Sort(removed)
+	if want := []string{"metal/model.bin", "original/config.json", "original/model.safetensors"}; !slices.Equal(removed, want) {
+		t.Errorf("removed = %v, want %v", removed, want)
+	}
+
+	if _, err := m.PruneOtherRevisions(state); err != nil {
+		t.Fatalf("PruneOtherRevisions: %v", err)
+	}
+
+	snapshotDir := filepath.Join("snapshots", newRevision)
+	for path, want := range map[string]bool{
+		filepath.Join(snapshotDir, "config.json"):                      true,
+		filepath.Join(snapshotDir, "model-00000-of-00001.safetensors"): true,
+		filepath.Join(snapshotDir, "metal"):                            false,
+		filepath.Join(snapshotDir, "original"):                         false,
+		"blobs/weights":                                                true,
+		"blobs/metal":                                                  false,
+		"blobs/original":                                               false,
+	} {
+		_, err := os.Stat(filepath.Join(modelDir, path))
+		if exists := err == nil; exists != want {
+			t.Errorf("%s exists = %v, want %v", path, exists, want)
+		}
+	}
+}
+
+func TestRemoveUnselectedNeedsThePinnedSnapshot(t *testing.T) {
+	m := newManager(t)
+	modelDir := filepath.Join(m.HubDir(), "models--openai--gpt-oss-20b")
+	snapshot(t, modelDir, oldRevision, map[string]string{"metal/model.bin": "metal"})
+
+	removed, err := m.RemoveUnselected(State{ModelDir: modelDir, Revision: "main"}, files.Select)
+	if err != nil || len(removed) > 0 {
+		t.Errorf("removed = %v, err = %v, want nothing removed", removed, err)
 	}
 }

@@ -500,7 +500,10 @@ During this stage, the installer:
 
 - checks which models to serve are already in Harbor
 - checks that the installer storage directory on the provisioning host has room for the missing ones
-- downloads them from Hugging Face
+- downloads from Hugging Face the files of each model that vLLM loads. It leaves out weights for
+  other runtimes (`original/`, `metal/`, `onnx/`, `openvino/`, `coreml/`, GGUF, Flax, TensorFlow)
+  and second copies in another format (`.bin` next to safetensors, the HF shards of a Mistral repo
+  that ships `consolidated*.safetensors`). A cache from an earlier run is trimmed the same way.
 - uploads model artifacts to Harbor
 - copies container images from their origin registries into Harbor, leaving out the WebApp image when the WebApp is not installed, the KC and KC-MCP images when the Knowledge Center is not, and the simulator image when the `Simulator` model is not served
 - deletes the artifacts of uninstalled models from Harbor

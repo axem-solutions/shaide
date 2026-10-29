@@ -10,15 +10,6 @@ import (
 	"github.com/axem-solutions/ai_platform/installer/internal/httpapi"
 )
 
-func (c *Client) FetchSizeInfo(ctx context.Context, repoID, revision string) (SizeInfo, error) {
-	modelMetadata, err := c.FetchMetadata(ctx, repoID, revision)
-	if err != nil {
-		return SizeInfo{}, err
-	}
-
-	return sizeFromMetadata(modelMetadata), nil
-}
-
 func (c *Client) FetchMetadata(ctx context.Context, repoID, revision string) (Metadata, error) {
 	request, err := newRequest(repoID, revision, c.defaultRevision)
 	if err != nil {
