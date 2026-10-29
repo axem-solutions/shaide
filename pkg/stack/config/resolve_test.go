@@ -335,3 +335,36 @@ func TestResolveEncodesNonStrings(t *testing.T) {
 		}
 	}
 }
+
+// A check sees every resolved value, including prompted ones, so a rule that
+// spans entries (two credentials must differ) fails before deployment.
+func TestChecksSeeResolvedValues(t *testing.T) {
+	var seen Values
+	definition := Config[testValues]{
+		Namespace: "ns",
+		Entries: []Entry[testValues]{
+			entry("a", Source{Value: "same"}, nil, Policy{}),
+			entry("b", Source{}, &Prompt{Kind: PromptInput, Title: "b?"}, Policy{}),
+			entry("inactive", Source{Value: "x"}, nil, Policy{When: WhenEquals("a", "other")}),
+		},
+		Checks: []Check{func(values Values) error {
+			seen = values
+			if values["a"] == values["b"] {
+				return errors.New("a and b must differ")
+			}
+			return nil
+		}},
+	}
+
+	_, err := definition.Resolve(&recordingPrompter{answers: map[string]string{"b?": "same"}})
+	if err == nil || !strings.Contains(err.Error(), "a and b must differ") {
+		t.Fatalf("Resolve() error = %v, want the check's error", err)
+	}
+	if _, ok := seen["inactive"]; ok {
+		t.Error("a check saw an entry whose condition did not hold")
+	}
+
+	if _, err := definition.Resolve(&recordingPrompter{answers: map[string]string{"b?": "different"}}); err != nil {
+		t.Fatalf("Resolve() error = %v with differing values", err)
+	}
+}

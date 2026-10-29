@@ -6,6 +6,7 @@ import (
 
 	iackube "github.com/axem-solutions/ai_platform/pkg/iac/kubernetes"
 	"github.com/axem-solutions/ai_platform/pkg/iac/mcp/internal/components/caconfigmap"
+	"github.com/axem-solutions/ai_platform/pkg/iac/mcp/internal/components/kcmcp"
 	"github.com/axem-solutions/ai_platform/pkg/iac/mcp/internal/components/mcpdeployment"
 	"github.com/axem-solutions/ai_platform/pkg/iac/mcp/internal/components/mcpsecret"
 	"github.com/axem-solutions/ai_platform/pkg/iac/mcp/internal/components/networkpolicy"
@@ -89,6 +90,14 @@ func deployAppMCP(ctx *pulumi.Context, stackConfig appconfig.Config) error {
 		}
 	}
 
-	return nil
+	// --- KC-MCP (with the Knowledge Center) ---
+	// Leaving it out of the program also removes one an earlier deployment
+	// installed.
+	if appConfig.KnowledgeCenterEnabled {
+		if err := kcmcp.Deploy(ctx, appConfig, providerOpt, nsOpt); err != nil {
+			return err
+		}
+	}
 
+	return nil
 }

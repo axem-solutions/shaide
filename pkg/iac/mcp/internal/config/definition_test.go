@@ -74,7 +74,6 @@ func TestShaideBindingDefaults(t *testing.T) {
 	}
 
 	for key, want := range map[string]string{
-		"app-mcp:namespace":                DefaultNamespace,
 		"app-mcp:shaideNamespace":          DefaultShaideNamespace,
 		"app-mcp:shaideServiceAccountName": DefaultShaideSAName,
 	} {

@@ -15,7 +15,15 @@ type Definition interface {
 type Config[T any] struct {
 	Namespace string
 	Entries   []Entry[T]
+
+	// Checks run after every entry resolved, on the values of the active
+	// entries. They hold rules that span entries, e.g. that two credentials
+	// differ. An error must name keys, never values.
+	Checks []Check
 }
+
+// Check validates resolved values across entries.
+type Check func(Values) error
 
 func (c Config[T]) Key(key Key) string {
 	return c.Namespace + ":" + key.String()

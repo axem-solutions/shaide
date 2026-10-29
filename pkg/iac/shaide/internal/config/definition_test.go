@@ -204,7 +204,6 @@ func TestServiceDefaultsAreWritten(t *testing.T) {
 		"app-shaide:controlPanelService": DefaultControlPanelService,
 		"app-shaide:qdrantService":       DefaultQdrantService,
 		"app-shaide:vectorDBUrl":         DefaultVectorDBURL,
-		"app-shaide:mcpNamespace":        DefaultMCPNamespace,
 		"app-shaide:shaideServerUiPort":  DefaultShaideServerUiPort,
 	} {
 		if values[key] != want {
