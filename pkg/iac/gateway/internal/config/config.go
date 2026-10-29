@@ -234,10 +234,9 @@ func (cfg Values) Validate() error {
 		return fmt.Errorf("gateway namespace cannot be empty")
 	}
 
-	if cfg.Gateway.Hostname == "" && cfg.Gateway.InfraStackRef == "" {
-		return fmt.Errorf("gateway hostname or infrastructure stack reference is required")
-	}
-
+	// With neither a hostname nor an infrastructure stack reference, the
+	// stack installs the CRDs and Istio but no shared Gateway: a development
+	// install reached with kubectl port-forward.
 	if cfg.Gateway.Hostname != "" && cfg.Gateway.InfraStackRef != "" {
 		return fmt.Errorf("gateway hostname and infrastructure stack reference are mutually exclusive")
 	}

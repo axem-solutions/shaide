@@ -527,9 +527,21 @@ with the installer. The prompts below cover what cannot be known in advance.
 |---|---|
 | `Cloud platform` | `gcp`, `aws`, `azure`, `on-prem`. Detected from the cluster; confirm or override |
 | `Gateway class` | Selected from the GatewayClasses the cluster accepts, plus `istio`, which the gateway stack installs. The class of the existing shared Gateway is pre-selected. Not asked when `istio` is the only option |
-| `Gateway hostname (e.g. shaide.example.com)` | Public hostname for the shared Gateway |
+| `Gateway hostname (empty: no Gateway, for development only)` | Public hostname for the shared Gateway, for example `shaide.example.com`. Empty deploys no shared Gateway, see [Installing without a Gateway](#installing-without-a-gateway) |
 | `Azure subnet resource ID for Application Gateway for Containers` | Only with the `azure-alb-external` class. Pre-filled with the existing association on an update |
 | `cert-manager ClusterIssuer for Gateway TLS` | Selected from the cluster's ClusterIssuers, or `(none, HTTP only)`. Not asked when the cluster has no ClusterIssuer |
+
+#### Installing without a Gateway
+
+Leave `Gateway hostname` empty to install without a shared Gateway. The gateway stack still
+installs the Gateway API CRDs and Istio, which model serving needs, but creates no Gateway, no
+HTTPRoute and no load balancer. shaide-server is reachable only from inside the cluster, for
+example with `kubectl -n app-shaide port-forward svc/shaide-server 8080:80`.
+
+!!! warning "Development only"
+    An install without a Gateway is for development and testing only. A production install
+    needs a public Gateway: set `Gateway hostname`, point DNS at the Gateway's address and
+    configure TLS. See [Gateway and routing](../architecture/gateway.md).
 
 #### TLS
 
@@ -598,7 +610,7 @@ kubectl get namespaces | grep llm-d-
 # Shared gateway is live
 kubectl -n gateway-system get gateway shared-gateway
 ```
-If you have configured DNS for your gateway hostname, the shaide UI is reachable at `https://<your-gateway-hostname>/ui`.
+If you have configured DNS for your gateway hostname, the shaide UI is reachable at `https://<your-gateway-hostname>/ui`. An install without a Gateway has no `shared-gateway`; reach shaide-server with `kubectl port-forward` instead.
 
 ## Re-running the Installer
 

@@ -67,7 +67,7 @@ func TestApplyDefaultsPreservesConfiguredGatewayValues(t *testing.T) {
 	}
 }
 
-func TestValidateRequiresOneGatewaySource(t *testing.T) {
+func TestValidateAcceptsAtMostOneGatewaySource(t *testing.T) {
 	validConfig := func() Values {
 		var cfg Values
 		cfg.Platform = cluster.Azure
@@ -93,10 +93,11 @@ func TestValidateRequiresOneGatewaySource(t *testing.T) {
 		}
 	})
 
-	t.Run("missing source", func(t *testing.T) {
+	// A development install without a shared Gateway.
+	t.Run("no source", func(t *testing.T) {
 		cfg := validConfig()
-		if err := cfg.Validate(); err == nil {
-			t.Fatal("Validate() error = nil, want a gateway source error")
+		if err := cfg.Validate(); err != nil {
+			t.Fatalf("Validate() error = %v, want an install without a shared Gateway", err)
 		}
 	})
 

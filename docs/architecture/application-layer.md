@@ -264,7 +264,8 @@ When either `infraStackRef` (a StackReference to an infra stack that exports
 `gatewayHostname`) **or** `gatewayHostname` (set directly) is non-empty, an HTTPRoute
 attaches shaide-server to the shared Gateway. The two are mutually exclusive in practice:
 set one or the other, not both. When neither is set, no HTTPRoute is created and
-shaide-server is reachable only from inside the cluster.
+shaide-server is reachable only from inside the cluster. That is for development only; a
+production install needs the shared Gateway.
 
 ### Local access for development
 
