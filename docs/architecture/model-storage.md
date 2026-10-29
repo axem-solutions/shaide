@@ -124,7 +124,8 @@ app-serving:harborToken:
 ## Uploading Models to Harbor
 
 The installer downloads the selected models from Hugging Face on the provisioning host
-and uploads them to Harbor. See [`Populate Harbor` stage](../installation/installer-guide.md#populate-harbor-stage).
+and uploads them to Harbor. It downloads only the files vLLM loads, so the artifact and the
+model volume hold the served weights without the other formats a repository ships. See [`Populate Harbor` stage](../installation/installer-guide.md#populate-harbor-stage).
 
 ---
 

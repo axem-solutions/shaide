@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -97,5 +98,22 @@ func TestEnvKeepsTheCacheAndTokenSettings(t *testing.T) {
 		if value, ok := envValue(env, key); !ok || value != want {
 			t.Errorf("%s = %q, want %q", key, value, want)
 		}
+	}
+}
+
+func TestDownloadArgsListTheSelectedFiles(t *testing.T) {
+	args := downloadArgs(DownloadRequest{
+		RepoID:   "openai/gpt-oss-20b",
+		Revision: "abc",
+		HubDir:   "/cache/hub",
+		Files:    []string{"config.json", "model-00000-of-00002.safetensors"},
+	})
+
+	want := []string{
+		"download", "--cache-dir", "/cache/hub", "--revision", "abc",
+		"openai/gpt-oss-20b", "config.json", "model-00000-of-00002.safetensors",
+	}
+	if !slices.Equal(args, want) {
+		t.Errorf("args = %v, want %v", args, want)
 	}
 }

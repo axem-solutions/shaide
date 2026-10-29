@@ -35,11 +35,6 @@ type ResponseSibling struct {
 	Size     int64  `json:"size"`
 }
 
-type SizeInfo struct {
-	TotalBytes int64
-	TotalFiles int
-}
-
 func newRequest(repoID, revision, defaultRevision string) (Request, error) {
 	repoID = strings.TrimSpace(repoID)
 	if repoID == "" {
@@ -82,11 +77,4 @@ func FromResponse(revision string, response Response) Metadata {
 	metadata.TotalFiles = len(metadata.Siblings)
 
 	return metadata
-}
-
-func sizeFromMetadata(metadata Metadata) SizeInfo {
-	return SizeInfo{
-		TotalBytes: metadata.TotalBytes,
-		TotalFiles: metadata.TotalFiles,
-	}
 }

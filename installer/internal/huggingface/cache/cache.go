@@ -203,6 +203,70 @@ func (m Manager) PruneOtherRevisions(state State) (int64, error) {
 	return freed, nil
 }
 
+// RemoveUnselected removes the files of the pinned revision's snapshot that
+// selectFn leaves out, with the directories that end up empty, and returns
+// the paths it removed. selectFn gets and returns slash-separated paths
+// relative to the snapshot. The blobs of the removed files stay until
+// PruneOtherRevisions drops them. It does nothing unless the pinned revision
+// has a snapshot.
+func (m Manager) RemoveUnselected(state State, selectFn func([]string) []string) ([]string, error) {
+	pinned := snapshotDir(state.ModelDir, state.Revision)
+	if info, err := os.Stat(pinned); err != nil || !info.IsDir() {
+		return nil, nil
+	}
+
+	var paths []string
+	var dirs []string
+	err := filepath.WalkDir(pinned, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if path == pinned {
+			return nil
+		}
+
+		rel, err := filepath.Rel(pinned, path)
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			dirs = append(dirs, path)
+			return nil
+		}
+		paths = append(paths, filepath.ToSlash(rel))
+
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list files of %s: %w", pinned, err)
+	}
+
+	selected := make(map[string]bool, len(paths))
+	for _, path := range selectFn(paths) {
+		selected[path] = true
+	}
+
+	var removed []string
+	for _, path := range paths {
+		if selected[path] {
+			continue
+		}
+		if err := os.Remove(filepath.Join(pinned, filepath.FromSlash(path))); err != nil {
+			return removed, fmt.Errorf("remove %s: %w", path, err)
+		}
+		removed = append(removed, path)
+	}
+
+	// WalkDir lists parents first, so the reverse order empties children
+	// before their parents. Removing a directory that still has files fails,
+	// which keeps it.
+	for i := len(dirs) - 1; i >= 0; i-- {
+		_ = os.Remove(dirs[i])
+	}
+
+	return removed, nil
+}
+
 // referencedBlobs names the blobs the snapshot's symlinks point at.
 func referencedBlobs(snapshot string) (map[string]bool, error) {
 	keep := map[string]bool{}

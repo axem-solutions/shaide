@@ -9,10 +9,10 @@ import (
 	"github.com/axem-solutions/ai_platform/installer/internal/config/resources"
 	"github.com/axem-solutions/ai_platform/installer/internal/config/storage"
 	"github.com/axem-solutions/ai_platform/installer/internal/huggingface/api"
-	hfapi "github.com/axem-solutions/ai_platform/installer/internal/huggingface/api"
 	"github.com/axem-solutions/ai_platform/installer/internal/huggingface/cache"
 	"github.com/axem-solutions/ai_platform/installer/internal/huggingface/cli"
 	hferrors "github.com/axem-solutions/ai_platform/installer/internal/huggingface/errors"
+	"github.com/axem-solutions/ai_platform/installer/internal/huggingface/files"
 	"github.com/axem-solutions/ai_platform/installer/internal/huggingface/utils"
 	"github.com/axem-solutions/ai_platform/installer/internal/progress"
 )
@@ -86,6 +86,15 @@ type StorageEstimate struct {
 	Repositories []RepositoryMetadata
 }
 
+// download is the part of a repository revision the installer fetches: the
+// files the model server loads.
+type download struct {
+	Files []string
+	Bytes int64
+}
+
+// RepositoryMetadata describes a repository revision. Bytes and Files count
+// the files the installer downloads, not the whole repository.
 type RepositoryMetadata struct {
 	ID       string
 	Revision string
@@ -147,10 +156,10 @@ func (d *Downloader) downloadRepository(ctx context.Context, repo Repository) er
 	}
 	if state.Skip {
 		d.detailf("using cached model %s@%s", repo.ID, state.Revision)
-		return d.pruneOtherRevisions(repo, state)
+		return d.trimCache(repo, state)
 	}
 
-	size, err := d.fetchSizeInfo(ctx, repo)
+	plan, err := d.fetchDownload(ctx, repo)
 	if err != nil {
 		return &hferrors.Error{
 			Kind:     hferrors.ClassifyError(err),
@@ -166,7 +175,7 @@ func (d *Downloader) downloadRepository(ctx context.Context, repo Repository) er
 	storageReq := storage.Requirement{
 		Phase:    "model download",
 		Target:   repo.ID,
-		Expected: size.TotalBytes,
+		Expected: plan.Bytes,
 		Reusable: current.Bytes,
 	}
 
@@ -180,7 +189,7 @@ func (d *Downloader) downloadRepository(ctx context.Context, repo Repository) er
 		}
 	}
 
-	if err := d.runDownload(ctx, repo, state, size); err != nil {
+	if err := d.runDownload(ctx, repo, state, plan); err != nil {
 		return &hferrors.Error{
 			Kind:     hferrors.ClassifyError(err),
 			Op:       "download",
@@ -199,11 +208,7 @@ func (d *Downloader) downloadRepository(ctx context.Context, repo Repository) er
 		}
 	}
 
-	if err := d.pruneOtherRevisions(repo, state); err != nil {
-		return err
-	}
-
-	return nil
+	return d.trimCache(repo, state)
 }
 
 func EstimateStorage(ctx context.Context, token string, models []Model) (StorageEstimate, error) {
@@ -222,33 +227,69 @@ func EstimateStorage(ctx context.Context, token string, models []Model) (Storage
 			return StorageEstimate{}, fmt.Errorf("fetch metadata for %s@%s: %w", repo.ID, repo.Revision, err)
 		}
 
-		estimate.TotalBytes += metadata.TotalBytes
-		estimate.TotalFiles += metadata.TotalFiles
+		plan := planDownload(metadata)
+
+		estimate.TotalBytes += plan.Bytes
+		estimate.TotalFiles += len(plan.Files)
 		estimate.Repositories = append(estimate.Repositories, RepositoryMetadata{
 			ID:       repo.ID,
 			Revision: repo.Revision,
 			SHA:      metadata.SHA,
-			Bytes:    metadata.TotalBytes,
-			Files:    metadata.TotalFiles,
+			Bytes:    plan.Bytes,
+			Files:    len(plan.Files),
 		})
 	}
 
 	return estimate, nil
 }
 
-func (d *Downloader) fetchSizeInfo(ctx context.Context, repo Repository) (hfapi.SizeInfo, error) {
+func (d *Downloader) fetchDownload(ctx context.Context, repo Repository) (download, error) {
 	reqCtx, cancel := context.WithTimeout(ctx, metadataTimeout)
 	defer cancel()
 
-	return d.client.FetchSizeInfo(reqCtx, repo.ID, repo.Revision)
+	metadata, err := d.client.FetchMetadata(reqCtx, repo.ID, repo.Revision)
+	if err != nil {
+		return download{}, err
+	}
+
+	plan := planDownload(metadata)
+	if skipped := metadata.TotalFiles - len(plan.Files); skipped > 0 {
+		d.detailf(
+			"skipping %d files of %s that the model server does not load (%s)",
+			skipped,
+			repo.ID,
+			storage.FormatBytes(metadata.TotalBytes-plan.Bytes),
+		)
+	}
+
+	return plan, nil
 }
 
-func (d *Downloader) runDownload(ctx context.Context, repo Repository, state cache.State, size hfapi.SizeInfo) error {
+// planDownload picks the files of the revision that the model server loads.
+func planDownload(metadata api.Metadata) download {
+	paths := make([]string, 0, len(metadata.Siblings))
+	sizes := make(map[string]int64, len(metadata.Siblings))
+	for _, sibling := range metadata.Siblings {
+		paths = append(paths, sibling.Filename)
+		sizes[sibling.Filename] = sibling.Size
+	}
+
+	plan := download{Files: files.Select(paths)}
+	for _, path := range plan.Files {
+		if size := sizes[path]; size > 0 {
+			plan.Bytes += size
+		}
+	}
+
+	return plan
+}
+
+func (d *Downloader) runDownload(ctx context.Context, repo Repository, state cache.State, plan download) error {
 	tracker := progress.NewTracker(
 		progress.PhaseDownloading,
 		repo.ID,
-		size.TotalBytes,
-		size.TotalFiles,
+		plan.Bytes,
+		len(plan.Files),
 		d.progressf,
 	)
 
@@ -274,6 +315,7 @@ func (d *Downloader) runDownload(ctx context.Context, repo Repository, state cac
 		RepoID:   repo.ID,
 		Revision: repo.Revision,
 		HubDir:   d.cache.HubDir(),
+		Files:    plan.Files,
 	})
 
 	cancelPoll()
@@ -295,10 +337,24 @@ func (d *Downloader) runDownload(ctx context.Context, repo Repository, state cac
 	return nil
 }
 
-// pruneOtherRevisions drops what earlier pins of the model left in the cache,
-// so it is not packed into the model artifact or kept on the provisioning
-// host.
-func (d *Downloader) pruneOtherRevisions(repo Repository, state cache.State) error {
+// trimCache leaves the pinned revision's files that the model server loads in
+// the cache, so nothing else is packed into the model artifact or kept on the
+// provisioning host. It drops the other files of a cache an earlier installer
+// filled with the whole repository, and what earlier pins of the model left.
+func (d *Downloader) trimCache(repo Repository, state cache.State) error {
+	removed, err := d.cache.RemoveUnselected(state, files.Select)
+	if err != nil {
+		return &hferrors.Error{
+			Kind:   hferrors.ErrCache,
+			Op:     "remove files the model server does not load",
+			RepoID: repo.ID,
+			Err:    err,
+		}
+	}
+	if len(removed) > 0 {
+		d.detailf("removed %d files of %s that the model server does not load from the cache", len(removed), repo.ID)
+	}
+
 	freed, err := d.cache.PruneOtherRevisions(state)
 	if err != nil {
 		return &hferrors.Error{
@@ -309,7 +365,7 @@ func (d *Downloader) pruneOtherRevisions(repo Repository, state cache.State) err
 		}
 	}
 	if freed > 0 {
-		d.detailf("removed superseded revisions of %s from the cache, freeing %s", repo.ID, storage.FormatBytes(freed))
+		d.detailf("freed %s of unused files in the cache of %s", storage.FormatBytes(freed), repo.ID)
 	}
 
 	return nil
