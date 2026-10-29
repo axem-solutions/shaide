@@ -82,24 +82,24 @@ func TestPromptsAreLimitedToPerClusterValues(t *testing.T) {
 			sources:  Sources{GatewayClassName: AGCGatewayClassName, ALBSubnetID: testSubnetID},
 			want: []string{
 				"Azure subnet resource ID for Application Gateway for Containers",
-				"Gateway hostname",
+				GatewayHostnamePromptTitle,
 			},
 		},
 		{
 			name:     "azure istio",
 			platform: cluster.Azure,
 			sources:  Sources{GatewayClassName: IstioGatewayClassName},
-			want:     []string{"Gateway hostname"},
+			want:     []string{GatewayHostnamePromptTitle},
 		},
 		{
 			name:     "gcp",
 			platform: cluster.GCP,
-			want:     []string{"Gateway hostname"},
+			want:     []string{GatewayHostnamePromptTitle},
 		},
 		{
 			name:     "on-prem",
 			platform: cluster.OnPrem,
-			want:     []string{"Gateway hostname"},
+			want:     []string{GatewayHostnamePromptTitle},
 		},
 	}
 

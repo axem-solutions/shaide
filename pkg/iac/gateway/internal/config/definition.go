@@ -77,6 +77,10 @@ func New(projectDir string, opts stack.Options, sources Sources) Config {
 	}
 }
 
+// GatewayHostnamePromptTitle is the hostname question. Production installs
+// need a public Gateway, so the title says what an empty answer means.
+const GatewayHostnamePromptTitle = "Gateway hostname (empty: no Gateway, for development only)"
+
 // newDefinition declares the stack's entire external configuration.
 //
 // Only values that must differ per cluster and cannot be derived are prompted
@@ -127,11 +131,12 @@ func newDefinition(opts stack.Options, sources Sources) stackconfig.Config[Value
 			},
 			{
 				// The hostname the platform is served on. There is no sensible
-				// default and every cluster needs its own.
+				// default and every cluster needs its own. Empty deploys no
+				// shared Gateway, for development installs only.
 				Key: KeyGatewayHostname,
 				Prompt: &stackconfig.Prompt{
 					Kind:        stackconfig.PromptInput,
-					Title:       "Gateway hostname",
+					Title:       GatewayHostnamePromptTitle,
 					Placeholder: "shaide.example.com",
 				},
 				Setter: func(cfg *Values, root *pulumiconfig.Config) {
