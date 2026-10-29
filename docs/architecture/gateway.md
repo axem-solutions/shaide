@@ -15,10 +15,16 @@ that all model-serving workloads depend on. It performs three distinct jobs:
    present in the cluster before any Gateway or InferencePool resource can be created.
 2. **Install Istio** — Deploys `istio-base` and `istiod` via Helm, enabling Istio as the
    Gateway API implementation.
-3. **Create shared Gateway** — When `infraStackRef` (cloud) or `gatewayHostname` (on-prem) is
+3. **Create shared Gateway** — When `infraStackRef` (cloud) or `gatewayHostname` is
    configured, creates a `shared-gateway` resource in `gateway-system` backed by a
    cloud-managed or Istio/MetalLB load balancer. `app_shaide` and other stacks attach
-   `HTTPRoute` resources to this gateway.
+   `HTTPRoute` resources to this gateway. With neither set, the stack does the first two jobs
+   only, and shaide-server is reachable from inside the cluster alone.
+
+!!! warning "Production needs a public Gateway"
+    Leaving both `infraStackRef` and `gatewayHostname` empty is for development installs
+    reached with `kubectl port-forward`. A production install needs a public Gateway with a
+    hostname, DNS and TLS.
 
 ### Why a shared Gateway instead of a LoadBalancer Service per workload?
 
