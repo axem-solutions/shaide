@@ -1,8 +1,8 @@
 // RBAC for Shaide Server to watch MCP pods.
 //
 // Resources created:
-//   - Role        mcp-pod-reader        namespace: mcp-gateway  (verbs: watch, list on pods)
-//   - RoleBinding shaide-mcp-pod-reader namespace: mcp-gateway  (binds Shaide SA → mcp-pod-reader)
+//   - Role        mcp-pod-reader        namespace: the MCP namespace, default app-mcp  (verbs: watch, list on pods)
+//   - RoleBinding shaide-mcp-pod-reader namespace: the MCP namespace                 (binds Shaide SA → mcp-pod-reader)
 //
 // The Shaide Server ServiceAccount already exists in app-shaide — it is created and owned
 // by the app_shaide stack. This package grants that existing ServiceAccount watch/list

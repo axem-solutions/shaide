@@ -3,7 +3,7 @@
 // Creates per-datasource Kubernetes resources:
 //   - ConfigMap  mcp-<name>-ca     (only when Datasource.CACert is set)
 //   - Deployment mcp-<name>
-//   - Service    mcp-<name>        ClusterIP, reachable at mcp-<name>.mcp-gateway.svc.cluster.local
+//   - Service    mcp-<name>        ClusterIP, reachable at mcp-<name>.<namespace>.svc.cluster.local (default app-mcp)
 //
 // CA certificate resolution (first match wins):
 //  1. ds.CACert != ""          → creates mcp-<name>-ca ConfigMap for this datasource only

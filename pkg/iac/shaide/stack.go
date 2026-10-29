@@ -1,19 +1,20 @@
 package shaide
 
 import (
+	"github.com/axem-solutions/ai_platform/pkg/iac/knowledgecenter"
 	appconfig "github.com/axem-solutions/ai_platform/pkg/iac/shaide/internal/config"
 	stackpkg "github.com/axem-solutions/ai_platform/pkg/stack"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
 )
 
 // Options contains values known by the installer. Empty values are not
-// written, allowing an existing Pulumi stack value to be retained.
+// written, allowing an existing Pulumi stack value to be retained, except nil
+// feature flags which Resolve writes as false.
 type Options struct {
 	GatewayHostname string
 
 	// WebAppEnabled says whether the webapp is installed. The control panel
-	// learns the answer through its APP_ENABLED env var. Nil leaves the stack
-	// value, or the default of leaving it out.
+	// learns the answer through its APP_ENABLED env var. Nil resolves to false.
 	WebAppEnabled *bool
 
 	// Placement names the nodes the components prefer (soft node affinity),
@@ -25,6 +26,18 @@ type Options struct {
 	// (e.g. "qdrant/qdrant"), to the reference the cluster pulls it from. The
 	// stack picks the images it deploys and ignores the rest.
 	Images map[string]string
+
+	// KnowledgeCenterEnabled is the operator's single answer to whether the
+	// Knowledge Center is installed. Pass the same answer to mcp.Options,
+	// which runs KC-MCP. The control panel learns it through
+	// KNOWLEDGE_CENTER_ENABLED. Nil resolves to false; pass the operator's
+	// answer explicitly.
+	KnowledgeCenterEnabled *bool
+
+	// KnowledgeCenter are the credentials the installer generated once and
+	// keeps; pass the same value to mcp.Options. Read only when the
+	// Knowledge Center is installed.
+	KnowledgeCenter knowledgecenter.Credentials
 }
 
 type Stack struct {
@@ -45,6 +58,9 @@ func NewStack(projectDir string, common stackpkg.Options, options ...Options) *S
 			WebAppEnabled:   shaideOptions.WebAppEnabled,
 			Placement:       placement(shaideOptions.Placement),
 			Images:          shaideOptions.Images,
+
+			KnowledgeCenterEnabled: shaideOptions.KnowledgeCenterEnabled,
+			KnowledgeCenter:        shaideOptions.KnowledgeCenter,
 		},
 	)}
 }
@@ -95,3 +111,11 @@ const WebAppName = appconfig.DefaultWebappService
 // WebAppImage is the catalog name of the webapp image, so the installer can
 // leave it out of the Harbor upload when the webapp is not installed.
 const WebAppImage = appconfig.WebappImageName
+
+// KnowledgeCenterImage is the catalog name of the KC image, so the installer
+// can leave it out of the Harbor upload when KC is not installed.
+const KnowledgeCenterImage = knowledgecenter.ImageName
+
+// KnowledgeCenterName names the KC Deployment, so the installer can tell from
+// the cluster whether an earlier install included it.
+const KnowledgeCenterName = knowledgecenter.ServiceName

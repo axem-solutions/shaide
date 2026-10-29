@@ -92,6 +92,7 @@ nav:
   - Operations:
       - Model management: operations/model-management.md
       - MCP servers: operations/mcp-servers.md
+      - Knowledge Center: operations/knowledge-center.md
       - Scaling: operations/scaling.md
       - Observability: operations/observability.md
       - Model registry: operations/model-registry.md
