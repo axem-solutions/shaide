@@ -15,6 +15,8 @@ Models validated against the platform. Others generally work if vLLM supports th
 | GPT-OSS-20B | General purpose |
 | Gemma-4-31B-it | Instruction-tuned |
 | Qwen3.5-27B-FP8 | FP8 quantized |
+| Qwen3.8-27B | BF16, 1x 96 GB GPU |
+| Qwen3.8-27B-FP8 | FP8 quantized, 1x 48 GB GPU |
 | Qwen3-Coder-30B-A3B-Instruct | Code |
 | DeepSeek-Coder-V2-Lite-Instruct | Code, lightweight |
 | Devstral-Small-2-24B-Instruct-2512 | Code |

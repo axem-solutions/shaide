@@ -1,0 +1,73 @@
+# Qwen3.8-27B model definition
+# Creates the resources for Qwen/Qwen3.8-27B
+# Text-only BF16 profile for 1x 96 GB GPU: ~52 GiB of weights leaves room for a
+# 64K context with FP8 KV cache. On 48 GB GPUs use Qwen3.8-27B-FP8 instead.
+
+slug: qwen3-8-27b
+revision: "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0"
+model:
+  name: "Qwen/Qwen3.8-27B"
+  size: 90Gi
+server:
+  replicas: 1
+  args:
+    - "--tensor-parallel-size"
+    - "1"
+    - "--gpu-memory-utilization"
+    - "0.92"
+    - "--max-model-len"
+    - "65536"
+    - "--max-num-seqs"
+    - "4"
+    - "--block-size"
+    - "16"
+    - "--kv-cache-dtype"
+    - "fp8"
+    - "--enable-prefix-caching"
+    # Qwen3.8 uses the same reasoning and tool-call parsers as Qwen3.5.
+    - "--reasoning-parser"
+    - "qwen3"
+    - "--enable-auto-tool-choice"
+    - "--tool-call-parser"
+    - "qwen3_coder"
+    - "--trust-remote-code"
+  env:
+    - name: VLLM_LOGGING_LEVEL
+      value: INFO
+    - name: NCCL_P2P_DISABLE
+      value: "1"
+    - name: NCCL_IGNORE_DISABLED_P2P
+      value: "1"
+    - name: NCCL_DEBUG
+      value: "INFO"
+    - name: VLLM_SKIP_P2P_CHECK
+      value: "1"
+    - name: GLOO_SOCKET_IFNAME
+      value: "eth0"
+    - name: NCCL_SOCKET_IFNAME
+      value: "eth0"
+  resources:
+    limits:
+      nvidia.com/gpu: "1"
+      memory: "128Gi"
+      cpu: "16"
+    requests:
+      nvidia.com/gpu: "1"
+      memory: "96Gi"
+      cpu: "16"
+  volumeMounts:
+    - name: metrics-volume
+      mountPath: /.config
+    - name: torch-compile-cache
+      mountPath: /.cache
+    - name: shm
+      mountPath: /dev/shm
+  volumes:
+    - name: metrics-volume
+      emptyDir: {}
+    - name: torch-compile-cache
+      emptyDir: {}
+    - name: shm
+      emptyDir:
+        medium: Memory
+        sizeLimit: 16Gi

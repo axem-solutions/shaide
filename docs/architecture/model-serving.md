@@ -237,6 +237,7 @@ This is needed when the old model must be removed before the new pod can be sche
 - [**GPT-OSS-20B**](https://huggingface.co/openai/gpt-oss-20b)
 - [**Qwen3-Coder-30B-A3B-Instruct**](https://huggingface.co/Qwen/Qwen3-Coder-30B-A3B-Instruct)
 - [**Devstral-Small-2-24B-Instruct-2512**](https://huggingface.co/mistralai/Devstral-Small-2-24B-Instruct-2512)
+- [**Qwen3.8-27B**](https://huggingface.co/Qwen/Qwen3.8-27B)
 
 | Model                                  | Parameters | Tensor Type | Quantized                                                            |
 |----------------------------------------|------------|-------------|----------------------------------------------------------------------|
@@ -244,6 +245,7 @@ This is needed when the old model must be removed before the new pod can be sche
 | **Qwen3-Coder-30B-A3B-Instruct-FP8**   | 31B        | BF16        |  [FP8](https://huggingface.co/Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8) |
 | **Devstral-Small-2-24B-Instruct-2512** | 24B        | BF16        |   -                                                                  |
 | **Qwen3.5-27B-FP8**                    | 28B        |  BF16       | [FP8](https://huggingface.co/Qwen/Qwen3.5-27B-FP8)                   |
+| **Qwen3.8-27B**                        | 28B        |  BF16       | [FP8](https://huggingface.co/Qwen/Qwen3.8-27B-FP8)                   |
 
 #### Benchmarks
 
@@ -297,6 +299,8 @@ multiple folders for different cluster targets (e.g. `GPT-OSS-20B` for the cloud
 | `GLM-4.7-Flash` | Z.ai GLM-4.7-Flash | Cloud | 4× GPU, real model weights |
 | `GPT-OSS-20B` | GPT-OSS 20B | GCP / on-prem | 1× GPU, real model weights |
 | `Qwen3-Coder-30B-A3B-Instruct` | Qwen3 Coder 30B A3B Instruct | Cloud | BF16, tuned for 1× 96 GB GPU; use FP8 or TP>1 on 48 GB GPUs |
+| `Qwen3.8-27B` | Qwen3.8 27B | Cloud / on-prem | BF16, tuned for 1× 96 GB GPU, 64K context |
+| `Qwen3.8-27B-FP8` | Qwen3.8 27B FP8 | Cloud / on-prem | FP8, tuned for 1× 48 GB GPU, 32K context |
 | `nomic-embed-text-v1-5-rke2` | nomic-ai/nomic-embed-text-v1.5 | RKE2 on-prem | Model weights pre-loaded via Harbor + ORAS (`modelSource.hostpathNode`) |
 
 ## Adding a New Model
