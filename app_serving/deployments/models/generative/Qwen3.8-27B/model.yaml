@@ -1,7 +1,8 @@
 # Qwen3.8-27B model definition
 # Creates the resources for Qwen/Qwen3.8-27B
-# Text-only BF16 profile for 1x 96 GB GPU: ~52 GiB of weights leaves room for a
-# 64K context with FP8 KV cache. On 48 GB GPUs use Qwen3.8-27B-FP8 instead.
+# Text-only BF16 profile for 4x 24+ GB GPUs (e.g. L4, A10G, L40S) with tensor
+# parallelism: ~13 GiB of weights per GPU leaves room for a 64K context with
+# FP8 KV cache. On a single 48 GB GPU use Qwen3.8-27B-FP8 instead.
 
 slug: qwen3-8-27b
 revision: "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0"
@@ -12,7 +13,7 @@ server:
   replicas: 1
   args:
     - "--tensor-parallel-size"
-    - "1"
+    - "4"
     - "--gpu-memory-utilization"
     - "0.92"
     - "--max-model-len"
@@ -48,11 +49,11 @@ server:
       value: "eth0"
   resources:
     limits:
-      nvidia.com/gpu: "1"
+      nvidia.com/gpu: "4"
       memory: "128Gi"
       cpu: "16"
     requests:
-      nvidia.com/gpu: "1"
+      nvidia.com/gpu: "4"
       memory: "96Gi"
       cpu: "16"
   volumeMounts:

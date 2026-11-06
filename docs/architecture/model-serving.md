@@ -299,7 +299,7 @@ multiple folders for different cluster targets (e.g. `GPT-OSS-20B` for the cloud
 | `GLM-4.7-Flash` | Z.ai GLM-4.7-Flash | Cloud | 4× GPU, real model weights |
 | `GPT-OSS-20B` | GPT-OSS 20B | GCP / on-prem | 1× GPU, real model weights |
 | `Qwen3-Coder-30B-A3B-Instruct` | Qwen3 Coder 30B A3B Instruct | Cloud | BF16, tuned for 1× 96 GB GPU; use FP8 or TP>1 on 48 GB GPUs |
-| `Qwen3.8-27B` | Qwen3.8 27B | Cloud / on-prem | BF16, tuned for 1× 96 GB GPU, 64K context |
+| `Qwen3.8-27B` | Qwen3.8 27B | Cloud / on-prem | BF16, tensor parallel across 4× 24 GB GPUs, 64K context |
 | `Qwen3.8-27B-FP8` | Qwen3.8 27B FP8 | Cloud / on-prem | FP8, tuned for 1× 48 GB GPU, 32K context |
 | `nomic-embed-text-v1-5-rke2` | nomic-ai/nomic-embed-text-v1.5 | RKE2 on-prem | Model weights pre-loaded via Harbor + ORAS (`modelSource.hostpathNode`) |
 
